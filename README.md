@@ -9,7 +9,7 @@ A target repo adds one short caller workflow and a `.github/ai-workflows.yml` co
 
 ## Start here
 
-1. `SETUP.md` — the manual steps (repos, token, secrets).
+1. `SETUP.md` — the manual steps (repos, fork, token, secrets, tester App, branch protection).
 2. `KICKOFF.md` — the prompt for the first Claude Code session.
 3. `docs/spec.md` — what is built. `docs/plan.md` — the order, as 15 work packages. `docs/progress.md` — where things stand.
 

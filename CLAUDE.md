@@ -44,9 +44,15 @@ tests/                  unit tests for scripts (no network)
 
 ## Testing
 
-- Test repo: `<OWNER>/ai-workflows-playground` (see `SETUP.md`). Seed bugs there on purpose for checks; label seeded issues/PRs `test-fixture`.
-- A second GitHub account exists for outsider tests (fork PRs, commands without rights, reporter replies). The maintainer performs actions with it when asked; you give exact steps.
+- Test repo: `esciara/ai-workflows-playground`.
+- Seed bugs there on purpose for checks; label seeded issues/PRs `test-fixture`.
+- Fork PRs come from `opinionated-digital-center/ai-workflows-playground`. Push branches there and open PRs to `esciara/ai-workflows-playground` with `gh`.
+- The outside reporter and the non-maintainer commenter are played by the GitHub App `ai-workflows-tester`.
+  - Write `scripts/dev/as-tester`. It mints an installation token from the App ID and the private key on this machine, then runs `gh` with that token.
+  - The key is read from the macOS Keychain, entry `ai-workflows-tester` (`security find-generic-password -s ai-workflows-tester -w | base64 -d`). Fallback: if the env var `AI_WORKFLOWS_TESTER_KEY_PATH` is set, read the key from that file instead. The App ID comes from the env var `AI_WORKFLOWS_TESTER_APP_ID`. Never commit or print the key or the token.
+  - Use the script to open issues, reply as the reporter, and post commands that must be refused.
 - Unit-test the orchestrator scripts locally; end-to-end checks run on the playground.
+- Unit tests also cover fork detection and the permission logic: author is or isn't a maintainer, has or hasn't write access.
 
 ## Tooling
 
