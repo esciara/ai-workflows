@@ -68,6 +68,7 @@ jobs:
         run: aiwf parse-command --repo "$REPO"
 
   # Agent job (ADR-0003, ADR-0012): read-only, OAuth secret only, no GitHub token at all.
+  # `--tools StructuredOutput`: no built-in tools (an empty `--tools ""` is dropped by base-action's arg parser).
   # Prompts are fetched without credentials (public repo) instead of actions/checkout, whose token defaults to github.token.
   agent:
     needs: parse
@@ -94,7 +95,7 @@ jobs:
           prompt_file: .ai-workflows/prompts/ping.md
           claude_args: >-
             --max-turns 2
-            --tools ""
+            --tools StructuredOutput
             --json-schema '${{ env.SCHEMA }}'
 
   publish:
