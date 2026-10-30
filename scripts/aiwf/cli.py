@@ -1,4 +1,4 @@
-"""Command-line entry point: `aiwf config ...`."""
+"""Command-line entry point: `aiwf config|labels-sync ...`."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import os
 import sys
 from pathlib import Path
 
-from aiwf import config
+from aiwf import config, labels
 
 
 def _write_outputs(path: str, outputs: dict[str, str]) -> None:
@@ -40,6 +40,11 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_labels_sync(args: argparse.Namespace) -> int:
+    labels.sync(args.repo, config.run_gh)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aiwf")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -51,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ref", default="", help="git ref; default is the repo's default branch")
     p.add_argument("--github-output", default=None, help="file to append outputs to (default $GITHUB_OUTPUT)")
     p.set_defaults(func=cmd_config)
+    p = sub.add_parser("labels-sync", help="create or update the labels in schema/labels.yml")
+    p.add_argument("--repo", required=True)
+    p.set_defaults(func=cmd_labels_sync)
     args = parser.parse_args(argv)
     return args.func(args)
 
