@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/esciara/ai-workflows/schema/ai-workflows.schema.json",
+  "title": ".github/ai-workflows.yml",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["maintainers"],
+  "properties": {
+    "enabled": {"type": "boolean", "default": true, "description": "Repo-level kill switch; false stops every run."},
+    "maintainers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$"},
+      "description": "GitHub logins: B4 questions, assignments, pings, allowed command authors."
+    },
+    "default_branch": {"type": "string", "minLength": 1, "default": "main"},
+    "setup": {"type": "string", "minLength": 1, "description": "How an agent installs the project in its sandbox."},
+    "test": {"type": "string", "minLength": 1, "description": "B2 repro and B5 exit condition."},
+    "risk_paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "high": {"type": "array", "items": {"type": "string", "minLength": 1}, "default": []},
+        "medium": {"type": "array", "items": {"type": "string", "minLength": 1}, "default": []}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "human_review_lines": {"type": "integer", "minimum": 1, "default": 400},
+        "fix_rounds": {"type": "integer", "minimum": 1, "default": 3},
+        "info_requests": {"type": "integer", "minimum": 0, "default": 2}
+      }
+    },
+    "reporter_silence_days": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "ping": {"type": "integer", "minimum": 1, "default": 4},
+        "stale": {"type": "integer", "minimum": 1, "default": 14},
+        "close": {"type": "integer", "minimum": 1, "default": 21}
+      }
+    },
+    "notify": {"enum": ["none", "slack", "telegram"], "default": "none"},
+    "fork_prs": {"enum": ["on-command", "off"], "default": "on-command"},
+    "workflows": {
+      "type": "object",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "review": {"type": "boolean", "default": true, "description": "Workflow A"},
+        "triage": {"type": "boolean", "default": false, "description": "Workflow B"}
+      }
+    },
+    "model": {"type": "string", "minLength": 1, "description": "Optional Claude model override for agent runs."},
+    "required_checks": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "description": "Optional: check names the CI gate waits for; default is all checks on the head SHA except ours."
+    }
+  }
+}

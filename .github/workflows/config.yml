@@ -1,0 +1,59 @@
+# Reusable: load and validate the caller repo's .github/ai-workflows.yml.
+# The config is read from the repo's default branch via the API, never from a PR head.
+name: ai-workflows config
+on:
+  workflow_call:
+    inputs:
+      ai_workflows_ref:
+        description: Ref of esciara/ai-workflows to load scripts and schema from
+        type: string
+        default: main
+      config_path:
+        type: string
+        default: .github/ai-workflows.yml
+      config_ref:
+        description: Read the config from this ref instead of the default branch. Honoured only on workflow_dispatch runs.
+        type: string
+        default: ''
+    outputs:
+      config:
+        description: Normalised config as JSON (defaults applied)
+        value: ${{ jobs.load.outputs.config }}
+      enabled:
+        value: ${{ jobs.load.outputs.enabled }}
+      review:
+        description: "'true' when enabled and workflows.review"
+        value: ${{ jobs.load.outputs.review }}
+      triage:
+        description: "'true' when enabled and workflows.triage"
+        value: ${{ jobs.load.outputs.triage }}
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      config: ${{ steps.cfg.outputs.config }}
+      enabled: ${{ steps.cfg.outputs.enabled }}
+      review: ${{ steps.cfg.outputs.review }}
+      triage: ${{ steps.cfg.outputs.triage }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: esciara/ai-workflows
+          ref: ${{ inputs.ai_workflows_ref }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet -e ./.ai-workflows
+      - id: cfg
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          CONFIG_PATH: ${{ inputs.config_path }}
+          CONFIG_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref || '' }}
+        run: aiwf config --repo "$REPO" --path "$CONFIG_PATH" --ref "$CONFIG_REF"

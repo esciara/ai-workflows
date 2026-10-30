@@ -1,0 +1,20 @@
+enabled: true
+maintainers: [esciara, other-dev]
+default_branch: main
+setup: pip install -e '.[test]'
+test: pytest
+risk_paths:
+  high: ["src/auth/**", ".github/**"]
+  medium: ["src/api/**"]
+limits:
+  human_review_lines: 300
+  fix_rounds: 2
+  info_requests: 1
+reporter_silence_days: {ping: 1, stale: 2, close: 3}
+notify: telegram
+fork_prs: on-command
+workflows:
+  review: true
+  triage: true
+model: claude-sonnet-4-5
+required_checks: [test, lint]
