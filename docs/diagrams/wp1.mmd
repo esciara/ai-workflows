@@ -1,0 +1,8 @@
+flowchart TD
+  C["Comment '/ping'<br/>on target repo"] --> P{"Command parser<br/>in maintainers list<br/>AND write access?"}
+  P -- no --> I["Ignored<br/>no reply"]
+  P -- yes --> AG["Agent job<br/>Claude Code, read-only<br/>no GitHub token"]
+  AG -- JSON --> V{"Orchestrator<br/>does Claude's JSON answer<br/>match the ping answer schema?"}
+  V -- no --> E["Label 'ai: error'"]
+  V -- yes --> R["Orchestrator posts reply<br/>via gh api"]
+  L["Label bootstrap<br/>creates all labels"] -.-> R

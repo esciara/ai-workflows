@@ -8,21 +8,27 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 ## Source of truth
 
 - `docs/spec.md` says **what** to build. `docs/plan.md` says **in which order** and **how we know it works**.
-- `docs/progress.md` is the status board. Read it at the start of every session; update it at the end of every work package.
+- The status board is beads (`bd`, ADR-0015); `docs/progress.md` is rendered from it by `scripts/dev/render-progress`. Read `bd list --all` or `docs/progress.md` at the start of every session. Only the orchestrator edits the board and the rendered file; never hand-edit the generated blocks.
 - If the spec, the plan and the code disagree, stop and ask the maintainer. Never resolve a conflict by guessing.
 - The spec's feature IDs (REV-01, TRI-08, …) link to a reference architecture; ignore those links, the spec is self-contained.
 
 ## How to work
 
-- One work package (WP) at a time, in the order of `docs/plan.md`, unless the maintainer says otherwise.
+- One work package (WP) at a time per track, in the order of `docs/plan.md`, unless the maintainer or the orchestrator says otherwise (tracks: see Roles below).
 - Each WP: branch `wp<N>-<slug>` → write the acceptance test `tests/e2e/test_wp<N>.py` (asserts every "Done when" condition on the test repo) → `scripts/dev/verify-wp <WP>` reviews it → build → the WP is done when `AIWF_E2E=1 pytest tests/e2e/test_wp<N>.py -v` passes → open a PR on this repo whose description holds the e2e output and run IDs, plus the review verdict (ADR-0014).
 - Any change to an acceptance test after its review: stop and ask the maintainer.
 - Stop-WPs: WP1, WP4, WP9 and WP12. Before writing code, post a short plan (files, approach, how you'll run the check) and wait for "go" unless the maintainer has said to proceed without asking; after the PR, stop and wait for review.
 - Other WPs: no plan stop. When the review passes and the acceptance test passes, put both in the PR description and continue to the next WP without waiting. The maintainer reviews these PRs in batches and always does the merges.
 - Always stop and ask when a new decision is needed, when `scripts/dev/verify-wp` fails or errors, or when the policy tests (`tests/test_workflow_policy.py`) fail.
-- At the end of every WP, update its row in the Metrics table of `docs/progress.md`.
+- At the end of every WP, the orchestrator sets the WP bead's `metrics` metadata and re-renders `docs/progress.md`.
 - Keep PRs small. If a WP grows past roughly 600 changed lines, propose splitting it.
-- When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer as a new ADR in `docs/adr/` (next number, copy the template in `docs/adr/README.md`, add it to the index). The new ADR starts as `Proposed`, lists the options considered, and becomes `Accepted` when the maintainer approves it.
+- When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer as a new ADR in `docs/adr/` (number allocated by the orchestrator, copy the template in `docs/adr/README.md`, add it to the index). The new ADR starts as `Proposed`, lists the options considered, and becomes `Accepted` when the maintainer approves it.
+
+## Roles (parallel tracks, ADR-0015)
+
+- **Orchestrator** (one session, main checkout): assigns WPs to tracks, allocates ADR numbers, owns the merge order and the status board (beads + `docs/progress.md`), and holds `aiwf-merge-slot` while rebasing and merging. ADR numbers are allocated by the orchestrator; a track never picks the next free number itself.
+- **Track agent** (one per WP): works one WP in its own worktree (`git worktree add ../ai-workflows-<slug> -b wp<N>-<slug> origin/main`), claims its bead (`bd update aiwf-wp<N> --claim`), may move only its own bead's status (`in_progress` → `in_review`), and never touches other tracks' files. Shared paths (listed in ADR-0015) are changed only with the orchestrator's go. Everything else on the board, and `docs/progress.md`, belong to the orchestrator.
+- Diagrams: edit `docs/diagrams/<name>.mmd`, then run `scripts/dev/render-diagrams`; never hand-edit the generated blocks in `docs/diagrams.md`.
 
 ## Layout (target, created in WP0)
 
