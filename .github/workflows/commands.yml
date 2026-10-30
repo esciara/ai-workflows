@@ -85,7 +85,8 @@ jobs:
           git init --quiet .ai-workflows
           git -C .ai-workflows fetch --quiet --depth 1 https://github.com/esciara/ai-workflows.git "$REF"
           git -C .ai-workflows checkout --quiet FETCH_HEAD
-          echo "SCHEMA=$(jq -c . .ai-workflows/schema/ping.json)" >> "$GITHUB_ENV"
+          # Claude's --json-schema rejects the draft 2020-12 `$schema` key; publish validates against the full file.
+          echo "SCHEMA=$(jq -c 'del(."$schema")' .ai-workflows/schema/ping.json)" >> "$GITHUB_ENV"
       - id: claude
         uses: anthropics/claude-code-action/base-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
         with:
