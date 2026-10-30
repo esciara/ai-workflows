@@ -46,3 +46,4 @@ Why: <rationale>
 | [ADR-0011](0011-factory-loop-and-independent-verifier.md) | D11 | Factory loop and independent verifier | Accepted |
 | [ADR-0012](0012-agents-use-base-action.md) | D12 | Agents use `claude-code-action/base-action` | Accepted |
 | [ADR-0013](0013-publish-job-pull-requests-write.md) | D13 | Publish job gets `pull-requests: write` | Accepted |
+| [ADR-0014](0014-executable-acceptance-tests.md) | D14 | Executable acceptance tests; verifier reviews the test | Accepted |

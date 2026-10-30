@@ -27,7 +27,7 @@ Baseline for a later comparison of build loops. One row per finished WP, updated
 | WP | maintainer interventions | verifier fails | rework PRs | coordination issues | notes |
 | --- | --- | --- | --- | --- | --- |
 | WP0 | n/a (pre-loop) | n/a (pre-loop) | 0 | 0 | Built before [D11](adr/0011-factory-loop-and-independent-verifier.md): plan "go" + one review; kept as one PR over ~600 lines at the maintainer's call. Verifier run afterwards on #2: pass |
-| WP1 | 2 decisions (base-action, PR-write scope) + 2 playground merges (#4, #7) | 1 | 0 | 0 | Split into 2 stacked PRs (#7, #8) for size; 3 agent/publish fixes found by the playground check; verifier fail: tester-ignored evidence cut by log truncation |
+| WP1 | 2 decisions (base-action, PR-write scope) + 2 playground merges (#4, #7) | 1 | 0 | 0 | Split into 2 stacked PRs (#7, #8) for size; 3 agent/publish fixes found by the playground check; verifier fail: tester-ignored evidence cut by log truncation → [ADR-0014](adr/0014-executable-acceptance-tests.md) |
 
 ## Milestones
 

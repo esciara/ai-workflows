@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: scripts/dev/verify-wp <WP id> <PR number> [--repo owner/name] [--print-pack]
+# Usage: scripts/dev/verify-wp <WP id> [--print-pack]   (reviews tests/e2e/test_wp<N>.py against the Done-when)
 # Exit 0 pass, 1 fail, 2 error. Uses the repo's .venv python when present (needs jsonschema).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
