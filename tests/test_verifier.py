@@ -25,24 +25,22 @@ def test_done_when_unknown_wp():
         verifier.done_when(PLAN, "WP99")
 
 
-def test_run_links_dedup_and_order():
-    body = (
-        "green https://github.com/esciara/ai-workflows-playground/actions/runs/41087000415\n"
-        "red https://github.com/esciara/ai-workflows-playground/actions/runs/41087013620/job/1 and again "
-        "https://github.com/esciara/ai-workflows-playground/actions/runs/41087000415 "
-        "pr https://github.com/esciara/ai-workflows/pull/2"
-    )
-    assert verifier.run_links(body) == [
-        ("esciara/ai-workflows-playground", "41087000415"),
-        ("esciara/ai-workflows-playground", "41087013620"),
-    ]
+def test_pack_holds_spec_done_when_and_test_source():
+    pack = verifier.build_pack("WP1")
+    assert "<spec>" in pack and '<done_when wp="WP1">' in pack
+    assert '<file path="tests/e2e/test_wp1.py">' in pack and '<file path="tests/e2e/playground.py">' in pack
+    assert "def test_non_maintainer_ping_is_ignored" in pack
 
 
-def test_truncate_keeps_head_and_tail():
-    text = "a" * 10 + "b" * 100 + "c" * 10
-    out = verifier.truncate(text, head=10, tail=10)
-    assert out.startswith("a" * 10) and out.endswith("c" * 10) and "100 chars cut" in out
-    assert verifier.truncate("short", head=10, tail=10) == "short"
+def test_test_files_lists_test_first_then_helpers():
+    names = [p.name for p in verifier.test_files("WP1")]
+    assert names[0] == "test_wp1.py" and "playground.py" in names and "conftest.py" in names
+    assert not any(n.startswith("test_") for n in names[1:])
+
+
+def test_missing_acceptance_test_is_an_error():
+    with pytest.raises(verifier.VerifyError, match="no acceptance test"):
+        verifier.test_files("WP99")
 
 
 def envelope(verdict):
@@ -50,24 +48,24 @@ def envelope(verdict):
 
 
 def test_parse_verdict_pass_and_fail():
-    ok = {"verdict": "pass", "unmet": [], "notes": "green run shown"}
+    ok = {"verdict": "pass", "gaps": [], "notes": "each condition asserted"}
     assert verifier.parse_verdict(envelope(ok)) == ok
-    bad = {"verdict": "fail", "unmet": ["no run link"], "notes": ""}
+    bad = {"verdict": "fail", "gaps": ["labels not compared"], "notes": ""}
     assert verifier.parse_verdict(envelope(bad)) == bad
 
 
 def test_parse_verdict_falls_back_to_result_text():
-    ok = {"verdict": "pass", "unmet": [], "notes": "x"}
+    ok = {"verdict": "pass", "gaps": [], "notes": "x"}
     assert verifier.parse_verdict(json.dumps({"result": json.dumps(ok)})) == ok
 
 
 @pytest.mark.parametrize(
     "verdict",
     [
-        {"verdict": "maybe", "unmet": [], "notes": ""},
-        {"verdict": "pass", "unmet": [], "notes": "", "extra": 1},
+        {"verdict": "maybe", "gaps": [], "notes": ""},
+        {"verdict": "pass", "gaps": [], "notes": "", "extra": 1},
         {"verdict": "pass", "notes": ""},
-        {"verdict": "pass", "unmet": ["x"], "notes": ""},
+        {"verdict": "pass", "gaps": ["x"], "notes": ""},
     ],
 )
 def test_parse_verdict_rejects_invalid(verdict):

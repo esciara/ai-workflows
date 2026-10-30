@@ -15,9 +15,10 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 ## How to work
 
 - One work package (WP) at a time, in the order of `docs/plan.md`, unless the maintainer says otherwise.
-- Each WP: branch `wp<N>-<slug>` → build → run the WP's "Done when" check on the test repo → open a PR on this repo whose description holds the check's evidence (run links, labels/comments observed) → run `scripts/dev/verify-wp <WP> <PR>`.
+- Each WP: branch `wp<N>-<slug>` → write the acceptance test `tests/e2e/test_wp<N>.py` (asserts every "Done when" condition on the test repo) → `scripts/dev/verify-wp <WP>` reviews it → build → the WP is done when `AIWF_E2E=1 pytest tests/e2e/test_wp<N>.py -v` passes → open a PR on this repo whose description holds the e2e output and run IDs, plus the review verdict (ADR-0014).
+- Any change to an acceptance test after its review: stop and ask the maintainer.
 - Stop-WPs: WP1, WP4, WP9 and WP12. Before writing code, post a short plan (files, approach, how you'll run the check) and wait for "go" unless the maintainer has said to proceed without asking; after the PR, stop and wait for review.
-- Other WPs: no plan stop. When the verifier passes, put its verdict in the PR description and continue to the next WP without waiting. The maintainer reviews these PRs in batches and always does the merges.
+- Other WPs: no plan stop. When the review passes and the acceptance test passes, put both in the PR description and continue to the next WP without waiting. The maintainer reviews these PRs in batches and always does the merges.
 - Always stop and ask when a new decision is needed, when `scripts/dev/verify-wp` fails or errors, or when the policy tests (`tests/test_workflow_policy.py`) fail.
 - At the end of every WP, update its row in the Metrics table of `docs/progress.md`.
 - Keep PRs small. If a WP grows past roughly 600 changed lines, propose splitting it.
