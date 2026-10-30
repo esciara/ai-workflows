@@ -1,17 +1,22 @@
-# .github/ai-workflows.yml — per-repo configuration (example; schema finalised in WP0)
+# .github/ai-workflows.yml — per-repo configuration. Schema: schema/ai-workflows.schema.json.
+# Read from the repo's default branch only. Only `maintainers` is required; the rest shows the defaults or examples.
+enabled: true                   # repo kill switch: false stops every run
 maintainers: [<OWNER>]          # B4 questions, assignments, pings, allowed command authors
 default_branch: main
 setup: npm ci                   # how an agent installs the project in its sandbox
 test: npm test                  # B2 repro and B5 exit condition
-risk_paths:
+risk_paths:                     # unmatched paths are low risk
   high: ["src/auth/**", "migrations/**", ".github/**", "infra/**"]
+  medium: []
 limits:
   human_review_lines: 400
   fix_rounds: 3
   info_requests: 2
-reporter_silence_days: {ping: 4, stale: 14, close: 21}
-notify: slack                   # or telegram
-fork_prs: on-command            # public repos: review fork PRs only after /review
+reporter_silence_days: {ping: 4, stale: 14, close: 21}   # must be increasing
+notify: none                    # none | slack | telegram
+fork_prs: on-command            # on-command (review fork PRs only after /review) | off
 workflows:
   review: true                  # Workflow A
   triage: false                 # Workflow B (enable after M2)
+# model: claude-sonnet-4-5      # optional model override for agent runs
+# required_checks: [test]       # optional; default: CI gate waits on all checks on the head SHA except ours
