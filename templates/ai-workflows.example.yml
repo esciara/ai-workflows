@@ -1,0 +1,17 @@
+# .github/ai-workflows.yml — per-repo configuration (example; schema finalised in WP0)
+maintainers: [<OWNER>]          # B4 questions, assignments, pings, allowed command authors
+default_branch: main
+setup: npm ci                   # how an agent installs the project in its sandbox
+test: npm test                  # B2 repro and B5 exit condition
+risk_paths:
+  high: ["src/auth/**", "migrations/**", ".github/**", "infra/**"]
+limits:
+  human_review_lines: 400
+  fix_rounds: 3
+  info_requests: 2
+reporter_silence_days: {ping: 4, stale: 14, close: 21}
+notify: slack                   # or telegram
+fork_prs: on-command            # public repos: review fork PRs only after /review
+workflows:
+  review: true                  # Workflow A
+  triage: false                 # Workflow B (enable after M2)

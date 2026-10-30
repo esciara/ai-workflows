@@ -1,0 +1,30 @@
+# .github/workflows/ai-workflows.yml in a TARGET repo — DRAFT, finalised in WP0/WP1.
+# Shows the intended shape only: events in, one call per workflow out, secrets passed explicitly.
+name: AI workflows
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '17 5 * * *'        # daily jobs: reporter silence (WP7)
+
+permissions: {}                 # each called job declares its own minimal permissions
+
+jobs:
+  review:
+    if: github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request)
+    uses: <OWNER>/ai-workflows/.github/workflows/review.yml@v1
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  triage:
+    if: github.event_name == 'issues' || github.event_name == 'schedule' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request)
+    uses: <OWNER>/ai-workflows/.github/workflows/triage.yml@v1
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
