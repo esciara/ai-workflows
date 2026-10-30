@@ -99,7 +99,7 @@ Four passes review the PR at once; only findings that survive the refute step co
 | Something absent (missing test, migration, linked issue) | General | General |
 | The PR itself (size, scope creep, description, CI red) | General | General |
 
-**How it is sent.** The summary and the inline comments go out together as one GitHub review: Request changes when the verdict is `changes-requested`, Comment otherwise, never Approve. A human approval therefore stays required, and branch protection can block the merge; a maintainer clears a false positive by dismissing the review.
+**How it is sent.** The summary lives in the single self-updating review comment. Each run's verdict and new inline comments go out together as one GitHub review, at most one per run and only when there are new inline comments or the verdict changes: Request changes when the verdict is `changes-requested`, Comment otherwise, never Approve. When the verdict stops being `changes-requested`, the orchestrator dismisses its own earlier Request changes review (ADR-0016). A human approval therefore stays required, and branch protection can block the merge; a maintainer clears a false positive by dismissing the review.
 
 ## Workflow B — Bug issue to fix PR
 

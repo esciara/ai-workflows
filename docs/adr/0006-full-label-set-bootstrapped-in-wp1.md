@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D6`
+- Amended by: [ADR-0023](0023-labels-sync-on-dispatch-and-schedule-only.md)
 
 ## Context
 

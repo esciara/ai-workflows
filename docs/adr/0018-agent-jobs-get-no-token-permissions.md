@@ -1,6 +1,6 @@
 # ADR-0018 · Agent jobs get `permissions: {}`
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D18`

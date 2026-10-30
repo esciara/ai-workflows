@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D12`
+- Amended by: [ADR-0018](0018-agent-jobs-get-no-token-permissions.md)
 
 ## Context
 
@@ -16,6 +17,6 @@ Why: it is the only entry point of the action that runs with no GitHub token and
 
 ## Consequences
 
-- Agent jobs touch no GitHub token, not even implicitly through an action's defaults.
+- Agent jobs touch no GitHub token, not even implicitly through an action's defaults. Correction (ADR-0018): base-action's nested setup-node and setup-bun default to `github.token` for public downloads; ADR-0018 makes that token scope-less with `permissions: {}`.
 - The main action's GitHub features (tracking comments, branch handling) are not used; the orchestrator does all GitHub writes.
 - If `esciara/ai-workflows` ever goes private, the token-free prompt fetch stops working and this needs revisiting.

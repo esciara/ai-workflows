@@ -1,6 +1,6 @@
 # ADR-0020 · Test-PR approval and admin bypass on the playground only
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D20`

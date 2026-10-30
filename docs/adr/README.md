@@ -57,11 +57,11 @@ Why: <rationale>
 | [ADR-0012](0012-agents-use-base-action.md) | D12 | Agents use `claude-code-action/base-action` | Accepted |
 | [ADR-0013](0013-publish-job-pull-requests-write.md) | D13 | Publish job gets `pull-requests: write` | Accepted |
 | [ADR-0014](0014-executable-acceptance-tests.md) | D14 | Executable acceptance tests; verifier reviews the test | Accepted |
-| [ADR-0016](0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md) | D16 | Review summary in a sticky comment; GitHub reviews only when needed | Proposed |
-| [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md) | D17 | Top-level `permissions: {}` in caller and reusable workflows | Proposed |
-| [ADR-0018](0018-agent-jobs-get-no-token-permissions.md) | D18 | Agent jobs get `permissions: {}` | Proposed |
-| [ADR-0019](0019-scripts-ref-follows-the-workflow-sha.md) | D19 | Scripts ref follows the workflow SHA; callers pin a tagged SHA | Proposed |
-| [ADR-0020](0020-test-pr-approval-and-bypass-on-the-playground-only.md) | D20 | Test-PR approval and admin bypass on the playground only | Proposed |
+| [ADR-0016](0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md) | D16 | Review summary in a sticky comment; GitHub reviews only when needed | Accepted |
+| [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md) | D17 | Top-level `permissions: {}` in caller and reusable workflows | Accepted |
+| [ADR-0018](0018-agent-jobs-get-no-token-permissions.md) | D18 | Agent jobs get `permissions: {}` | Accepted |
+| [ADR-0019](0019-scripts-ref-follows-the-workflow-sha.md) | D19 | Scripts ref follows the workflow SHA; callers pin a tagged SHA | Accepted |
+| [ADR-0020](0020-test-pr-approval-and-bypass-on-the-playground-only.md) | D20 | Test-PR approval and admin bypass on the playground only | Accepted |
 | [ADR-0021](0021-run-state-on-the-item-labels-and-marker-comment.md) | D21 | Run state lives on the item: labels plus a marker comment | Proposed |
-| [ADR-0022](0022-own-reusable-workflow-refs-pinned-to-a-sha-from-wp14.md) | D22 | Own reusable-workflow refs pinned to a SHA from WP14 | Proposed |
-| [ADR-0023](0023-labels-sync-on-dispatch-and-schedule-only.md) | D23 | Labels sync on dispatch and schedule only | Proposed |
+| [ADR-0022](0022-own-reusable-workflow-refs-pinned-to-a-sha-from-wp14.md) | D22 | Own reusable-workflow refs pinned to a SHA from WP14 | Accepted |
+| [ADR-0023](0023-labels-sync-on-dispatch-and-schedule-only.md) | D23 | Labels sync on dispatch and schedule only | Accepted |

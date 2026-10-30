@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D2`
+- Amended by: [ADR-0019](0019-scripts-ref-follows-the-workflow-sha.md)
 
 ## Context
 
