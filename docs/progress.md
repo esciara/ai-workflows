@@ -20,6 +20,14 @@ Updated by the Claude Code session at the end of every work package. Status: `to
 | WP13 | Contributor mode | WP3, WP8 | todo | | |
 | WP14 | Onboarding kit | WP3 | todo | | |
 
+## Metrics
+
+Baseline for a later comparison of build loops. One row per finished WP, updated at the end of the WP.
+
+| WP | maintainer interventions | verifier fails | rework PRs | coordination issues | notes |
+| --- | --- | --- | --- | --- | --- |
+| WP0 | n/a (pre-loop) | n/a (pre-loop) | 0 | 0 | Built before D11: plan "go" + one review; kept as one PR over ~600 lines at the maintainer's call. Verifier run afterwards on #2: pass |
+
 ## Milestones
 
 - **M1 · Review** — WP0–WP4, WP14: install Workflow A on any repo you own.
