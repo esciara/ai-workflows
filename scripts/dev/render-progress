@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Usage: scripts/dev/render-progress [--check] [--input bd.json]   (regenerates the tables and log of docs/progress.md from beads)
+# Exit 0 ok, 1 out of date (--check), 2 error. Reads `bd list --json --all -n 0` unless --input is given.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+py="$root/.venv/bin/python"
+[ -x "$py" ] || py=python3
+PYTHONPATH="$root/scripts${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -c 'import sys; from aiwf.progress import main; sys.exit(main(sys.argv[1:]))' "$@"

@@ -1,0 +1,131 @@
+"""Render the generated blocks of docs/progress.md from the beads board (`bd list --json --all -n 0`).
+
+A work-package bead carries `metadata.wp` ("WP2"); optional `metadata.pr`, `metadata.notes`, `metadata.log` (list of
+log lines) and `metadata.metrics` (maintainer_interventions, verifier_fails, rework_prs, coordination_issues, notes).
+"Depends on" comes from the bead's `blocks` dependencies on other WP beads. Other beads are ignored.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+from aiwf import gendoc
+
+ROOT = Path(__file__).resolve().parents[2]
+PROGRESS_PATH = ROOT / "docs" / "progress.md"
+BD_LIST = ["bd", "list", "--json", "--all", "-n", "0"]
+
+STATUS = {
+    "open": "todo",
+    "in_progress": "in progress",
+    "in_review": "in review",
+    "blocked": "blocked",
+    "deferred": "deferred",
+    "closed": "done",
+}
+METRIC_KEYS = ["maintainer_interventions", "verifier_fails", "rework_prs", "coordination_issues", "notes"]
+METRIC_HEADERS = ["maintainer interventions", "verifier fails", "rework PRs", "coordination issues", "notes"]
+
+
+class BoardError(Exception):
+    pass
+
+
+def _cell(value: object) -> str:
+    return str(value).replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _row(cells: list[object]) -> str:
+    return "|" + "|".join(f" {c} " if c else " " for c in map(_cell, cells)) + "|"
+
+
+def _wp_num(wp: str) -> int:
+    if not (wp.startswith("WP") and wp[2:].isdigit()):
+        raise BoardError(f"bad metadata.wp {wp!r}")
+    return int(wp[2:])
+
+
+def work_packages(issues: list[dict]) -> list[dict]:
+    wps = [i for i in issues if isinstance(i.get("metadata"), dict) and "wp" in i["metadata"]]
+    names = [i["metadata"]["wp"] for i in wps]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    if dupes:
+        raise BoardError(f"more than one bead for {', '.join(dupes)}")
+    return sorted(wps, key=lambda i: _wp_num(i["metadata"]["wp"]))
+
+
+def wp_table(issues: list[dict]) -> str:
+    wps = work_packages(issues)
+    by_id = {i["id"]: i["metadata"]["wp"] for i in wps}
+    lines = ["| WP | Package | Depends on | Status | PR | Notes |", "| --- | --- | --- | --- | --- | --- |"]
+    for i in wps:
+        meta = i["metadata"]
+        deps = sorted(
+            (by_id[d["depends_on_id"]] for d in i.get("dependencies", []) if d.get("type") == "blocks" and d.get("depends_on_id") in by_id),
+            key=_wp_num,
+        )
+        status = STATUS.get(i["status"])
+        if status is None:
+            raise BoardError(f"{i['id']}: unknown status {i['status']!r}")
+        lines.append(_row([meta["wp"], i["title"], ", ".join(deps) or "—", status, meta.get("pr", ""), meta.get("notes", "")]))
+    return "\n".join(lines)
+
+
+def metrics_table(issues: list[dict]) -> str:
+    lines = [_row(["WP", *METRIC_HEADERS]), "| --- " * (len(METRIC_KEYS) + 1) + "|"]
+    for i in work_packages(issues):
+        metrics = i["metadata"].get("metrics")
+        if metrics:
+            lines.append(_row([i["metadata"]["wp"], *(metrics.get(k, "") for k in METRIC_KEYS)]))
+    return "\n".join(lines)
+
+
+def log_lines(issues: list[dict]) -> str:
+    entries = []
+    for i in work_packages(issues):
+        for line in i["metadata"].get("log", []):
+            entries.append((line[:10], _wp_num(i["metadata"]["wp"]), line))
+    return "\n".join(f"- {line}" for _, _, line in sorted(entries))
+
+
+def render(text: str, issues: list[dict]) -> str:
+    return gendoc.replace_blocks(text, {"wp-table": wp_table(issues), "metrics": metrics_table(issues), "log": log_lines(issues)})
+
+
+def load_issues(path: str | None) -> list[dict]:
+    if path:
+        raw = Path(path).read_text(encoding="utf-8")
+    else:
+        raw = subprocess.run(BD_LIST, cwd=ROOT, check=True, capture_output=True, text=True).stdout
+    issues = json.loads(raw)
+    if not isinstance(issues, list):
+        raise BoardError("expected a JSON array of beads")
+    return issues
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="render-progress", description=__doc__.splitlines()[0])
+    ap.add_argument("--input", help="bd JSON file (default: run `bd list --json --all -n 0`)")
+    ap.add_argument("--file", default=str(PROGRESS_PATH), help="progress file to update")
+    ap.add_argument("--check", action="store_true", help="exit 1 if the file is out of date; write nothing")
+    args = ap.parse_args(argv)
+    target = Path(args.file)
+    try:
+        old = target.read_text(encoding="utf-8")
+        new = render(old, load_issues(args.input))
+    except (BoardError, gendoc.GenDocError, json.JSONDecodeError, subprocess.CalledProcessError, OSError) as exc:
+        print(f"render-progress: {exc}", file=sys.stderr)
+        return 2
+    if args.check:
+        if new != old:
+            print(f"{target} is out of date; run scripts/dev/render-progress", file=sys.stderr)
+            return 1
+        return 0
+    if new != old:
+        target.write_text(new, encoding="utf-8")
+        print(f"updated {target}")
+    return 0

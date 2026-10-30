@@ -2,3 +2,6 @@
 __pycache__/
 *.egg-info/
 .pytest_cache/
+# beads (ADR-0015): the database is local to the main checkout, shared by worktrees; nothing under .beads is committed
+.beads/
+.beads.gate.lock
