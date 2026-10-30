@@ -105,6 +105,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       issues: write
+      pull-requests: write  # commenting and labelling on a PR (403 with issues: write alone)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
