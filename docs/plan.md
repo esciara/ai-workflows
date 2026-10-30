@@ -75,7 +75,7 @@ Metrics logging from the spec is left out of this plan; it is worth adding once 
 | `README.md` | What the repo is and how it is laid out |
 | `CLAUDE.md` | Standing rules for every Claude Code session in this repo: source of truth, one package per PR, security rules |
 | `KICKOFF.md` | The prompt for the first session |
-| `SETUP.md` | Your manual checklist: repos, fork, token, secrets, tester App, Actions access |
+| `SETUP.md` | Your manual checklist: repos, fork, token, secrets, tester App, branch protection |
 | `docs/spec.md` | The spec, exported from the doc |
 | `docs/plan.md` | This plan, exported from the doc |
 | `docs/progress.md` | Status of each work package, kept up to date by the session |
