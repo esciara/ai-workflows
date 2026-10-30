@@ -32,6 +32,20 @@ jobs:
       ai_workflows_ref: main
       config_ref: ${{ inputs.config_ref || '' }}
 
+  # Slash commands (WP1: /ping). Labels sync on every call.
+  commands:
+    needs: config
+    if: needs.config.outputs.enabled == 'true' && github.event_name == 'issue_comment'
+    uses: esciara/ai-workflows/.github/workflows/commands.yml@main
+    permissions:
+      contents: read
+      issues: write
+    with:
+      ai_workflows_ref: main
+      config: ${{ needs.config.outputs.config }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
   # Workflow A (WP2+): enabled once review.yml exists.
   # review:
   #   needs: config

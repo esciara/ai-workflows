@@ -44,3 +44,4 @@ Why: <rationale>
 | [ADR-0009](0009-approving-test-prs-on-the-playground.md) | D9 | Approving test PRs on the playground | Accepted |
 | [ADR-0010](0010-config-keys-beyond-the-spec-example.md) | D10 | Config keys beyond the spec example | Accepted |
 | [ADR-0011](0011-factory-loop-and-independent-verifier.md) | D11 | Factory loop and independent verifier | Accepted |
+| [ADR-0012](0012-agents-use-base-action.md) | D12 | Agents use `claude-code-action/base-action` | Accepted |
