@@ -25,7 +25,14 @@ Some checks need someone who is not the maintainer: an outside reporter who open
 - [x] Same page, section "Private keys" → **Generate a private key**. A `.pem` file downloads.
 - [x] Install the App on `esciara/ai-workflows-playground` only: left sidebar → **Install App** → **Install** next to `esciara` → choose **Only select repositories** → pick `ai-workflows-playground` → **Install**.
 - Store the key on your machine, never committed and never pasted into a chat. Tick the option you chose:
-  - [ ] **macOS Keychain (recommended).** No key file left on disk, nothing in dotfiles or backups. Run `security add-generic-password -a esciara -s ai-workflows-tester -w "$(base64 -i ~/Downloads/ai-workflows-tester.*.pem)"`, then `rm ~/Downloads/ai-workflows-tester.*.pem`. Reads via `security` normally don't prompt; if a prompt appears, click **Always Allow** once. Add `-T ""` to the command if you want a prompt on every use instead.
+  - [ ] **macOS Keychain (recommended).** No key file left on disk, nothing in dotfiles or backups. Run these two commands, one at a time:
+
+    ```sh
+    security add-generic-password -a esciara -s ai-workflows-tester -w "$(base64 -i ~/Downloads/ai-workflows-tester.*.pem)"
+    rm ~/Downloads/ai-workflows-tester.*.pem
+    ```
+
+    Reads via `security` normally don't prompt; if a prompt appears, click **Always Allow** once. Add `-T ""` to the command if you want a prompt on every use instead.
   - [ ] **1Password CLI.** Save the `.pem` as a 1Password item and delete the downloaded file; the script reads it with `op read`.
   - [ ] **File, locked down.** `mv ~/Downloads/ai-workflows-tester.*.pem ~/.ssh/ai-workflows-tester.pem && chmod 600 ~/.ssh/ai-workflows-tester.pem`. Avoid `~/.config`, which is often synced to dotfiles repos.
 
