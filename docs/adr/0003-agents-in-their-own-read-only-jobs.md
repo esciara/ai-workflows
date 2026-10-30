@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D3`
+- Amended by: [ADR-0018](0018-agent-jobs-get-no-token-permissions.md)
 
 ## Context
 

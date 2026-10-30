@@ -1,6 +1,6 @@
 # ADR-0019 · Scripts ref follows the workflow SHA; callers pin a tagged SHA
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D19`

@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D1`
+- Amended by: [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md)
 
 ## Context
 

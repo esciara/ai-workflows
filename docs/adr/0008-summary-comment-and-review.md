@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D8`
+- Amended by: [ADR-0016](0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md)
 
 ## Context
 

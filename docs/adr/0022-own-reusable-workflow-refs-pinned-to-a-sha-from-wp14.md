@@ -1,6 +1,6 @@
 # ADR-0022 · Own reusable-workflow refs pinned to a SHA from WP14
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D22`

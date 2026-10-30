@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D9`
+- Amended by: [ADR-0020](0020-test-pr-approval-and-bypass-on-the-playground-only.md)
 
 ## Context
 

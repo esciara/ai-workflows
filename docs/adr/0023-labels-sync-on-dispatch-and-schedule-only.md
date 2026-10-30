@@ -1,6 +1,6 @@
 # ADR-0023 · Labels sync on dispatch and schedule only
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D23`
