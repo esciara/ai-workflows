@@ -19,7 +19,7 @@ Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't 
 
 ```mermaid
 flowchart TD
-  WP0["WP0 Bootstrap<br/>config + caller"]:::done --> WP1["WP1 Shared runtime<br/>agent runner, labels, commands"]:::base
+  WP0["WP0 Bootstrap<br/>config + caller"]:::done --> WP1["WP1 Shared runtime<br/>agent runner, labels, commands"]:::done
 
   WP1 --> WP2["WP2 A core review<br/>4 passes, verdict label"]:::a
   WP2 --> WP3["WP3 A formal review<br/>inline comments"]:::a
