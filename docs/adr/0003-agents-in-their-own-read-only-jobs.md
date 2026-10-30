@@ -16,5 +16,5 @@ Why: Rule of Two, reader/writer split.
 
 ## Consequences
 
-- To be validated in WP2; if `claude-code-action` insists on a token, stop and ask the maintainer.
+- To be validated in WP2; if `claude-code-action` insists on a token, stop and ask the maintainer. Validated in WP1: see [ADR-0012](0012-agents-use-base-action.md).
 - Agent output reaches the writer only as JSON (job output or artifact).

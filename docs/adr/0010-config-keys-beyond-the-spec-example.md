@@ -10,7 +10,7 @@ The spec gives only an example config; keys and defaults beyond it were not spec
 
 ## Decision
 
-Keep `workflows: {review, triage}` from the example config; add top-level `enabled` (repo kill switch, default `true`), optional `model`, optional `required_checks`. Every object rejects unknown keys. Where the spec gives only examples, defaults are:
+Keep `workflows: {review, triage}` from the example config; add top-level `enabled` (repo kill switch, default `true`), optional `model`, optional `required_checks` (see ADR-0007). Every object rejects unknown keys. Where the spec gives only examples, defaults are:
 
 - `default_branch: main`
 - `limits` 400/3/2
