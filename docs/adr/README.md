@@ -45,3 +45,4 @@ Why: <rationale>
 | [ADR-0010](0010-config-keys-beyond-the-spec-example.md) | D10 | Config keys beyond the spec example | Accepted |
 | [ADR-0011](0011-factory-loop-and-independent-verifier.md) | D11 | Factory loop and independent verifier | Accepted |
 | [ADR-0012](0012-agents-use-base-action.md) | D12 | Agents use `claude-code-action/base-action` | Accepted |
+| [ADR-0013](0013-publish-job-pull-requests-write.md) | D13 | Publish job gets `pull-requests: write` | Accepted |
