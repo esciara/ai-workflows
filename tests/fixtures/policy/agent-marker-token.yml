@@ -1,0 +1,16 @@
+on: push
+jobs:
+  agent:  # aiwf: agent
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: ./run-agent.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  writer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: echo ok
