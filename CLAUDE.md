@@ -21,7 +21,7 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 - Always stop and ask when a new decision is needed, when `scripts/dev/verify-wp` fails or errors, or when the policy tests (`tests/test_workflow_policy.py`) fail.
 - At the end of every WP, update its row in the Metrics table of `docs/progress.md`.
 - Keep PRs small. If a WP grows past roughly 600 changed lines, propose splitting it.
-- When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer in `docs/decisions.md` (create it when first needed).
+- When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer as a new ADR in `docs/adr/` (next number, copy the template in `docs/adr/README.md`, add it to the index).
 
 ## Layout (target, created in WP0)
 
@@ -31,7 +31,7 @@ prompts/                one prompt file per agent role (classifier, reproducer, 
 scripts/                orchestrator code: config loading, gh api calls, label/comment/review publishing, command parsing
 schema/                 JSON Schema for .github/ai-workflows.yml
 templates/              caller workflow + example config for target repos
-docs/                   spec, plan, progress, decisions, install guide
+docs/                   spec, plan, progress, ADRs (docs/adr/), install guide
 tests/                  unit tests for scripts (no network)
 ```
 
@@ -60,5 +60,5 @@ tests/                  unit tests for scripts (no network)
 ## Tooling
 
 - Use the `gh` CLI for GitHub operations from this machine.
-- Prefer a small, boring stack for scripts (e.g. TypeScript on Node 20 or Python 3.12 — pick one in WP0 and record it in `docs/decisions.md`).
+- Prefer a small, boring stack for scripts (e.g. TypeScript on Node 20 or Python 3.12 — pick one in WP0 and record it as an ADR in `docs/adr/`).
 - Pin third-party actions to a full commit SHA, with the version in a comment.

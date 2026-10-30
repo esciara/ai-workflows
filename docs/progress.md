@@ -26,7 +26,7 @@ Baseline for a later comparison of build loops. One row per finished WP, updated
 
 | WP | maintainer interventions | verifier fails | rework PRs | coordination issues | notes |
 | --- | --- | --- | --- | --- | --- |
-| WP0 | n/a (pre-loop) | n/a (pre-loop) | 0 | 0 | Built before D11: plan "go" + one review; kept as one PR over ~600 lines at the maintainer's call. Verifier run afterwards on #2: pass |
+| WP0 | n/a (pre-loop) | n/a (pre-loop) | 0 | 0 | Built before [D11](adr/0011-factory-loop-and-independent-verifier.md): plan "go" + one review; kept as one PR over ~600 lines at the maintainer's call. Verifier run afterwards on #2: pass |
 
 ## Milestones
 
