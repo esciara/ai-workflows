@@ -4,7 +4,7 @@ Updated by the Claude Code session at the end of every work package. Status: `to
 
 | WP | Package | Depends on | Status | PR | Notes |
 | --- | --- | --- | --- | --- | --- |
-| WP0 | Repo bootstrap | — | todo | | |
+| WP0 | Repo bootstrap | — | in review | [#2](https://github.com/esciara/ai-workflows/pull/2) | Python 3.12; config read from default branch |
 | WP1 | Shared runtime | WP0 | todo | | |
 | WP2 | A · core review | WP1 | todo | | |
 | WP3 | A · placement + formal review | WP2 | todo | | |
@@ -29,3 +29,5 @@ Updated by the Claude Code session at the end of every work package. Status: `to
 ## Log
 
 <!-- One line per finished WP: date · WP · PR link · one-line outcome -->
+
+- 2026-10-30 · WP0 · [#2](https://github.com/esciara/ai-workflows/pull/2) · Caller on playground validates config: green run 41087000415, invalid config red run 41087013620.
