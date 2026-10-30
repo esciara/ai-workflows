@@ -22,7 +22,7 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 - Always stop and ask when a new decision is needed, when `scripts/dev/verify-wp` fails or errors, or when the policy tests (`tests/test_workflow_policy.py`) fail.
 - At the end of every WP, update its row in the Metrics table of `docs/progress.md`.
 - Keep PRs small. If a WP grows past roughly 600 changed lines, propose splitting it.
-- When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer as a new ADR in `docs/adr/` (next number, copy the template in `docs/adr/README.md`, add it to the index).
+- When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer as a new ADR in `docs/adr/` (next number, copy the template in `docs/adr/README.md`, add it to the index). The new ADR starts as `Proposed`, lists the options considered, and becomes `Accepted` when the maintainer approves it.
 
 ## Layout (target, created in WP0)
 

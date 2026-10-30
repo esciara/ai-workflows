@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D11`
+- Amended by: [ADR-0014](0014-executable-acceptance-tests.md) (what `scripts/dev/verify-wp` judges)
 
 ## Context
 

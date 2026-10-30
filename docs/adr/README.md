@@ -1,6 +1,6 @@
 # Architecture decision records
 
-Choices not covered by the spec, approved by the maintainer, one file per decision. To add one: take the next free number, copy the template below to `NNNN-<kebab-slug>.md`, fill it in and add a row to the index. Status is one of `Proposed`, `Accepted` or `Superseded by ADR-NNNN`. Never edit the decision of an accepted ADR; write a new ADR that supersedes it and update both Status lines. The alias `D<n>` keeps older mentions such as "(D4)" resolvable.
+Choices not covered by the spec, approved by the maintainer, one file per decision. To add one: take the next free number, copy the template below to `NNNN-<kebab-slug>.md`, fill it in, list at least two options under Options considered, and add a row to the index. Status is one of `Proposed`, `Accepted` or `Superseded by ADR-NNNN`; a new ADR stays `Proposed` until the maintainer approves it, then becomes `Accepted`. Never edit the decision of an accepted ADR; write a new ADR instead. If it changes part of the decision, add `Amends: ADR-NNNN` to the new ADR and `Amended by: ADR-NNNN` to the old one; if it replaces the decision fully, add `Supersedes: ADR-NNNN` and update both Status lines. The alias `D<n>` keeps older mentions such as "(D4)" resolvable.
 
 ## Template
 
@@ -9,13 +9,23 @@ Choices not covered by the spec, approved by the maintainer, one file per decisi
 
 - Status: Proposed
 - Date: YYYY-MM-DD
+- Deciders: maintainer
 - Alias: `D<n>`
 - Supersedes: ADR-NNNN (omit if none)
 - Superseded by: ADR-NNNN (omit if none)
+- Amends: ADR-NNNN (omit if none)
+- Amended by: ADR-NNNN (omit if none)
 
 ## Context
 
 <the problem or constraint that forced a choice>
+
+## Options considered
+
+- <option>: <pros>; <cons>
+- <option>: <pros>; <cons>
+
+<why the rejected options were rejected>
 
 ## Decision
 
