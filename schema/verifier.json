@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Verifier verdict",
+  "type": "object",
+  "properties": {
+    "verdict": {"enum": ["pass", "fail"]},
+    "unmet": {"type": "array", "items": {"type": "string"}},
+    "notes": {"type": "string"}
+  },
+  "required": ["verdict", "unmet", "notes"],
+  "additionalProperties": false
+}
