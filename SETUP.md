@@ -25,7 +25,7 @@ Some checks need someone who is not the maintainer: an outside reporter who open
 - [x] Same page, section "Private keys" → **Generate a private key**. A `.pem` file downloads.
 - [x] Install the App on `esciara/ai-workflows-playground` only: left sidebar → **Install App** → **Install** next to `esciara` → choose **Only select repositories** → pick `ai-workflows-playground` → **Install**.
 - Store the key on your machine, never committed and never pasted into a chat. Choose one of the following three options and tick it:
-  - [x] **macOS Keychain (recommended).**
+    - [x] **macOS Keychain (recommended).**
     - No key file left on disk, nothing in dotfiles or backups.
     - Run these two commands, one at a time:
 
@@ -36,10 +36,10 @@ Some checks need someone who is not the maintainer: an outside reporter who open
 
     - Reads via `security` normally don't prompt; if a prompt appears, click **Always Allow** once.
     - Add `-T ""` to the first command if you want a prompt on every use instead.
-  - [ ] **1Password CLI.**
+    - [ ] **1Password CLI.**
     - Save the `.pem` as a 1Password item and delete the downloaded file.
     - The script reads it with `op read`.
-  - [ ] **File, locked down.**
+    - [ ] **File, locked down.**
     - Run:
 
       ```sh
