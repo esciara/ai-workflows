@@ -20,7 +20,7 @@ Everything here touches accounts or secrets, so you do it yourself. Tick as you 
 
 Some checks need someone who is not the maintainer: an outside reporter who opens issues and replies (WP6, WP7), and a commenter without maintainer status (WP1). A GitHub App plays that role.
 
-- [ ] Create a GitHub App owned by `esciara` (Settings → Developer settings → GitHub Apps → New), named `ai-workflows-tester`. Homepage URL (required, any URL works): `https://github.com/esciara/ai-workflows`. Permissions: Issues read & write, Pull requests read & write, Metadata read. No webhook (untick Active).
+- [x] Create a GitHub App owned by `esciara` (Settings → Developer settings → GitHub Apps → New), named `ai-workflows-tester`. Homepage URL (required, any URL works): `https://github.com/esciara/ai-workflows`. Permissions: Issues read & write, Pull requests read & write, Metadata read. No webhook (untick Active). Where can this GitHub App be installed: **Only on this account**.
 - [ ] Generate a private key, note the App ID, and install the App on `esciara/ai-workflows-playground` only.
 - [ ] Keep the key on your machine (e.g. `~/.config/ai-workflows-tester.pem`). It is never committed and never pasted into a chat.
 
