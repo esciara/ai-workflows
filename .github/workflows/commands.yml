@@ -1,0 +1,123 @@
+# Reusable: slash commands on issue_comment. WP1 handles `/ping` (health check, ADR-0005).
+# Comment text and author are untrusted: they reach scripts only through env vars.
+name: ai-workflows commands
+on:
+  workflow_call:
+    inputs:
+      ai_workflows_ref:
+        description: Ref of esciara/ai-workflows to load scripts, prompts and schema from
+        type: string
+        default: main
+      config:
+        description: Normalised config JSON (output of config.yml)
+        type: string
+        required: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: esciara/ai-workflows
+          ref: ${{ inputs.ai_workflows_ref }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet -e ./.ai-workflows
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: aiwf labels-sync --repo "$REPO"
+
+  parse:
+    if: github.event_name == 'issue_comment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      command: ${{ steps.parse.outputs.command }}
+      args: ${{ steps.parse.outputs.args }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: esciara/ai-workflows
+          ref: ${{ inputs.ai_workflows_ref }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet -e ./.ai-workflows
+      - id: parse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          AIWF_CONFIG: ${{ inputs.config }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+        run: aiwf parse-command --repo "$REPO"
+
+  # Agent job (ADR-0003, ADR-0012): read-only, OAuth secret only, no GitHub token at all.
+  # Prompts are fetched without credentials (public repo) instead of actions/checkout, whose token defaults to github.token.
+  agent:
+    needs: parse
+    if: needs.parse.outputs.command == 'ping'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      json: ${{ steps.claude.outputs.structured_output }}
+    steps:
+      - env:
+          REF: ${{ inputs.ai_workflows_ref }}
+        run: |
+          git init --quiet .ai-workflows
+          git -C .ai-workflows fetch --quiet --depth 1 https://github.com/esciara/ai-workflows.git "$REF"
+          git -C .ai-workflows checkout --quiet FETCH_HEAD
+          echo "SCHEMA=$(jq -c . .ai-workflows/schema/ping.json)" >> "$GITHUB_ENV"
+      - id: claude
+        uses: anthropics/claude-code-action/base-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt_file: .ai-workflows/prompts/ping.md
+          claude_args: >-
+            --max-turns 2
+            --tools ""
+            --json-schema '${{ env.SCHEMA }}'
+
+  publish:
+    needs: [parse, agent]
+    if: always() && needs.parse.outputs.command == 'ping'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: esciara/ai-workflows
+          ref: ${{ inputs.ai_workflows_ref }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet -e ./.ai-workflows
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AGENT_JSON: ${{ needs.agent.outputs.json }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: aiwf publish --kind ping --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
