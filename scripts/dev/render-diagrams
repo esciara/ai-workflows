@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Usage: scripts/dev/render-diagrams [--check]   (regenerates the mermaid blocks of docs/diagrams.md from docs/diagrams/*.mmd)
+# Exit 0 ok, 1 out of date (--check), 2 error (missing block or source).
+set -euo pipefail
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+py="$root/.venv/bin/python"
+[ -x "$py" ] || py=python3
+PYTHONPATH="$root/scripts${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -c 'import sys; from aiwf.diagrams import main; sys.exit(main(sys.argv[1:]))' "$@"

@@ -1,6 +1,6 @@
 # Diagrams
 
-One overview of all work packages, then one small diagram per WP, added when that WP starts.
+One overview of all work packages, then one small diagram per WP, added when that WP starts. Each diagram's source is `docs/diagrams/<name>.mmd`; edit the `.mmd`, add a matching `generated:<name>` block here for a new one, then run `scripts/dev/render-diagrams`.
 
 ## Overview — work packages and dependencies
 
@@ -17,6 +17,7 @@ Key:
 
 Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't work in your viewer, use the table below.
 
+<!-- BEGIN generated:overview (from docs/diagrams/overview.mmd by scripts/dev/render-diagrams; edit the .mmd, not this block) -->
 ```mermaid
 flowchart TD
   WP0["WP0 Bootstrap<br/>config + caller"]:::done --> WP1["WP1 Shared runtime<br/>agent runner, labels, commands"]:::done
@@ -64,6 +65,7 @@ flowchart TD
   classDef bDone fill:#15803d,stroke:#14532d,color:#ffffff
   classDef xDone fill:#c2410c,stroke:#7c2d12,color:#ffffff
 ```
+<!-- END generated:overview -->
 
 | WP | Definition |
 | --- | --- |
@@ -89,6 +91,7 @@ Milestones: **M1** review usable = WP0–4, WP14 · **M2** bugs triaged and anal
 
 What happens when someone types `/ping` on an issue or PR in a target repo. `/ping` is a health check: it does nothing except confirm the whole chain works, from comment to reply.
 
+<!-- BEGIN generated:wp1 (from docs/diagrams/wp1.mmd by scripts/dev/render-diagrams; edit the .mmd, not this block) -->
 ```mermaid
 flowchart TD
   C["Comment '/ping'<br/>on target repo"] --> P{"Command parser<br/>in maintainers list<br/>AND write access?"}
@@ -99,6 +102,7 @@ flowchart TD
   V -- yes --> R["Orchestrator posts reply<br/>via gh api"]
   L["Label bootstrap<br/>creates all labels"] -.-> R
 ```
+<!-- END generated:wp1 -->
 
 Check on the playground:
 
