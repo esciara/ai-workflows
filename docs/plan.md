@@ -49,7 +49,7 @@ Metrics logging from the spec is left out of this plan; it is worth adding once 
 
 ## Milestones and test setup
 
-| **TL;DR** — Three milestones: A usable on your repos (M1), bugs triaged and analysed (M2), bugs fixed end to end (M3). Everything is tested on a throwaway repo with seeded bugs, plus a second GitHub account for fork and permission tests. |
+| **TL;DR** — Three milestones: A usable on your repos (M1), bugs triaged and analysed (M2), bugs fixed end to end (M3). Everything is tested on a throwaway repo with seeded bugs, plus a fork in my organization and a small tester GitHub App standing in for outsiders, so no second account is needed. |
 | --- |
 
 | Milestone | Packages | What you can do from then on |
@@ -61,7 +61,7 @@ Metrics logging from the spec is left out of this plan; it is worth adding once 
 **Test setup** (you create these before WP0):
 
 - **Test repo** `ai-workflows-playground`, public, with a small app and a real test suite. The session seeds bugs into it on purpose, one per WP check.
-- **Second GitHub account** (a free one is enough) to open issues as an outside reporter, send fork PRs and try commands without rights. WP1, WP4, WP6 and WP7 need it.
+- **Outsider stand-ins, no second account.** A fork of the playground in `opinionated-digital-center` sends real fork PRs (WP4). A tester GitHub App opens issues, replies as the reporter and tries commands without maintainer status (WP1, WP6, WP7).
 - **Your first real repo** gets Workflow A only after M1, then B after M3.
 - **Secrets** on the test repo: `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`), then `SLACK_WEBHOOK_URL` or `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` by WP11.
 
@@ -75,7 +75,7 @@ Metrics logging from the spec is left out of this plan; it is worth adding once 
 | `README.md` | What the repo is and how it is laid out |
 | `CLAUDE.md` | Standing rules for every Claude Code session in this repo: source of truth, one package per PR, security rules |
 | `KICKOFF.md` | The prompt for the first session |
-| `SETUP.md` | Your manual checklist: repos, token, secrets, second account, Actions access |
+| `SETUP.md` | Your manual checklist: repos, fork, token, secrets, tester App, Actions access |
 | `docs/spec.md` | The spec, exported from the doc |
 | `docs/plan.md` | This plan, exported from the doc |
 | `docs/progress.md` | Status of each work package, kept up to date by the session |
