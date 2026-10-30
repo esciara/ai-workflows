@@ -1,0 +1,27 @@
+# Every label the spec names, created by `aiwf labels-sync` (ADR-0006). Sync creates and updates, never deletes.
+labels:
+  # B1 classify
+  - {name: "type: bug", color: "d73a4a", description: "Issue class: bug (B1)"}
+  - {name: "type: feature", color: "a2eeef", description: "Issue class: feature (B1); out of scope, labelled only"}
+  - {name: "type: question", color: "d876e3", description: "Issue class: question (B1); out of scope, labelled only"}
+  # B1-B4 triage
+  - {name: "triage: needs-info", color: "fbca04", description: "Waiting on the reporter; ping at day 4, stale at 14, closed at 21 (B2)"}
+  - {name: "triage: no-response", color: "f9d0c4", description: "Reporter silent 4 days; maintainer pinged (B2)"}
+  - {name: "triage: reproduced", color: "0e8a16", description: "Repro test stored (B2)"}
+  - {name: "triage: awaiting-maintainer", color: "1d76db", description: "Analysis posted, waiting for /fix or /no-fix (B4)"}
+  - {name: "triage: needs-human", color: "b60205", description: "Agent stopped; a person takes over (B1, B2)"}
+  - {name: "triage: duplicate", color: "cfd3d7", description: "Duplicate or already fixed; see the linked item (B1)"}
+  # B4-B6 fix
+  - {name: "fix: declined", color: "e4e669", description: "Maintainer said /no-fix (B4)"}
+  - {name: "fix: needs-maintainer", color: "b60205", description: "3 fix rounds failed; draft PR waiting for the maintainer (B5)"}
+  - {name: "ai-fix", color: "5319e7", description: "PR written by Workflow B (B6)"}
+  # Workflow A verdicts
+  - {name: "ai-review: pending", color: "ededed", description: "AI review running (A)"}
+  - {name: "ai-review: merge", color: "0e8a16", description: "AI verdict: no blocking findings, CI green, low or medium risk (A)"}
+  - {name: "ai-review: changes-requested", color: "d93f0b", description: "AI verdict: blocking finding or red CI (A)"}
+  - {name: "ai-review: human-review", color: "fbca04", description: "AI verdict: high risk or not enough context; a human decides (A)"}
+  # Guardrails and reporter silence
+  - {name: "ai: off", color: "000000", description: "Kill switch: no AI run on this issue or PR"}
+  - {name: "ai: error", color: "b60205", description: "An AI run failed; see the run link"}
+  - {name: "stale", color: "ffffff", description: "No reply from the reporter for 14 days; closes in 7 (actions/stale)"}
+  - {name: "keep-open", color: "c2e0c6", description: "Exempt from the stale job"}
