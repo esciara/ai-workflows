@@ -4,7 +4,18 @@ One overview of all work packages, then one small diagram per WP, added when tha
 
 ## Overview — work packages and dependencies
 
-Colours: grey = shared foundation, blue = Workflow A (PR review), green = Workflow B (issue triage and fix), orange = cross-cutting. Thick black border = done.
+Key:
+
+- Colours:
+  - grey = shared foundation
+  - blue = Workflow A (PR review)
+  - green = Workflow B (issue triage and fix)
+  - orange = cross-cutting
+- Boxes:
+  - solid dark box = done
+  - very pale box with dotted border = not done yet
+
+Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't work in your viewer, use the table below.
 
 ```mermaid
 flowchart TD
@@ -28,28 +39,69 @@ flowchart TD
   WP8 --> WP13
   WP3 --> WP14["WP14 Onboarding kit<br/>install guide, templates"]:::x
 
-  classDef done fill:#374151,stroke:#000000,stroke-width:4px,color:#ffffff
-  classDef base fill:#4b5563,stroke:#1f2937,color:#ffffff
-  classDef a fill:#1d4ed8,stroke:#1e3a8a,color:#ffffff
-  classDef b fill:#15803d,stroke:#14532d,color:#ffffff
-  classDef x fill:#c2410c,stroke:#7c2d12,color:#ffffff
+  click WP0 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L32" "Open WP0 in docs/plan.md" _blank
+  click WP1 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L33" "Open WP1 in docs/plan.md" _blank
+  click WP2 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L34" "Open WP2 in docs/plan.md" _blank
+  click WP3 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L35" "Open WP3 in docs/plan.md" _blank
+  click WP4 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L36" "Open WP4 in docs/plan.md" _blank
+  click WP5 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L37" "Open WP5 in docs/plan.md" _blank
+  click WP6 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L38" "Open WP6 in docs/plan.md" _blank
+  click WP7 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L39" "Open WP7 in docs/plan.md" _blank
+  click WP8 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L40" "Open WP8 in docs/plan.md" _blank
+  click WP9 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L41" "Open WP9 in docs/plan.md" _blank
+  click WP10 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L42" "Open WP10 in docs/plan.md" _blank
+  click WP11 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43" "Open WP11 in docs/plan.md" _blank
+  click WP12 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44" "Open WP12 in docs/plan.md" _blank
+  click WP13 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45" "Open WP13 in docs/plan.md" _blank
+  click WP14 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46" "Open WP14 in docs/plan.md" _blank
+
+  classDef done fill:#374151,stroke:#111827,color:#ffffff
+  classDef base fill:#f3f4f6,stroke:#9ca3af,stroke-dasharray:5 4,color:#6b7280
+  classDef a fill:#eff6ff,stroke:#60a5fa,stroke-dasharray:5 4,color:#6b7280
+  classDef b fill:#f0fdf4,stroke:#4ade80,stroke-dasharray:5 4,color:#6b7280
+  classDef x fill:#fff7ed,stroke:#fb923c,stroke-dasharray:5 4,color:#6b7280
+  classDef aDone fill:#1d4ed8,stroke:#1e3a8a,color:#ffffff
+  classDef bDone fill:#15803d,stroke:#14532d,color:#ffffff
+  classDef xDone fill:#c2410c,stroke:#7c2d12,color:#ffffff
 ```
+
+| WP | Definition |
+| --- | --- |
+| WP0 | [docs/plan.md, line 32](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L32) |
+| WP1 | [docs/plan.md, line 33](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L33) |
+| WP2 | [docs/plan.md, line 34](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L34) |
+| WP3 | [docs/plan.md, line 35](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L35) |
+| WP4 | [docs/plan.md, line 36](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L36) |
+| WP5 | [docs/plan.md, line 37](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L37) |
+| WP6 | [docs/plan.md, line 38](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L38) |
+| WP7 | [docs/plan.md, line 39](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L39) |
+| WP8 | [docs/plan.md, line 40](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L40) |
+| WP9 | [docs/plan.md, line 41](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L41) |
+| WP10 | [docs/plan.md, line 42](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L42) |
+| WP11 | [docs/plan.md, line 43](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43) |
+| WP12 | [docs/plan.md, line 44](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44) |
+| WP13 | [docs/plan.md, line 45](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45) |
+| WP14 | [docs/plan.md, line 46](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46) |
 
 Milestones: **M1** review usable = WP0–4, WP14 · **M2** bugs triaged and analysed = WP5–8, WP11 · **M3** bugs fixed end to end = WP9, 10, 12, 13.
 
 ## WP1 — Shared runtime
 
-What happens when someone types `/ping` on an issue or PR in a target repo.
+What happens when someone types `/ping` on an issue or PR in a target repo. `/ping` is a health check: it does nothing except confirm the whole chain works, from comment to reply.
 
 ```mermaid
 flowchart TD
   C["Comment '/ping'<br/>on target repo"] --> P{"Command parser<br/>in maintainers list<br/>AND write access?"}
   P -- no --> I["Ignored<br/>no reply"]
   P -- yes --> AG["Agent job<br/>Claude Code, read-only<br/>no GitHub token"]
-  AG -- JSON --> V{"Orchestrator<br/>JSON matches schema?"}
+  AG -- JSON --> V{"Orchestrator<br/>does Claude's JSON answer<br/>match the ping answer schema?"}
   V -- no --> E["Label 'ai: error'"]
   V -- yes --> R["Orchestrator posts reply<br/>via gh api"]
   L["Label bootstrap<br/>creates all labels"] -.-> R
 ```
 
-Check on the playground: maintainer `/ping` → reply; tester App `/ping` → nothing; all labels exist.
+Check on the playground:
+
+- maintainer `/ping` → reply
+- tester App `/ping` → nothing
+- all labels exist
