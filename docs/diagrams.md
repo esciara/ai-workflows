@@ -4,10 +4,10 @@ One overview of all work packages, then one small diagram per WP, added when tha
 
 ## Overview — work packages and dependencies
 
-Colours: grey = shared foundation, blue = Workflow A (PR review), green = Workflow B (issue triage and fix), orange = cross-cutting. Bold border = done.
+Colours: grey = shared foundation, blue = Workflow A (PR review), green = Workflow B (issue triage and fix), orange = cross-cutting. Thick black border = done.
 
 ```mermaid
-flowchart LR
+flowchart TD
   WP0["WP0 Bootstrap<br/>config + caller"]:::done --> WP1["WP1 Shared runtime<br/>agent runner, labels, commands"]:::base
 
   WP1 --> WP2["WP2 A core review<br/>4 passes, verdict label"]:::a
@@ -28,11 +28,11 @@ flowchart LR
   WP8 --> WP13
   WP3 --> WP14["WP14 Onboarding kit<br/>install guide, templates"]:::x
 
-  classDef done fill:#e5e7eb,stroke:#111827,stroke-width:3px
-  classDef base fill:#e5e7eb,stroke:#6b7280
-  classDef a fill:#dbeafe,stroke:#2563eb
-  classDef b fill:#dcfce7,stroke:#16a34a
-  classDef x fill:#ffedd5,stroke:#ea580c
+  classDef done fill:#374151,stroke:#000000,stroke-width:4px,color:#ffffff
+  classDef base fill:#4b5563,stroke:#1f2937,color:#ffffff
+  classDef a fill:#1d4ed8,stroke:#1e3a8a,color:#ffffff
+  classDef b fill:#15803d,stroke:#14532d,color:#ffffff
+  classDef x fill:#c2410c,stroke:#7c2d12,color:#ffffff
 ```
 
 Milestones: **M1** review usable = WP0–4, WP14 · **M2** bugs triaged and analysed = WP5–8, WP11 · **M3** bugs fixed end to end = WP9, 10, 12, 13.
