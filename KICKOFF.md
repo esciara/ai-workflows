@@ -10,7 +10,7 @@ You are going to build the `ai-workflows` repo described in this folder.
 2. Check the environment and report what you find:
    - `gh auth status` and that you can see `esciara/ai-workflows`, `esciara/ai-workflows-playground` and its fork `opinionated-digital-center/ai-workflows-playground`;
    - that the playground has the secret `CLAUDE_CODE_OAUTH_TOKEN` (`gh secret list -R esciara/ai-workflows-playground`; names only);
-   - that the tester GitHub App `ai-workflows-tester` is installed on `esciara/ai-workflows-playground` (ask me for the App ID and the private key's path; never print the key);
+   - that the tester GitHub App `ai-workflows-tester` is installed on `esciara/ai-workflows-playground` (ask me for the App ID; the private key is in the macOS Keychain entry `ai-workflows-tester`, or at the path in `AI_WORKFLOWS_TESTER_KEY_PATH` if I chose the file option; check the key exists without printing it);
    - that this repo's Actions access setting lets other repos call its workflows (ask me to confirm if you can't read it).
 3. Give me, in under 40 lines:
    - your understanding of the goal in 3 sentences;
