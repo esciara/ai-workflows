@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# Usage (from .claude/settings.json): scripts/dev/claims-hook <event>   (hook JSON on stdin; ADR-0015 claims tied to agent lifetime)
-# Events: session-start pre-agent post-agent post-send subagent-stop task-stop stop-failure session-end pre-bash. Always exits 0; pre-bash may print a deny.
-root="$(cd "$(dirname "$0")/../.." && pwd)"
-py="$root/.venv/bin/python"
-[ -x "$py" ] || py=python3
-PYTHONPATH="$root/scripts${PYTHONPATH:+:$PYTHONPATH}" "$py" -c 'import sys; from aiwf.claims import main; sys.exit(main(["hook", *sys.argv[1:]]))' "$@" || true

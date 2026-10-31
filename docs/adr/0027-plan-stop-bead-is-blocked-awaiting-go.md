@@ -4,6 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D27`
+- Amended by: [ADR-0033](0033-stall-only-risks-get-no-mechanism-claims-retired.md)
 
 ## Context
 
