@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""Claude Code PreToolUse hook for Bash (ADR-0031): exit 2 blocks the command, stderr tells the agent why."""
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from aiwf.devguard import decide  # noqa: E402
+
+command = (json.load(sys.stdin).get("tool_input") or {}).get("command") or ""
+allowed, why = decide(command)
+if not allowed:
+    print(f"blocked by scripts/dev/guard-bash (ADR-0031): {why}", file=sys.stderr)
+    sys.exit(2)

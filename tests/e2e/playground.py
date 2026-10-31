@@ -26,20 +26,25 @@ POLL_INTERVAL = int(os.environ.get("AIWF_E2E_POLL", "5"))
 T = TypeVar("T")
 
 
-def gh(args: list[str], as_tester: bool = False) -> str:
-    """Run gh as the maintainer (local gh auth) or as the tester App. API failures fail the test."""
-    cmd = [str(ROOT / "scripts" / "dev" / "as-tester"), *args] if as_tester else ["gh", *args]
+def gh(args: list[str], as_tester: bool = False, as_agent: bool = False, as_maintainer: bool = False) -> str:
+    """Run gh: reads with the local gh login; writes as the agent App (ADR-0031), the tester App, or the maintainer
+    through scripts/dev/as-maintainer (comments, reviews, dispatch on the playground only). API failures fail the test."""
+    wrapper = "as-tester" if as_tester else "as-maintainer" if as_maintainer else "as-agent" if as_agent else None
+    cmd = [str(ROOT / "scripts" / "dev" / wrapper), *args] if wrapper else ["gh", *args]
+    if wrapper == "as-agent":
+        cmd.insert(1, "gh")
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         pytest.fail(f"GitHub call failed (not a pass): {' '.join(args[:3])}: {proc.stderr.strip()[:300]}", pytrace=False)
     return proc.stdout
 
 
-def api(path: str, *fields: str, method: str = "GET", as_tester: bool = False) -> Any:
+def api(path: str, *fields: str, method: str = "GET", as_tester: bool = False, as_maintainer: bool = False) -> Any:
+    """GETs read with the local gh login; other methods run as the tester, the maintainer, or else the agent App."""
     args = ["api", "-X", method, path]
     for f in fields:
         args += ["-f", f]
-    out = gh(args, as_tester=as_tester)
+    out = gh(args, as_tester=as_tester, as_maintainer=as_maintainer, as_agent=method != "GET")
     return json.loads(out) if out.strip() else None
 
 
@@ -56,8 +61,9 @@ def poll(check: Callable[[], T | None], what: str, timeout: int = RUN_TIMEOUT) -
 
 
 def comment(number: int, body: str, as_tester: bool = False) -> dict[str, Any]:
-    """Post a comment; returns its id, created_at and author."""
-    c = api(f"repos/{REPO}/issues/{number}/comments", f"body={body}", method="POST", as_tester=as_tester)
+    """Post a comment as the maintainer (or the tester); returns its id, created_at and author."""
+    c = api(f"repos/{REPO}/issues/{number}/comments", f"body={body}", method="POST", as_tester=as_tester,
+            as_maintainer=not as_tester)
     return {"id": c["id"], "created_at": c["created_at"], "user": c["user"]["login"]}
 
 
@@ -79,7 +85,7 @@ def dispatch(ref: str = "main") -> int:
     """Start the caller workflow by workflow_dispatch on `ref`; returns the new run's ID."""
     wf = next(w for w in api(f"repos/{REPO}/actions/workflows")["workflows"] if w["name"] == WORKFLOW)
     out = gh(["api", "-X", "POST", f"repos/{REPO}/actions/workflows/{wf['id']}/dispatches",
-              "-f", f"ref={ref}", "-F", "return_run_details=true"])
+              "-f", f"ref={ref}", "-F", "return_run_details=true"], as_maintainer=True)  # the App has no actions write
     return json.loads(out)["workflow_run_id"]
 
 
@@ -169,6 +175,6 @@ def throwaway_pr(title: str, *, e2e: bool, wp: str = "", slug: str = "", base: s
         api(f"repos/{REPO}/issues/{pr['number']}/labels", *[f"labels[]={lb}" for lb in _labels(e2e)], method="POST")
         yield {"number": pr["number"], "title": title, "branch": branch}
     finally:
-        gh(["api", "-X", "DELETE", f"repos/{REPO}/git/refs/heads/{branch}"])
+        api(f"repos/{REPO}/git/refs/heads/{branch}", method="DELETE")
         if pr and api(f"repos/{REPO}/pulls/{pr['number']}")["state"] == "open":
             api(f"repos/{REPO}/pulls/{pr['number']}", "state=closed", method="PATCH")

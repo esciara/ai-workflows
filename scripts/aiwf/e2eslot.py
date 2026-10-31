@@ -67,5 +67,10 @@ def push_target(ref: str = "HEAD", remote: str = "origin", cwd: Path = ROOT, pat
         raise RuntimeError("push_target needs the e2e slot: run it inside e2eslot.hold()")
     sha = _git("rev-parse", f"{ref}^{{commit}}", cwd=cwd)
     current = _git("ls-remote", remote, TARGET, cwd=cwd).split("\t")[0]
-    _git("push", "--quiet", f"--force-with-lease={TARGET}:{current}", remote, f"{sha}:{TARGET}", cwd=cwd)
+    push = ["push", "--quiet", f"--force-with-lease={TARGET}:{current}", remote, f"{sha}:{TARGET}"]
+    if Path(cwd, remote).exists():  # a local remote (unit tests)
+        _git(*push, cwd=cwd)
+    else:  # GitHub: push as the agent App (ADR-0031), never with the maintainer's git credentials
+        subprocess.run([str(ROOT / "scripts" / "dev" / "as-agent"), "git", *push], cwd=cwd, capture_output=True,
+                       text=True, check=True)
     return sha
