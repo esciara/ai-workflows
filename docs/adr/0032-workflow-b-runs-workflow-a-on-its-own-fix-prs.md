@@ -25,6 +25,8 @@ Option (b) was rejected because it breaks a hard rule, option (c) because it nee
 
 Option (a). After B6 opens a non-draft fix PR, a following job in Workflow B calls Workflow A's reusable workflow for that PR (`needs:` the job that opened it, PR number passed as an input). B's own PR comment tells the maintainer that the target's CI has not run on the PR and how to start it: approve the pending runs ("Approve workflows to run" in the PR's merge box), push a commit, or close and reopen the PR.
 
+Verdict on B's PRs (maintainer, 2026-10-31): since B's fix PRs get no target CI, Workflow A's verdict on them is `human-review` (`docs/spec.md:53`, `docs/spec.md:305`), and B always hands them to the maintainer. `docs/spec.md:197` ("its verdict label decides what the maintainer does next") applies only once CI has run on the PR.
+
 Why: it keeps the hard rules (only `GITHUB_TOKEN` writes, no edits to target CI) and still guarantees an independent Workflow A review of every fix PR.
 
 ## Consequences
@@ -35,4 +37,5 @@ Why: it keeps the hard rules (only `GITHUB_TOKEN` writes, no edits to target CI)
 - A's CI gate (`docs/spec.md:53`) sees no CI on the fix PR. Under "CI never completes" A waits up to its budget and then posts `human-review` (`docs/spec.md:305`), so B's PRs get `human-review` until CI has run. If the maintainer approves the pending runs, the target's normal caller also runs A (the approval-required A run), which then sees CI; A must therefore tolerate two runs on the same head (one sticky comment, idempotent labels, ADR-0016).
 - Draft PRs (B5 escalation after round 3, `docs/spec.md:195`) are not handed to A, matching A's "drafts are skipped" (`docs/spec.md:31`).
 - B's total wall-clock time now includes A's review; the per-run budget must cover both.
-- Spec reading: `docs/spec.md:197` ("Opening it triggers Workflow A") and `docs/spec.md:122` ("handed to Workflow A") are read as "B hands the PR to Workflow A", which this ADR does explicitly. The consequence that A's verdict on B's PRs is `human-review` until CI has run is in tension with `docs/spec.md:197` ("its verdict label decides what the maintainer does next"); it is flagged to the maintainer, not resolved here.
+- Spec reading: `docs/spec.md:197` ("Opening it triggers Workflow A") and `docs/spec.md:122` ("handed to Workflow A") are read as "B hands the PR to Workflow A", which this ADR does explicitly. The tension with `docs/spec.md:197` ("its verdict label decides") is resolved by the maintainer as stated in the Decision: the verdict label decides only once CI has run.
+- Follow-up at WP9: try on the playground whether "Approve workflows to run" on a fix PR starts the target's CI and lets A re-run with a real verdict.
