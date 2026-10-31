@@ -1,9 +1,9 @@
 import os
-import time
 
 import pytest
 
 import playground as pg
+from aiwf import e2eslot
 
 
 def pytest_collection_modifyitems(config, items):
@@ -26,44 +26,33 @@ def fixture_issue(request) -> dict:
     would queue behind each other when run in parallel (`-n auto`, pytest-xdist).
     """
     title = f"{FIXTURE_TITLE} ({request.node.originalname})"
-    found = pg.api(f"repos/{pg.REPO}/issues?labels={pg.FIXTURE_LABEL}&state=open&per_page=100")
-    for issue in found:
-        if issue["title"] == title and "pull_request" not in issue:
-            return {"number": issue["number"], "title": issue["title"]}
-    issue = pg.api(
-        f"repos/{pg.REPO}/issues",
-        f"title={title}",
-        "body=Reusable fixture for tests/e2e/test_wp1.py in esciara/ai-workflows.",
-        f"labels[]={pg.FIXTURE_LABEL}",
-        method="POST",
-    )
-    return {"number": issue["number"], "title": issue["title"]}
+    return pg.reusable_issue(title, "Reusable fixture for tests/e2e/test_wp1.py in esciara/ai-workflows.", e2e=False)
 
 
 @pytest.fixture
 def throwaway_pr():
     """A test-fixture PR on its own branch; branch deleted (and PR closed) in teardown."""
-    branch = f"e2e-wp1-{time.time_ns()}"
-    base = pg.api(f"repos/{pg.REPO}")["default_branch"]
-    sha = pg.api(f"repos/{pg.REPO}/git/ref/heads/{base}")["object"]["sha"]
-    pg.api(f"repos/{pg.REPO}/git/refs", f"ref=refs/heads/{branch}", f"sha={sha}", method="POST")
-    pr = None
-    try:
-        pg.api(
-            f"repos/{pg.REPO}/contents/e2e/{branch}.md",
-            f"message=test: e2e throwaway {branch}",
-            "content=dGhyb3dhd2F5Cg==",  # "throwaway\n"
-            f"branch={branch}",
-            method="PUT",
-        )
-        title = f"[e2e] WP1 /ping on a PR ({branch})"
-        pr = pg.api(
-            f"repos/{pg.REPO}/pulls", f"title={title}", f"head={branch}", f"base={base}",
-            "body=Throwaway PR for tests/e2e/test_wp1.py; closed by its teardown.", method="POST",
-        )
-        pg.api(f"repos/{pg.REPO}/issues/{pr['number']}/labels", f"labels[]={pg.FIXTURE_LABEL}", method="POST")
-        yield {"number": pr["number"], "title": title}
-    finally:
-        pg.gh(["api", "-X", "DELETE", f"repos/{pg.REPO}/git/refs/heads/{branch}"])
-        if pr and pg.api(f"repos/{pg.REPO}/pulls/{pr['number']}")["state"] == "open":
-            pg.api(f"repos/{pg.REPO}/pulls/{pr['number']}", "state=closed", method="PATCH")
+    with pg.throwaway_pr("[e2e] WP1 /ping on a PR", e2e=False) as pr:
+        yield pr
+
+
+def pytest_configure(config):
+    """With AIWF_E2E_SLOT=1, the controller process takes the e2e slot for the whole run and points `e2e-target` at
+    HEAD (ADR-0026, ADR-0028). xdist workers inherit AIWF_E2E_TARGET_SHA; the `e2e_target` fixture checks it."""
+    if os.environ.get("AIWF_E2E") != "1" or os.environ.get("AIWF_E2E_SLOT") != "1" or hasattr(config, "workerinput"):
+        return
+    slot = e2eslot.hold()
+    print(f"waiting for the e2e slot {e2eslot.lock_path()} ...")
+    slot.__enter__()
+    config.add_cleanup(lambda: slot.__exit__(None, None, None))
+    os.environ["AIWF_E2E_TARGET_SHA"] = e2eslot.push_target(remote=os.environ.get("AIWF_E2E_REMOTE", "origin"))
+    print(f"e2e slot held; e2e-target -> {os.environ['AIWF_E2E_TARGET_SHA']}")
+
+
+@pytest.fixture
+def e2e_target() -> str:
+    """The commit `e2e-target` points at for this run; fails the test unless the run holds the slot."""
+    sha = os.environ.get("AIWF_E2E_TARGET_SHA")
+    if not sha:
+        pytest.fail("this test needs the e2e slot: run with AIWF_E2E_SLOT=1 (not a pass)", pytrace=False)
+    return sha

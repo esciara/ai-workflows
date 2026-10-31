@@ -1,5 +1,7 @@
 # Reusable: load and validate the caller repo's .github/ai-workflows.yml.
 # The config is read from the repo's default branch via the API, never from a PR head.
+# Exception (ADR-0028): the playground's e2e caller passes `e2e_config`; then the file comes from tests/e2e/config/
+# of this workflow's own commit (job.workflow_sha), so a WP branch on `e2e-target` carries its own e2e config.
 name: ai-workflows config
 on:
   workflow_call:
@@ -9,6 +11,10 @@ on:
         default: .github/ai-workflows.yml
       config_ref:
         description: Read the config from this ref instead of the default branch. Honoured only on workflow_dispatch runs.
+        type: string
+        default: ''
+      e2e_config:
+        description: e2e caller only (ADR-0028). File name in tests/e2e/config/ of this workflow's commit, used instead of the repo's config.
         type: string
         default: ''
     outputs:
@@ -65,4 +71,5 @@ jobs:
           REPO: ${{ github.repository }}
           CONFIG_PATH: ${{ inputs.config_path }}
           CONFIG_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref || '' }}
-        run: aiwf config --repo "$REPO" --path "$CONFIG_PATH" --ref "$CONFIG_REF"
+          E2E_CONFIG: ${{ inputs.e2e_config }}
+        run: aiwf config --repo "$REPO" --path "$CONFIG_PATH" --ref "$CONFIG_REF" --e2e-config "$E2E_CONFIG"

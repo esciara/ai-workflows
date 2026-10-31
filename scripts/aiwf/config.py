@@ -12,8 +12,10 @@ from typing import Any, Callable
 import yaml
 from jsonschema import Draft202012Validator
 
-SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema" / "ai-workflows.schema.json"
+ROOT = Path(__file__).resolve().parents[2]  # the ai-workflows checkout (at job.workflow_sha in CI, ADR-0019)
+SCHEMA_PATH = ROOT / "schema" / "ai-workflows.schema.json"
 DEFAULT_CONFIG_PATH = ".github/ai-workflows.yml"
+E2E_CONFIG_DIR = "tests/e2e/config"  # alternative configs for the playground's e2e caller only (ADR-0028)
 
 GhRunner = Callable[[list[str]], str]
 
@@ -64,6 +66,17 @@ def fetch_from_repo(repo: str, path: str, ref: str | None = None, gh: GhRunner |
     except (ValueError, UnicodeDecodeError):
         raise ConfigError(source, ["content is not valid base64/UTF-8"]) from None
     return text, source
+
+
+def read_e2e(name: str, root: Path = ROOT) -> tuple[str, str]:
+    """Return (text, source) for e2e config `name`: a plain file name in E2E_CONFIG_DIR of this checkout, never a path."""
+    source = f"ai-workflows:{E2E_CONFIG_DIR}/{name}"
+    if not name or name != Path(name).name or name.startswith(".") or not name.endswith((".yml", ".yaml")):
+        raise ConfigError(source, ["e2e config must be a .yml file name in " + E2E_CONFIG_DIR])
+    try:
+        return (root / E2E_CONFIG_DIR / name).read_text(encoding="utf-8"), source
+    except OSError:
+        raise ConfigError(source, ["file not found"]) from None
 
 
 def parse(text: str, source: str) -> dict[str, Any]:
