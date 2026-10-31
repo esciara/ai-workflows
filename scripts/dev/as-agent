@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Usage: scripts/dev/as-agent gh <args...>
+#        scripts/dev/as-agent git <args...>     (e.g. git push origin HEAD)
+# Runs `gh` or `git` as the GitHub App `ai-workflows-agent`, the identity of development agents (ADR-0031).
+# Mints an installation token for the App's installation on $AI_WORKFLOWS_AGENT_REPO
+# (default esciara/ai-workflows) and hands it to gh as GH_TOKEN; git gets it through
+# `gh auth git-credential` set via GIT_CONFIG_* env vars (no git config file is changed).
+#   AI_WORKFLOWS_AGENT_APP_ID    App ID (required)
+#   AI_WORKFLOWS_AGENT_KEY_PATH  private key file; default: macOS Keychain entry `ai-workflows-agent` (base64 PEM)
+# The key, the JWT and the token never go on a command line or to output; temp files are removed on exit.
+set -euo pipefail
+
+case "${1:-}" in
+  gh|git) ;;
+  *) echo "usage: as-agent gh|git <args...>" >&2; exit 2 ;;
+esac
+
+app_id="${AI_WORKFLOWS_AGENT_APP_ID:?set AI_WORKFLOWS_AGENT_APP_ID to the agent App ID}"
+repo="${AI_WORKFLOWS_AGENT_REPO:-esciara/ai-workflows}"
+api="https://api.github.com"
+
+umask 077
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+if [ -n "${AI_WORKFLOWS_AGENT_KEY_PATH:-}" ]; then
+  key="$AI_WORKFLOWS_AGENT_KEY_PATH"
+else
+  key="$tmp/key.pem"
+  security find-generic-password -s ai-workflows-agent -w | base64 -d > "$key"
+fi
+
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+now="$(date +%s)"
+header="$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)"
+payload="$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now - 60))" "$((now + 540))" "$app_id" | b64url)"
+sig="$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign "$key" -binary | b64url)"
+printf 'Authorization: Bearer %s.%s.%s\n' "$header" "$payload" "$sig" > "$tmp/jwt-header"
+
+call() {  # call <method> <path> -> JSON on stdout; fails on HTTP errors without echoing secrets
+  curl -fsS -X "$1" -H @"$tmp/jwt-header" -H 'Accept: application/vnd.github+json' \
+    -H 'X-GitHub-Api-Version: 2022-11-28' "$api$2"
+}
+
+installation="$(call GET "/repos/$repo/installation" | jq -r .id)"
+GH_TOKEN="$(call POST "/app/installations/$installation/access_tokens" | jq -r .token)"
+[ -n "$GH_TOKEN" ] && [ "$GH_TOKEN" != null ] || { echo "as-agent: no installation token" >&2; exit 1; }
+export GH_TOKEN
+unset GITHUB_TOKEN
+
+if [ "$1" = git ]; then
+  # Empty helper first resets inherited helpers (e.g. osxkeychain with the maintainer's token).
+  export GIT_CONFIG_COUNT=2
+  export GIT_CONFIG_KEY_0=credential.https://github.com.helper GIT_CONFIG_VALUE_0=
+  export GIT_CONFIG_KEY_1=credential.https://github.com.helper GIT_CONFIG_VALUE_1='!gh auth git-credential'
+fi
+
+status=0
+"$@" || status=$?
+exit "$status"
