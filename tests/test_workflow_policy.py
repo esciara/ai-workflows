@@ -23,6 +23,9 @@ EXPECTED = {
     "agent-read-permissions.yml": "agent-permissions:",
     "agent-marker-token.yml": "agent-secrets:",
     "pull-request-target-head.yml": "pull-request-target:",
+    "pull-request-target-checkout.yml": "pull-request-target:",
+    "pull-request-target-run-text.yml": "pull-request-target:",
+    "pull-request-target-secret.yml": "pull-request-target:",
     "secrets-inherit.yml": "secrets-inherit:",
 }
 
@@ -84,7 +87,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {pull-requests: write}
     steps:
-      - run: echo ${{ github.event.pull_request.number }}
+      - env:
+          PR: ${{ github.event.pull_request.number }}
+        run: echo "$PR"
 """
     assert policy.check_text(text) == []
 
@@ -102,3 +107,36 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 """
     assert policy.check_text(text) == []
+
+
+# --- fork PRs (ADR-0044): the only code that runs on pull_request_target --------------------------------------------
+
+
+def _doc(path: str) -> dict:
+    return policy.load_workflow((ROOT / path).read_text())
+
+
+def test_fork_push_workflow_is_api_only():
+    doc = _doc(".github/workflows/review-fork-push.yml")
+    assert policy.triggers(doc) == {"workflow_call"}
+    assert "secrets" not in (doc[True]["workflow_call"] or {}), "declares no secrets"
+    for name, job in doc["jobs"].items():
+        assert "pull_request_target" in job["if"] and "head.repo.full_name != github.repository" in job["if"], name
+        assert job["permissions"] == {"pull-requests": "write"}, name
+        for step in job["steps"]:
+            assert "uses" not in step, f"{name}: no actions at all, API calls only"
+            assert "${{" not in step["run"], f"{name}: PR fields go through env, never into run:"
+
+
+def test_caller_runs_only_the_fork_push_job_on_pull_request_target():
+    doc = _doc("templates/caller.yml")
+    assert doc[True]["pull_request_target"] == {"types": ["synchronize"]}
+    job = doc["jobs"]["review-fork-push"]
+    assert job["permissions"] == {"pull-requests": "write"} and "secrets" not in job and "with" not in job
+    assert job["uses"].startswith("esciara/ai-workflows/.github/workflows/review-fork-push.yml@")
+    assert "head.repo.full_name != github.repository" in job["if"]
+    for name, other in doc["jobs"].items():
+        if name in ("config", "review-fork-push"):
+            continue
+        cond = other["if"]
+        assert "pull_request_target" not in cond and "github.event_name ==" in cond, (name, cond)

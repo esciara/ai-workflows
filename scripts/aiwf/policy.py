@@ -16,6 +16,8 @@ AGENT_MARKER_RE = re.compile(r"#\s*aiwf:\s*agent\b")
 PR_HEAD_RE = re.compile(r"github\.event\.pull_request\.head\.(?:ref|sha)|refs/pull/")
 TOKEN_RE = re.compile(r"GITHUB_TOKEN|github\.token")
 SECRET_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
+EVENT_EXPR_RE = re.compile(r"\$\{\{[^}]*\bgithub\.(?:event\.|head_ref)")
+CHECKOUT_ACTION = "actions/checkout"
 AGENT_ACTION = "anthropics/claude-code-action"
 ALLOWED_AGENT_SECRET = "CLAUDE_CODE_OAUTH_TOKEN"
 OWN_REUSABLE_PREFIX = "esciara/ai-workflows/"
@@ -137,6 +139,30 @@ def check_text(text: str) -> list[str]:
 
     if "pull_request_target" in triggers(doc) and PR_HEAD_RE.search(json.dumps(doc)):
         errors.append("pull-request-target: pull_request_target workflow checks out the PR head")
+    errors += pull_request_target_jobs(doc)
+    return errors
+
+
+def pull_request_target_jobs(doc: dict[str, Any]) -> list[str]:
+    """ADR-0044: code that can run on `pull_request_target` (the trigger, or a job whose `if:` names it) makes API calls
+    only: no checkout at all, no event data in `run:` (env vars instead), and no secrets in a job that runs on it."""
+    on_trigger = "pull_request_target" in triggers(doc)
+    errors = []
+    for name, job in doc["jobs"].items():
+        if not isinstance(job, dict):
+            continue
+        named = "pull_request_target" in str(job.get("if", ""))
+        if not (on_trigger or named):
+            continue
+        for step in job.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
+            if str(step.get("uses", "")).startswith(CHECKOUT_ACTION):
+                errors.append(f"pull-request-target: job '{name}' checks out code (API calls only)")
+            if EVENT_EXPR_RE.search(str(step.get("run", ""))):
+                errors.append(f"pull-request-target: job '{name}' puts event data in run: (pass it through env)")
+        if named and SECRET_RE.search(json.dumps(job)):
+            errors.append(f"pull-request-target: job '{name}' runs on pull_request_target with secrets")
     return errors
 
 
