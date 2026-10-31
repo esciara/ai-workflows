@@ -106,9 +106,14 @@ def check_text(text: str) -> list[str]:
         elif not VERSION_COMMENT_RE.search(rest):
             errors.append(f"unpinned: line {n}: {ref} (needs a '# vX' version comment)")
 
+    # Top level: `permissions: {}`, so a job without its own block gets nothing (ADR-0017).
     top = doc.get("permissions")
-    if top is not None and has_write(top):
+    if top is None:
+        errors.append("permissions: no top-level permissions (needs `permissions: {}`)")
+    elif has_write(top):
         errors.append("permissions: top-level permissions grant write")
+    elif top != {}:
+        errors.append("permissions: top-level permissions must be `{}`")
 
     blocks = job_blocks(text)
     for name, job in doc["jobs"].items():
@@ -127,8 +132,8 @@ def check_text(text: str) -> list[str]:
                 errors.append(f"agent-secrets: agent job '{name}' references GITHUB_TOKEN / github.token")
             for secret in sorted(set(SECRET_RE.findall(body)) - {ALLOWED_AGENT_SECRET}):
                 errors.append(f"agent-secrets: agent job '{name}' references secrets.{secret}")
-            if has_write(perms):
-                errors.append(f"agent-permissions: agent job '{name}' has write permissions")
+            if perms is not None and perms != {}:  # agent jobs get no token scope at all (ADR-0018)
+                errors.append(f"agent-permissions: agent job '{name}' must have `permissions: {{}}`")
 
     if "pull_request_target" in triggers(doc) and PR_HEAD_RE.search(json.dumps(doc)):
         errors.append("pull-request-target: pull_request_target workflow checks out the PR head")

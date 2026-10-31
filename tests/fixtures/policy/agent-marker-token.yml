@@ -1,9 +1,9 @@
 on: push
+permissions: {}
 jobs:
   agent:  # aiwf: agent
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    permissions: {}
     steps:
       - run: ./run-agent.sh
         env:

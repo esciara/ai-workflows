@@ -1,0 +1,30 @@
+# Reusable: create or update the managed label set (ADR-0006).
+# Called only on workflow_dispatch and schedule, never per comment (ADR-0023).
+name: ai-workflows labels
+on:
+  workflow_call:
+
+# Least privilege by default (ADR-0017); each job grants what it needs.
+permissions: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - run: pip install --quiet -e ./.ai-workflows
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: aiwf labels-sync --repo "$REPO"

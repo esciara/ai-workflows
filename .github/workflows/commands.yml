@@ -4,10 +4,6 @@ name: ai-workflows commands
 on:
   workflow_call:
     inputs:
-      ai_workflows_ref:
-        description: Ref of esciara/ai-workflows to load scripts, prompts and schema from
-        type: string
-        default: main
       config:
         description: Normalised config JSON (output of config.yml)
         type: string
@@ -16,28 +12,10 @@ on:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
 
-jobs:
-  labels:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      issues: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: esciara/ai-workflows
-          ref: ${{ inputs.ai_workflows_ref }}
-          path: .ai-workflows
-          persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.12'
-      - run: pip install --quiet -e ./.ai-workflows
-      - env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: aiwf labels-sync --repo "$REPO"
+# Least privilege by default (ADR-0017); each job grants what it needs.
+permissions: {}
 
+jobs:
   parse:
     if: github.event_name == 'issue_comment'
     runs-on: ubuntu-latest
@@ -50,8 +28,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: esciara/ai-workflows
-          ref: ${{ inputs.ai_workflows_ref }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .ai-workflows
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -67,7 +45,7 @@ jobs:
           COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
         run: aiwf parse-command --repo "$REPO"
 
-  # Agent job (ADR-0003, ADR-0012): read-only, OAuth secret only, no GitHub token at all.
+  # Agent job (ADR-0003, ADR-0012, ADR-0018): no token permissions, OAuth secret only.
   # `--tools StructuredOutput`: no built-in tools (an empty `--tools ""` is dropped by base-action's arg parser).
   # Prompts are fetched without credentials (public repo) instead of actions/checkout, whose token defaults to github.token.
   agent:
@@ -75,16 +53,18 @@ jobs:
     if: needs.parse.outputs.command == 'ping'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
+    permissions: {}
     outputs:
       json: ${{ steps.claude.outputs.structured_output }}
     steps:
       - env:
-          REF: ${{ inputs.ai_workflows_ref }}
+          AIWF_REPO: ${{ job.workflow_repository }}
+          AIWF_SHA: ${{ job.workflow_sha }}
         run: |
+          # Scripts, prompts and schema come from the commit this workflow file came from (ADR-0019).
+          echo "ai-workflows: $AIWF_REPO@$AIWF_SHA"
           git init --quiet .ai-workflows
-          git -C .ai-workflows fetch --quiet --depth 1 https://github.com/esciara/ai-workflows.git "$REF"
+          git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
           git -C .ai-workflows checkout --quiet FETCH_HEAD
           # Claude's --json-schema rejects the draft 2020-12 `$schema` key; publish validates against the full file.
           echo "SCHEMA=$(jq -c 'del(."$schema")' .ai-workflows/schema/ping.json)" >> "$GITHUB_ENV"
@@ -109,8 +89,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: esciara/ai-workflows
-          ref: ${{ inputs.ai_workflows_ref }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .ai-workflows
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

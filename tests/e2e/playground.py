@@ -72,6 +72,14 @@ def run_for(cmt: dict[str, Any], title: str) -> int:
     return poll(find, f"the issue_comment run for comment {cmt['id']}")
 
 
+def dispatch(ref: str = "main") -> int:
+    """Start the caller workflow by workflow_dispatch on `ref`; returns the new run's ID."""
+    wf = next(w for w in api(f"repos/{REPO}/actions/workflows")["workflows"] if w["name"] == WORKFLOW)
+    out = gh(["api", "-X", "POST", f"repos/{REPO}/actions/workflows/{wf['id']}/dispatches",
+              "-f", f"ref={ref}", "-F", "return_run_details=true"])
+    return json.loads(out)["workflow_run_id"]
+
+
 def completed(run_id: int) -> dict[str, Any]:
     def done() -> dict[str, Any] | None:
         run = api(f"repos/{REPO}/actions/runs/{run_id}")
