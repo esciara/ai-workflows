@@ -7,6 +7,7 @@ dropped, and records are sorted by id with sorted keys, so re-exporting an uncha
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,6 +19,8 @@ BD_EXPORT = ["bd", "export"]
 VOLATILE_FIELDS = frozenset({"updated_at", "lease_expires_at", "heartbeat_at", "owner"})
 # the merge slot flips on every acquire/release; it is coordination state, not board content
 EXCLUDED_LABELS = frozenset({"gt:slot"})
+# a split of a WP (WP2 -> WP2a, WP2b) is a child bead of the WP bead titled "WP2a · ..."; follow-ups are children too, untitled so
+SPLIT_TITLE = re.compile(r"^(WP\d+[a-z]) · ")
 
 
 class BoardError(Exception):
@@ -54,6 +57,30 @@ def parse(text: str) -> list[dict]:
             raise BoardError(f"line {n}: expected a JSON object with an id")
         records.append(rec)
     return records
+
+
+def work_package_beads(records: list[dict]) -> dict[str, dict]:
+    """WP beads (`metadata.wp`, e.g. "WP2") by WP id."""
+    return {r["metadata"]["wp"]: r for r in records if isinstance(r.get("metadata"), dict) and "wp" in r["metadata"]}
+
+
+def split_id(record: dict) -> str | None:
+    """"WP2a" for a split bead titled "WP2a · ...", else None."""
+    m = SPLIT_TITLE.match(record.get("title", ""))
+    return m.group(1) if m else None
+
+
+def splits(records: list[dict]) -> dict[str, list[dict]]:
+    """Split beads by parent bead id, sorted by split id: children (`parent-child` dependency) titled "WP<N><x> · ..."."""
+    out: dict[str, list[dict]] = {}
+    for r in records:
+        sid = split_id(r)
+        if sid is None:
+            continue
+        for d in r.get("dependencies") or []:
+            if d.get("type") == "parent-child":
+                out.setdefault(d["depends_on_id"], []).append(r)
+    return {k: sorted(v, key=lambda r: split_id(r) or "") for k, v in out.items()}
 
 
 def fresh_export(cwd: Path = ROOT, timeout: float = 30) -> str:

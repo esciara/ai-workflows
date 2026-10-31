@@ -5,6 +5,7 @@
 - Deciders: maintainer
 - Alias: `D42`
 - Supersedes: [ADR-0011](0011-factory-loop-and-independent-verifier.md), [ADR-0014](0014-executable-acceptance-tests.md)
+- Amended by: [ADR-0046](0046-status-views-derived-from-beads.md)
 
 ## Context
 

@@ -5,6 +5,7 @@
 - Deciders: maintainer
 - Alias: `D36`
 - Supersedes: [ADR-0015](0015-parallel-operating-model.md), [ADR-0027](0027-plan-stop-bead-is-blocked-awaiting-go.md)
+- Amended by: [ADR-0046](0046-status-views-derived-from-beads.md)
 
 ## Context
 
