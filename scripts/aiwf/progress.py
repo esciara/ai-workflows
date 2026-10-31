@@ -1,4 +1,6 @@
-"""Render the generated blocks of docs/progress.md from the beads board (`bd list --json --all -n 0`).
+"""Export the beads board to docs/board.jsonl, then render the generated blocks of docs/progress.md from that export.
+
+The export (aiwf.board) is the committed record: CI can re-render docs/progress.md from git alone (`--check`).
 
 A work-package bead carries `metadata.wp` ("WP2"); optional `metadata.pr`, `metadata.notes`, `metadata.log` (list of
 log lines) and `metadata.metrics` (maintainer_interventions, verifier_fails, rework_prs, coordination_issues, notes).
@@ -8,16 +10,14 @@ log lines) and `metadata.metrics` (maintainer_interventions, verifier_fails, rew
 from __future__ import annotations
 
 import argparse
-import json
 import subprocess
 import sys
 from pathlib import Path
 
-from aiwf import gendoc
+from aiwf import board, gendoc
 
 ROOT = Path(__file__).resolve().parents[2]
 PROGRESS_PATH = ROOT / "docs" / "progress.md"
-BD_LIST = ["bd", "list", "--json", "--all", "-n", "0"]
 
 STATUS = {
     "open": "todo",
@@ -96,35 +96,36 @@ def render(text: str, issues: list[dict]) -> str:
     return gendoc.replace_blocks(text, {"wp-table": wp_table(issues), "metrics": metrics_table(issues), "log": log_lines(issues)})
 
 
-def load_issues(path: str | None) -> list[dict]:
-    if path:
-        raw = Path(path).read_text(encoding="utf-8")
-    else:
-        raw = subprocess.run(BD_LIST, cwd=ROOT, check=True, capture_output=True, text=True).stdout
-    issues = json.loads(raw)
-    if not isinstance(issues, list):
-        raise BoardError("expected a JSON array of beads")
-    return issues
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="render-progress", description=__doc__.splitlines()[0])
-    ap.add_argument("--input", help="bd JSON file (default: run `bd list --json --all -n 0`)")
+    ap.add_argument("--board", default=str(board.BOARD_PATH), help="board export to write and render from (default docs/board.jsonl)")
     ap.add_argument("--file", default=str(PROGRESS_PATH), help="progress file to update")
-    ap.add_argument("--check", action="store_true", help="exit 1 if the file is out of date; write nothing")
+    ap.add_argument("--no-export", action="store_true", help="render from the existing export; do not run bd (CI, worktrees without a board)")
+    ap.add_argument("--check", action="store_true", help="exit 1 if the file is out of date with the export; implies --no-export; write nothing")
     args = ap.parse_args(argv)
-    target = Path(args.file)
+    target, board_path = Path(args.file), Path(args.board)
     try:
+        if args.check or args.no_export:
+            export = board_path.read_text(encoding="utf-8")
+        else:
+            export = board.fresh_export()
+            leaks = board.scan_secrets(export)
+            if leaks:
+                print(f"render-progress: secret scan found {', '.join(leaks)} in the board export; nothing written. Remove it from the beads and rerun.", file=sys.stderr)
+                return 2
         old = target.read_text(encoding="utf-8")
-        new = render(old, load_issues(args.input))
-    except (BoardError, gendoc.GenDocError, json.JSONDecodeError, subprocess.CalledProcessError, OSError) as exc:
+        new = render(old, board.parse(export))
+    except (BoardError, board.BoardError, board.SecretScanError, gendoc.GenDocError, subprocess.SubprocessError, OSError) as exc:
         print(f"render-progress: {exc}", file=sys.stderr)
         return 2
     if args.check:
         if new != old:
-            print(f"{target} is out of date; run scripts/dev/render-progress", file=sys.stderr)
+            print(f"{target} is out of date with {board_path}; run scripts/dev/render-progress", file=sys.stderr)
             return 1
         return 0
+    if not args.no_export and (not board_path.exists() or board_path.read_text(encoding="utf-8") != export):
+        board_path.write_text(export, encoding="utf-8")
+        print(f"updated {board_path}")
     if new != old:
         target.write_text(new, encoding="utf-8")
         print(f"updated {target}")
