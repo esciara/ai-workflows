@@ -29,5 +29,5 @@ B1 (`docs/spec.md`, Workflow B) must label the issue class, spot duplicates and 
 
 - Duplicates and fixes of any age are found, and the fix range follows the version the reporter runs.
 - Two agent calls per issue instead of one, each small and tool-less; a few search API calls per issue (well under the 30 per minute limit).
-- The spec's "already fixed: label `triage: duplicate`, stop" becomes "possibly fixed" without a label, so B2 still reproduces and confirms; a confirmed fix is B2's to report.
+- Deviation from the spec, approved by the maintainer: "already fixed: label `triage: duplicate`, stop" becomes "possibly fixed" without a label, so B2 still reproduces and confirms or rejects it; a confirmed fix is B2's to report. `docs/spec.md` (B1) is amended in the same PR.
 - Issue search depends on GitHub's search index, which can lag a few seconds behind a newly created issue.

@@ -125,7 +125,7 @@ The two highlighted steps are the only places the flow waits on a person; every 
 
 - Output one of `type: bug`, `type: feature`, `type: question`, with a one-line reason in a comment.
 - Feature or question: stop. Low confidence: `triage: needs-human`, stop.
-- Duplicate or already fixed on the default branch: comment with the link, label `triage: duplicate`, stop. Never close.
+- Duplicate: comment with the link, label `triage: duplicate`, stop. Possible fix on the default branch: comment with a "possibly fixed by X" link, no label; B2's reproduction confirms or rejects it. Never close.
 
 **B2 — Reproduce (**[TRI-08](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**, **[EXE-02](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**).** In a fresh sandbox on the default branch HEAD, with no secrets and no push rights:
 
