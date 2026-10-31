@@ -62,6 +62,12 @@ def test_non_maintainer_ping_is_ignored(fixture_issue):
 
 
 def test_all_spec_labels_exist_and_match_schema():
+    # Labels sync runs only on workflow_dispatch and schedule (ADR-0023): run it, then check.
+    run_id = pg.dispatch()
+    run = pg.completed(run_id)
+    print(f"labels sync dispatch: run {run_id} {run['html_url']} -> {run['conclusion']}")
+    assert run["conclusion"] == "success", pg.jobs(run_id)
+    assert pg.jobs(run_id).get("labels / sync") == "success", pg.jobs(run_id)
     wanted = {
         (str(l["name"]), str(l["color"]).lower(), str(l["description"]))
         for l in yaml.safe_load(LABELS_FILE.read_text())["labels"]

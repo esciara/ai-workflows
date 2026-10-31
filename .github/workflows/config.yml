@@ -4,10 +4,6 @@ name: ai-workflows config
 on:
   workflow_call:
     inputs:
-      ai_workflows_ref:
-        description: Ref of esciara/ai-workflows to load scripts and schema from
-        type: string
-        default: main
       config_path:
         type: string
         default: .github/ai-workflows.yml
@@ -28,6 +24,9 @@ on:
         description: "'true' when enabled and workflows.triage"
         value: ${{ jobs.load.outputs.triage }}
 
+# Least privilege by default (ADR-0017); each job grants what it needs.
+permissions: {}
+
 jobs:
   load:
     runs-on: ubuntu-latest
@@ -42,8 +41,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: esciara/ai-workflows
-          ref: ${{ inputs.ai_workflows_ref }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .ai-workflows
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

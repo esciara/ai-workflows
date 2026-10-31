@@ -15,9 +15,12 @@ EXPECTED = {
     "job-without-permissions.yml": "permissions:",
     "job-write-all.yml": "permissions:",
     "top-level-write.yml": "permissions:",
+    "top-level-missing.yml": "permissions:",
+    "top-level-read.yml": "permissions:",
     "agent-github-token.yml": "agent-secrets:",
     "agent-other-secret.yml": "agent-secrets:",
     "agent-write-permissions.yml": "agent-permissions:",
+    "agent-read-permissions.yml": "agent-permissions:",
     "agent-marker-token.yml": "agent-secrets:",
     "pull-request-target-head.yml": "pull-request-target:",
     "secrets-inherit.yml": "secrets-inherit:",
@@ -26,7 +29,7 @@ EXPECTED = {
 
 def test_real_workflows_found():
     names = {p.name for p in REAL}
-    assert {"ci.yml", "config.yml", "caller.yml"} <= names
+    assert {"ci.yml", "config.yml", "commands.yml", "labels.yml", "caller.yml"} <= names
 
 
 @pytest.mark.parametrize("path", REAL, ids=lambda p: str(p.relative_to(ROOT)))
@@ -61,6 +64,7 @@ def test_bare_on_key_parsed_as_true():
 
 def test_exemptions():
     text = """on: push
+permissions: {}
 jobs:
   local:
     uses: ./.github/workflows/x.yml
@@ -74,11 +78,27 @@ jobs:
 
 def test_pull_request_target_without_head_checkout_is_allowed():
     text = """on: [pull_request_target]
+permissions: {}
 jobs:
   label:
     runs-on: ubuntu-latest
     permissions: {pull-requests: write}
     steps:
       - run: echo ${{ github.event.pull_request.number }}
+"""
+    assert policy.check_text(text) == []
+
+
+def test_agent_job_with_empty_permissions_passes():
+    text = """on: push
+permissions: {}
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: anthropics/claude-code-action/base-action@0000000000000000000000000000000000000000 # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 """
     assert policy.check_text(text) == []
