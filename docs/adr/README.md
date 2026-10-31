@@ -44,35 +44,35 @@ Why: <rationale>
 | ADR | Alias | Title | Status |
 | --- | --- | --- | --- |
 | [ADR-0000](0000-stack-python-3-12.md) | D0 | Stack: Python 3.12 | Accepted |
-| [ADR-0001](0001-permissions-granted-per-job-by-caller.md) | D1 | Permissions granted per job by the caller | Accepted |
-| [ADR-0002](0002-called-workflows-load-code-by-ai-workflows-ref.md) | D2 | Called workflows load code by `ai_workflows_ref` | Accepted |
-| [ADR-0003](0003-agents-in-their-own-read-only-jobs.md) | D3 | Agents in their own read-only jobs | Accepted |
+| [ADR-0001](0001-permissions-granted-per-job-by-caller.md) | D1 | Permissions granted per job by the caller | Superseded by ADR-0038 |
+| [ADR-0002](0002-called-workflows-load-code-by-ai-workflows-ref.md) | D2 | Called workflows load code by `ai_workflows_ref` | Superseded by ADR-0040 |
+| [ADR-0003](0003-agents-in-their-own-read-only-jobs.md) | D3 | Agents in their own read-only jobs | Superseded by ADR-0039 |
 | [ADR-0004](0004-config-read-from-default-branch-only.md) | D4 | Config read from the default branch only | Accepted |
 | [ADR-0005](0005-command-authors.md) | D5 | Command authors | Accepted |
 | [ADR-0006](0006-full-label-set-bootstrapped-in-wp1.md) | D6 | Full label set bootstrapped in WP1 | Accepted |
 | [ADR-0007](0007-risk-tiers-and-ci-gate.md) | D7 | Risk tiers and CI gate | Accepted |
-| [ADR-0008](0008-summary-comment-and-review.md) | D8 | Summary comment and review | Accepted |
+| [ADR-0008](0008-summary-comment-and-review.md) | D8 | Summary comment and review | Superseded by ADR-0041 |
 | [ADR-0009](0009-approving-test-prs-on-the-playground.md) | D9 | Approving test PRs on the playground | Accepted |
 | [ADR-0010](0010-config-keys-beyond-the-spec-example.md) | D10 | Config keys beyond the spec example | Accepted |
-| [ADR-0011](0011-factory-loop-and-independent-verifier.md) | D11 | Factory loop and independent verifier | Accepted |
-| [ADR-0012](0012-agents-use-base-action.md) | D12 | Agents use `claude-code-action/base-action` | Accepted |
-| [ADR-0013](0013-publish-job-pull-requests-write.md) | D13 | Publish job gets `pull-requests: write` | Accepted |
-| [ADR-0014](0014-executable-acceptance-tests.md) | D14 | Executable acceptance tests; verifier reviews the test | Accepted |
+| [ADR-0011](0011-factory-loop-and-independent-verifier.md) | D11 | Factory loop and independent verifier | Superseded by ADR-0042 |
+| [ADR-0012](0012-agents-use-base-action.md) | D12 | Agents use `claude-code-action/base-action` | Superseded by ADR-0039 |
+| [ADR-0013](0013-publish-job-pull-requests-write.md) | D13 | Publish job gets `pull-requests: write` | Superseded by ADR-0038 |
+| [ADR-0014](0014-executable-acceptance-tests.md) | D14 | Executable acceptance tests; verifier reviews the test | Superseded by ADR-0042 |
 | [ADR-0015](0015-parallel-operating-model.md) | D15 | Parallel operating model: beads board, single writer, agent-lifetime claims, merge rules | Superseded by ADR-0036 |
-| [ADR-0016](0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md) | D16 | Review summary in a sticky comment; GitHub reviews only when needed | Accepted |
-| [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md) | D17 | Top-level `permissions: {}` in caller and reusable workflows | Accepted |
-| [ADR-0018](0018-agent-jobs-get-no-token-permissions.md) | D18 | Agent jobs get `permissions: {}` | Accepted |
-| [ADR-0019](0019-scripts-ref-follows-the-workflow-sha.md) | D19 | Scripts ref follows the workflow SHA; callers pin a tagged SHA | Accepted |
+| [ADR-0016](0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md) | D16 | Review summary in a sticky comment; GitHub reviews only when needed | Superseded by ADR-0041 |
+| [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md) | D17 | Top-level `permissions: {}` in caller and reusable workflows | Superseded by ADR-0038 |
+| [ADR-0018](0018-agent-jobs-get-no-token-permissions.md) | D18 | Agent jobs get `permissions: {}` | Superseded by ADR-0039 |
+| [ADR-0019](0019-scripts-ref-follows-the-workflow-sha.md) | D19 | Scripts ref follows the workflow SHA; callers pin a tagged SHA | Superseded by ADR-0040 |
 | [ADR-0020](0020-test-pr-approval-and-bypass-on-the-playground-only.md) | D20 | Test-PR approval and admin bypass on the playground only | Accepted |
 | [ADR-0021](0021-run-state-on-the-item-labels-and-marker-comment.md) | D21 | Run state lives on the item: labels plus a marker comment | Accepted |
-| [ADR-0022](0022-own-reusable-workflow-refs-pinned-to-a-sha-from-wp14.md) | D22 | Own reusable-workflow refs pinned to a SHA from WP14 | Accepted |
+| [ADR-0022](0022-own-reusable-workflow-refs-pinned-to-a-sha-from-wp14.md) | D22 | Own reusable-workflow refs pinned to a SHA from WP14 | Superseded by ADR-0040 |
 | [ADR-0023](0023-labels-sync-on-dispatch-and-schedule-only.md) | D23 | Labels sync on dispatch and schedule only | Accepted |
 | [ADR-0024](0024-split-wp11-senders-early-event-wiring-late.md) | D24 | Split WP11: senders early, event wiring late | Accepted |
 | [ADR-0025](0025-seams-pr-before-fan-out.md) | D25 | Seams PR before fan-out | Accepted |
-| [ADR-0026](0026-e2e-isolation-base-branch-per-wp-and-one-e2e-slot.md) | D26 | e2e isolation: base branch per WP and one e2e slot | Accepted |
-| [ADR-0027](0027-plan-stop-bead-is-blocked-awaiting-go.md) | D27 | Plan stop: bead is `blocked` with label `awaiting-go` | Accepted |
-| [ADR-0028](0028-fixed-e2e-caller-on-the-playground.md) | D28 | Fixed e2e caller on the playground | Accepted |
-| [ADR-0029](0029-e2e-pr-routing-by-branch-prefix.md) | D29 | e2e test PRs routed by an `e2e/` branch prefix | Accepted |
+| [ADR-0026](0026-e2e-isolation-base-branch-per-wp-and-one-e2e-slot.md) | D26 | e2e isolation: base branch per WP and one e2e slot | Superseded by ADR-0043 |
+| [ADR-0027](0027-plan-stop-bead-is-blocked-awaiting-go.md) | D27 | Plan stop: bead is `blocked` with label `awaiting-go` | Superseded by ADR-0036 |
+| [ADR-0028](0028-fixed-e2e-caller-on-the-playground.md) | D28 | Fixed e2e caller on the playground | Superseded by ADR-0043 |
+| [ADR-0029](0029-e2e-pr-routing-by-branch-prefix.md) | D29 | e2e test PRs routed by an `e2e/` branch prefix | Superseded by ADR-0043 |
 | [ADR-0030](0030-generated-docs-keep-single-writer-drop-enforcement.md) | D30 | Generated docs: single writer kept, enforcement dropped | Accepted |
 | [ADR-0031](0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md) | D31 | Agents act as their own GitHub App; main protected by a ruleset | Accepted |
 | [ADR-0032](0032-workflow-b-runs-workflow-a-on-its-own-fix-prs.md) | D32 | Workflow B runs Workflow A on its own fix PRs | Accepted |
@@ -80,4 +80,10 @@ Why: <rationale>
 | [ADR-0034](0034-workflow-a-agent-inputs-and-ci-gate.md) | D34 | Workflow A agent inputs and CI gate | Accepted |
 | [ADR-0035](0035-workflow-b-classifier-inputs-dedup-and-already-fixed.md) | D35 | Workflow B classifier inputs, dedup and already-fixed check | Accepted |
 | [ADR-0036](0036-parallel-operating-model-consolidated.md) | D36 | Parallel operating model (consolidated) | Accepted |
+| [ADR-0038](0038-github-token-permissions-consolidated.md) | D38 | GitHub token permissions: top-level `{}`, caller grants per job, called jobs narrow (consolidated) | Accepted |
+| [ADR-0039](0039-agent-jobs-consolidated.md) | D39 | Agent jobs: own job, `base-action`, no token scope, OAuth secret only (consolidated) | Accepted |
+| [ADR-0040](0040-code-ref-and-pinning-consolidated.md) | D40 | Code ref follows the workflow SHA; own reusable refs pinned to a tagged SHA from WP14 (consolidated) | Accepted |
+| [ADR-0041](0041-review-output-consolidated.md) | D41 | Review output: sticky summary comment; GitHub review only when needed (consolidated) | Accepted |
+| [ADR-0042](0042-factory-loop-consolidated.md) | D42 | Factory loop: stop-WPs, test-first acceptance, `verify-wp` reviews the test (consolidated) | Accepted |
+| [ADR-0043](0043-e2e-on-the-playground-consolidated.md) | D43 | e2e on the playground: one e2e caller, routing, single slot, e2e config (consolidated) | Accepted |
 <!-- END generated:adr-index -->
