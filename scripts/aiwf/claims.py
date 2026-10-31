@@ -1,7 +1,9 @@
 """Claims tied to agent lifetime (ADR-0015): assignment, heartbeat, release and reaper, driven by Claude Code hooks.
 
-Push model: the orchestrator runs `assign` just before spawning a track agent; SubagentStart binds that pending
-assignment to the agent's `agent_id`. State lives in `.beads/aiwf-claims.json` of the main checkout (not in git).
+Push model, parent-side binding: the orchestrator spawns a track agent with the Agent tool, `run_in_background: true`
+and a description starting with the bead id (`aiwf-wp2: ...`). PreToolUse(Agent) claims the bead (or denies the spawn);
+PostToolUse(Agent) binds it to the `agentId` of the tool response; PostToolUse(SendMessage) re-binds a resumed agent.
+State lives in `.beads/aiwf-claims.json` of the main checkout (not in git).
 Hooks never fail the tool call: every error ends in exit 0, except the deliberate PreToolUse deny. Stdlib only.
 """
 
@@ -32,8 +34,17 @@ RUN = subprocess.run  # replaced in tests
 SLEEP = time.sleep
 
 
+BEAD_IN_DESCRIPTION = re.compile(r"^(aiwf-[a-z0-9]+(?:\.[0-9]+)*):")
+
+
 def actor_for(bead: str) -> str:
     return f"track-{bead}"
+
+
+def bead_of(tool_input: dict) -> str | None:
+    """Bead id of an Agent call: its description must start with `<bead>:`."""
+    m = BEAD_IN_DESCRIPTION.match(str((tool_input or {}).get("description", "")))
+    return m.group(1) if m else None
 
 
 # ---------------------------------------------------------------- guard
@@ -90,7 +101,7 @@ def state(root: Path):
             data = json.loads(path.read_text()) if path.exists() else {}
         except json.JSONDecodeError:
             data = {}
-        for key, empty in (("pending", []), ("agents", {}), ("heartbeats", {}), ("loops", {}), ("reaper", 0)):
+        for key, empty in (("agents", {}), ("heartbeats", {}), ("loops", {}), ("reaper", 0)):
             data.setdefault(key, empty)
         yield data
         tmp = path.with_suffix(".tmp")
@@ -107,41 +118,51 @@ def _json(r: subprocess.CompletedProcess) -> dict:
     return data[0] if isinstance(data, list) else data
 
 
+def _issue(root: Path, bead: str) -> dict | None:
+    show = bd(root, "show", bead, "--json")
+    return _json(show) if show.returncode == 0 else None
+
+
+def _holds(issue: dict | None, actor: str) -> bool:
+    return bool(issue) and issue.get("status") == "in_progress" and issue.get("assignee") == actor
+
+
 # ---------------------------------------------------------------- actions
 
 
-def assign(root: Path, bead: str, agent_type: str = "general-purpose") -> int:
+def claim(root: Path, bead: str) -> str | None:
+    """Claim `bead` for its track actor; None on success (also when that actor already holds it), else why not."""
     actor = actor_for(bead)
+    if _holds(_issue(root, bead), actor):
+        return None
     r = bd(root, "update", bead, "--claim", "--actor", actor)
-    if r.returncode != 0:
-        print(f"board-assign: {bead}: {r.stderr.strip() or r.stdout.strip()}", file=sys.stderr)
-        return 1
-    with state(root) as s:
-        s["pending"].append({"bead": bead, "actor": actor, "agent_type": agent_type})
-    print(f"{bead} assigned to {actor}; spawn its agent ({agent_type}) now")
-    return 0
+    return None if r.returncode == 0 else (r.stderr.strip() or r.stdout.strip() or "claim failed")
 
 
-def bind(root: Path, agent_id: str, agent_type: str, session_id: str) -> None:
+def bind(root: Path, agent_id: str, bead: str, session_id: str) -> None:
     with state(root) as s:
-        for i, p in enumerate(s["pending"]):
-            if p["agent_type"] in (agent_type, "*"):
-                s["pending"].pop(i)
-                s["agents"][agent_id] = {"bead": p["bead"], "actor": p["actor"], "session_id": session_id}
-                return
+        s["agents"][agent_id] = {"bead": bead, "actor": actor_for(bead), "session_id": session_id, "active": True}
+
+
+def rebind(root: Path, agent_id: str, session_id: str) -> None:
+    """A released agent resumed by SendMessage: track it again if its bead is still assigned to it or in_review."""
+    with state(root) as s:
+        entry = s["agents"].get(agent_id)
+    if not entry or entry["active"]:
+        return
+    issue = _issue(root, entry["bead"])
+    if _holds(issue, entry["actor"]) or (issue or {}).get("status") == "in_review":
+        with state(root) as s:
+            s["agents"][agent_id].update(active=True, session_id=session_id)
 
 
 def release_bead(root: Path, bead: str, actor: str) -> bool:
     """Unclaim `bead` if `actor` still holds it in_progress, and free the merge slot if `actor` holds it."""
     for attempt in range(RETRIES):
-        ok = True
-        show = bd(root, "show", bead, "--json")
-        if show.returncode != 0:
-            ok = False
-        else:
-            issue = _json(show)
-            if issue.get("status") == "in_progress" and issue.get("assignee") == actor:
-                ok = bd(root, "unclaim", bead, "--if-assignee", actor, "--reason", "agent ended (ADR-0015 hook)").returncode == 0
+        issue = _issue(root, bead)
+        ok = issue is not None
+        if _holds(issue, actor):
+            ok = bd(root, "unclaim", bead, "--if-assignee", actor, "--reason", "agent ended (ADR-0015 hook)").returncode == 0
         slot = bd(root, "merge-slot", "check", "--json")
         if slot.returncode == 0 and _json(slot).get("holder") == actor:
             ok = bd(root, "merge-slot", "release", "--holder", actor).returncode == 0 and ok
@@ -153,30 +174,29 @@ def release_bead(root: Path, bead: str, actor: str) -> bool:
 
 
 def release_agent(root: Path, agent_id: str) -> None:
+    """Unknown agent ids (not bound yet, or not a track) are a no-op. The entry is kept, inactive, for a re-bind."""
     with state(root) as s:
         entry = s["agents"].get(agent_id)
-    if entry and release_bead(root, entry["bead"], entry["actor"]):
+    if entry and entry["active"] and release_bead(root, entry["bead"], entry["actor"]):
         with state(root) as s:
-            s["agents"].pop(agent_id, None)
+            s["agents"][agent_id]["active"] = False
             s["heartbeats"].pop(entry["bead"], None)
 
 
 def release_session(root: Path, session_id: str) -> None:
-    """Session over: release its agents' beads and assignments no agent picked up."""
+    """Session over (SessionEnd, or its Claude process died): release its agents' beads and forget them."""
     with state(root) as s:
-        agents = {a: e for a, e in s["agents"].items() if e["session_id"] == session_id}
-        pending = list(s["pending"])
+        agents = [a for a, e in s["agents"].items() if e["session_id"] == session_id]
     for agent_id in agents:
         release_agent(root, agent_id)
-    done = [p for p in pending if release_bead(root, p["bead"], p["actor"])]
     with state(root) as s:
-        s["pending"] = [p for p in s["pending"] if p not in done]
+        s["agents"] = {a: e for a, e in s["agents"].items() if e["session_id"] != session_id or e["active"]}
         s["loops"].pop(session_id, None)
 
 
 def heartbeat(root: Path, session_id: str, now: float) -> None:
     with state(root) as s:
-        held = [e for e in s["agents"].values() if e["session_id"] == session_id] + list(s["pending"])
+        held = [e for e in s["agents"].values() if e["session_id"] == session_id and e["active"]]
         due = [e for e in held if now - s["heartbeats"].get(e["bead"], 0) >= HEARTBEAT_MIN_GAP]
         for e in due:
             s["heartbeats"][e["bead"]] = now
@@ -228,6 +248,8 @@ def loop(root: Path, session_id: str, parent_pid: int) -> None:
                 reap(root, now)
             next_beat = now + HEARTBEAT_EVERY
         SLEEP(5)
+    with contextlib.suppress(Exception):  # crash or kill -9 of Claude: no SessionEnd, so release here
+        release_session(root, session_id)
 
 
 def start_loop(root: Path, session_id: str, parent_pid: int) -> None:
@@ -262,15 +284,26 @@ def stale_warning(cwd: str) -> str | None:
 # ---------------------------------------------------------------- hook entry
 
 
+def _deny(msg: str) -> int:
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": msg}}))
+    return 0
+
+
 def hook(event: str, payload: dict) -> int:
     cwd = payload.get("cwd") or os.getcwd()
     agent_id = payload.get("agent_id")
+    tool_input = payload.get("tool_input") or {}
     if event == "pre-bash":
-        reason = guard((payload.get("tool_input") or {}).get("command", "")) if agent_id else None
+        reason = guard(tool_input.get("command", "")) if agent_id else None
         if reason:
-            msg = f"{reason} is reserved to the orchestrator (ADR-0015, push model): track agents never claim, assign, unclaim, reclaim or force. Ask the orchestrator."
-            print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": msg}}))
+            return _deny(f"{reason} is reserved to the orchestrator (ADR-0015, push model): track agents never claim, assign, unclaim, reclaim or force. Ask the orchestrator.")
         return 0
+    bead = bead_of(tool_input) if event in ("pre-agent", "post-agent") else None
+    if event == "pre-agent" and bead:
+        if agent_id:
+            return _deny(f"only the orchestrator spawns track agents ({bead}, ADR-0015).")
+        if tool_input.get("run_in_background") is not True:
+            return _deny(f"a track agent ({bead}) must be spawned with run_in_background: true (ADR-0015): only a background launch returns its agent id at once, to bind the claim to it.")
     root = beads_root(cwd)
     if root is None:
         return 0
@@ -283,8 +316,16 @@ def hook(event: str, payload: dict) -> int:
             warning = stale_warning(cwd)
             if warning:
                 print(warning)
-    elif event == "subagent-start" and agent_id:
-        bind(root, agent_id, payload.get("agent_type", ""), session_id)
+    elif event == "pre-agent" and bead:
+        reason = claim(root, bead)
+        if reason:
+            return _deny(f"cannot claim {bead} for {actor_for(bead)} (ADR-0015): {reason}")
+    elif event == "post-agent" and bead:
+        response = payload.get("tool_response")
+        if isinstance(response, dict) and response.get("agentId") and response.get("status") == "async_launched":
+            bind(root, response["agentId"], bead, session_id)
+    elif event == "post-send" and tool_input.get("to"):
+        rebind(root, tool_input["to"], session_id)
     elif event in ("subagent-stop", "stop-failure") and agent_id:
         release_agent(root, agent_id)
         reap(root, now)
@@ -301,20 +342,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="claims", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     h = sub.add_parser("hook", help="Claude Code hook entry; reads the hook JSON on stdin")
-    h.add_argument("event", choices=["session-start", "subagent-start", "subagent-stop", "task-stop", "stop-failure", "session-end", "pre-bash"])
-    a = sub.add_parser("assign", help="orchestrator: claim a bead for its track agent, just before spawning it")
-    a.add_argument("bead")
-    a.add_argument("--agent-type", default="general-purpose", help="subagent type of the agent to bind ('*' for any)")
+    h.add_argument("event", choices=["session-start", "pre-agent", "post-agent", "post-send", "subagent-stop", "task-stop", "stop-failure", "session-end", "pre-bash"])
     lp = sub.add_parser("loop", help="internal: heartbeat loop of one session")
     lp.add_argument("session_id")
     lp.add_argument("parent_pid", type=int)
     args = ap.parse_args(argv)
-    if args.cmd == "assign":
-        root = beads_root(os.getcwd())
-        if root is None:
-            print("board-assign: bd or .beads/ not found", file=sys.stderr)
-            return 2
-        return assign(root, args.bead, args.agent_type)
     if args.cmd == "loop":
         loop(Path.cwd(), args.session_id, args.parent_pid)
         return 0

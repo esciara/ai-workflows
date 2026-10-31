@@ -102,32 +102,76 @@ def test_pre_bash_denies_only_subagents(env, monkeypatch, capsys):
     assert run_hook("pre-bash", cmd, monkeypatch, capsys) == (0, "")
 
 
-def test_assign_then_subagent_start_binds_fifo_by_agent_type(env, monkeypatch, capsys):
+def spawn(bead="aiwf-wp2", background=True, agent_id=None):
+    tool_input = {"description": f"{bead}: build it", "prompt": "...", "subagent_type": "general-purpose"}
+    if background is not None:
+        tool_input["run_in_background"] = background
+    return {"session_id": "s", "tool_name": "Agent", "tool_input": tool_input, **({"agent_id": agent_id} if agent_id else {})}
+
+
+def launched(payload, agent="a1"):
+    return {**payload, "tool_response": {"isAsync": True, "status": "async_launched", "agentId": agent}}
+
+
+def test_bead_of_needs_strict_description_prefix():
+    assert claims.bead_of({"description": "aiwf-wp2: build"}) == "aiwf-wp2"
+    assert claims.bead_of({"description": "aiwf-2en.1: x"}) == "aiwf-2en.1"
+    for d in ("fix aiwf-wp2: x", "aiwf-wp2 build", "explore: aiwf-wp2", "wp2: x"):
+        assert claims.bead_of({"description": d}) is None
+
+
+def test_spawn_claims_then_binds_agent_id_from_tool_response(env, monkeypatch, capsys):
     root, fake = env
-    assert claims.assign(root, "aiwf-wp2") == 0
-    assert claims.assign(root, "aiwf-wp5", agent_type="track") == 0
+    assert run_hook("pre-agent", spawn(), monkeypatch, capsys) == (0, "")
     assert fake.issues["aiwf-wp2"] == {"status": "in_progress", "assignee": "track-aiwf-wp2"}
-    run_hook("subagent-start", {"session_id": "s", "agent_id": "x", "agent_type": "Explore"}, monkeypatch, capsys)
-    run_hook("subagent-start", {"session_id": "s", "agent_id": "t", "agent_type": "track"}, monkeypatch, capsys)
-    run_hook("subagent-start", {"session_id": "s", "agent_id": "g", "agent_type": "general-purpose"}, monkeypatch, capsys)
-    st = load(root)
-    assert st["pending"] == []
-    assert st["agents"] == {
-        "t": {"bead": "aiwf-wp5", "actor": "track-aiwf-wp5", "session_id": "s"},
-        "g": {"bead": "aiwf-wp2", "actor": "track-aiwf-wp2", "session_id": "s"},
-    }
+    run_hook("post-agent", launched(spawn()), monkeypatch, capsys)
+    assert load(root)["agents"] == {"a1": {"bead": "aiwf-wp2", "actor": "track-aiwf-wp2", "session_id": "s", "active": True}}
+    assert run_hook("pre-agent", spawn(), monkeypatch, capsys) == (0, "")  # same actor already holds it: re-spawn allowed
 
 
-def test_assign_fails_when_already_claimed(env):
+@pytest.mark.parametrize(
+    "payload,holder,why",
+    [(spawn(background=None), None, "run_in_background"), (spawn(background=False), None, "run_in_background"), (spawn(agent_id="t1"), None, "only the orchestrator"), (spawn(), "someone", "cannot claim")],
+)
+def test_track_spawn_denied_unless_background_by_orchestrator_and_claimable(env, monkeypatch, capsys, payload, holder, why):
+    _, fake = env
+    if holder:
+        fake.issues["aiwf-wp2"] = {"status": "in_progress", "assignee": holder}
+    rc, out = run_hook("pre-agent", payload, monkeypatch, capsys)
+    assert rc == 0 and why in json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert fake.issues.get("aiwf-wp2", {}).get("assignee") == holder
+
+
+def test_agents_without_bead_and_foreground_results_are_ignored(env, monkeypatch, capsys):
     root, fake = env
-    fake.issues["aiwf-wp2"] = {"status": "in_progress", "assignee": "someone"}
-    assert claims.assign(root, "aiwf-wp2") == 1
-    assert not (root / ".beads" / claims.STATE_NAME).exists()
+    plain = {"session_id": "s", "tool_input": {"description": "explore code", "run_in_background": False}}
+    assert run_hook("pre-agent", plain, monkeypatch, capsys) == (0, "")
+    run_hook("post-agent", launched(plain), monkeypatch, capsys)
+    run_hook("post-agent", {**spawn(), "tool_response": {"status": "completed", "agentId": "a1"}}, monkeypatch, capsys)
+    assert fake.calls == [] and not (root / ".beads" / claims.STATE_NAME).exists()
 
 
 def bound(root, fake, agent="a1", bead="aiwf-wp2", session="s"):
-    claims.assign(root, bead)
-    claims.bind(root, agent, "general-purpose", session)
+    assert claims.claim(root, bead) is None
+    claims.bind(root, agent, bead, session)
+
+
+def test_unbound_agent_end_is_a_noop(env, monkeypatch, capsys):
+    _, fake = env
+    run_hook("subagent-stop", {"session_id": "s", "agent_id": "zz"}, monkeypatch, capsys)
+    assert fake.bd_calls("show") == fake.bd_calls("unclaim") == []
+
+
+@pytest.mark.parametrize("status,rebound", [("in_progress", True), ("in_review", True), ("open", False)])
+def test_send_message_rebinds_resumed_agent(env, monkeypatch, capsys, status, rebound):
+    root, fake = env
+    bound(root, fake)
+    fake.issues["aiwf-wp2"]["status"] = "in_review"
+    run_hook("subagent-stop", {"session_id": "s", "agent_id": "a1"}, monkeypatch, capsys)
+    assert load(root)["agents"]["a1"]["active"] is False
+    fake.issues["aiwf-wp2"]["status"] = status
+    run_hook("post-send", {"session_id": "s", "tool_input": {"to": "a1", "message": "fix the review"}}, monkeypatch, capsys)
+    assert load(root)["agents"]["a1"]["active"] is rebound
 
 
 @pytest.mark.parametrize(
@@ -146,7 +190,7 @@ def test_agent_end_releases_its_bead_and_merge_slot(env, monkeypatch, capsys, ev
     assert fake.issues["aiwf-wp2"] == {"status": "open", "assignee": None}
     assert fake.slot_holder is None
     assert ["bd", "unclaim", "aiwf-wp2", "--if-assignee", "track-aiwf-wp2", "--reason", "agent ended (ADR-0015 hook)"] in fake.calls
-    assert load(root)["agents"] == {}
+    assert load(root)["agents"]["a1"]["active"] is False
 
 
 def test_in_review_bead_is_not_released(env, monkeypatch, capsys):
@@ -166,16 +210,21 @@ def test_failed_release_retries_then_keeps_the_binding(env, monkeypatch, capsys)
     assert "a1" in load(root)["agents"]
 
 
-def test_session_end_releases_all_its_beads_and_unpicked_assignments(env, monkeypatch, capsys):
+def test_session_end_releases_all_its_beads(env, monkeypatch, capsys):
     root, fake = env
     bound(root, fake, "a1", "aiwf-wp2", "s")
     bound(root, fake, "b1", "aiwf-wp3", "other")
-    claims.assign(root, "aiwf-wp5")  # never spawned
     run_hook("session-end", {"session_id": "s", "reason": "other"}, monkeypatch, capsys)
-    assert fake.issues["aiwf-wp2"]["status"] == "open" and fake.issues["aiwf-wp5"]["status"] == "open"
-    assert fake.issues["aiwf-wp3"]["status"] == "in_progress"
-    st = load(root)
-    assert list(st["agents"]) == ["b1"] and st["pending"] == []
+    assert fake.issues["aiwf-wp2"]["status"] == "open" and fake.issues["aiwf-wp3"]["status"] == "in_progress"
+    assert list(load(root)["agents"]) == ["b1"]
+
+
+def test_loop_releases_session_when_claude_dies(env, monkeypatch):
+    root, fake = env
+    bound(root, fake)
+    monkeypatch.setattr(claims, "_alive", lambda pid: False)
+    claims.loop(root, "s", 12345)
+    assert fake.issues["aiwf-wp2"]["status"] == "open" and load(root)["agents"] == {}
 
 
 def test_heartbeat_covers_session_beads_at_most_once_a_minute(env):
@@ -199,7 +248,7 @@ def test_reaper_is_rate_limited_and_skips_after_sleep(env):
 
 
 def test_session_start_starts_loop_and_warns_main_session_only(env, monkeypatch, capsys):
-    root, fake = env
+    _, fake = env
     monkeypatch.setattr(claims, "stale_warning", lambda cwd: "sync PR due")
     assert run_hook("session-start", {"session_id": "s", "source": "startup"}, monkeypatch, capsys) == (0, "sync PR due\n")
     assert run_hook("session-start", {"session_id": "s", "agent_id": "a1"}, monkeypatch, capsys) == (0, "")
@@ -210,7 +259,7 @@ def test_hooks_are_noops_without_a_board(monkeypatch, capsys):
     calls = []
     monkeypatch.setattr(claims, "beads_root", lambda cwd: None)
     monkeypatch.setattr(claims, "RUN", lambda *a, **k: calls.append(a))
-    for event in ("session-start", "subagent-start", "subagent-stop", "task-stop", "stop-failure", "session-end"):
+    for event in ("session-start", "post-send", "subagent-stop", "task-stop", "stop-failure", "session-end"):
         assert run_hook(event, {"session_id": "s", "agent_id": "a1"}, monkeypatch, capsys) == (0, "")
     assert calls == []
 
@@ -252,11 +301,13 @@ def test_settings_wire_every_event_with_room_to_finish():
                     wired[event, g.get("matcher")] = (h["command"].rsplit(" ", 1)[1], h["timeout"])
     assert {k: v[0] for k, v in wired.items()} == {
         ("SessionStart", None): "session-start",
-        ("SubagentStart", None): "subagent-start",
         ("SubagentStop", None): "subagent-stop",
         ("StopFailure", None): "stop-failure",
         ("SessionEnd", None): "session-end",
         ("PreToolUse", "Bash"): "pre-bash",
+        ("PreToolUse", "Agent"): "pre-agent",
         ("PostToolUse", "TaskStop"): "task-stop",
+        ("PostToolUse", "Agent"): "post-agent",
+        ("PostToolUse", "SendMessage"): "post-send",
     }
     assert wired["SessionEnd", None][1] >= 10 and wired["PreToolUse", "Bash"][1] <= 10
