@@ -9,7 +9,9 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "dev" / "as-agent"
 
 STUBS = {
     "curl": "#!/bin/sh\necho '{}'\n",
-    "jq": "#!/bin/sh\necho fake\n",
+    # Stubs on the reading end of a pipe must drain stdin like the real tools; exiting early SIGPIPEs the writer
+    # (curl), and as-agent's pipefail turns that into exit 141.
+    "jq": "#!/bin/sh\ncat >/dev/null; echo fake\n",
     "openssl": "#!/bin/sh\ncat >/dev/null; printf x\n",
     "security": "#!/bin/sh\nexit 1\n",
     # Prints the GIT_CONFIG_* pairs the way git reads them (key=value per index).
