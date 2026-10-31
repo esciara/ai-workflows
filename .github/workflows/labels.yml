@@ -20,10 +20,20 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .ai-workflows
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - id: python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - run: pip install --quiet -e ./.ai-workflows
+      # Cached venv, keyed on the dependency file at job.workflow_sha; aiwf itself is an editable install, so its code
+      # always comes from the checkout above (ADR-0019), never from the cache.
+      - id: venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.aiwf-venv
+          key: aiwf-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/pyproject.toml') }}
+      - if: steps.venv.outputs.cache-hit != 'true'
+        run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
+      - run: echo "$HOME/.aiwf-venv/bin" >> "$GITHUB_PATH"
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
