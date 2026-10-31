@@ -55,7 +55,6 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(claims, "beads_root", lambda cwd: tmp_path)
     monkeypatch.setattr(claims, "start_loop", lambda root, sid, pid: fake.calls.append(["start_loop", sid]))
     monkeypatch.setattr(claims, "claude_pid", lambda: 1)
-    monkeypatch.setattr(claims, "stale_warning", lambda cwd: None)
     return tmp_path, fake
 
 
@@ -247,10 +246,9 @@ def test_reaper_is_rate_limited_and_skips_after_sleep(env):
     assert fake.bd_calls("reclaim") == [["bd", "reclaim", "--older-than", "10m"]] * 3
 
 
-def test_session_start_starts_loop_and_warns_main_session_only(env, monkeypatch, capsys):
+def test_session_start_starts_loop(env, monkeypatch, capsys):
     _, fake = env
-    monkeypatch.setattr(claims, "stale_warning", lambda cwd: "sync PR due")
-    assert run_hook("session-start", {"session_id": "s", "source": "startup"}, monkeypatch, capsys) == (0, "sync PR due\n")
+    assert run_hook("session-start", {"session_id": "s", "source": "startup"}, monkeypatch, capsys) == (0, "")
     assert run_hook("session-start", {"session_id": "s", "agent_id": "a1"}, monkeypatch, capsys) == (0, "")
     assert fake.calls.count(["start_loop", "s"]) == 2
 

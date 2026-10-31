@@ -1,6 +1,6 @@
 """Export the beads board to docs/board.jsonl, then render the generated blocks of docs/progress.md from that export.
 
-The export (aiwf.board) is the committed record: CI can re-render docs/progress.md from git alone (`--check`).
+The export (aiwf.board) is the committed record: docs/progress.md can be re-rendered from git alone (`--no-export`).
 
 A work-package bead carries `metadata.wp` ("WP2"); optional `metadata.pr`, `metadata.notes`, `metadata.log` (list of
 log lines) and `metadata.metrics` (maintainer_interventions, verifier_fails, rework_prs, coordination_issues, notes).
@@ -100,12 +100,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="render-progress", description=__doc__.splitlines()[0])
     ap.add_argument("--board", default=str(board.BOARD_PATH), help="board export to write and render from (default docs/board.jsonl)")
     ap.add_argument("--file", default=str(PROGRESS_PATH), help="progress file to update")
-    ap.add_argument("--no-export", action="store_true", help="render from the existing export; do not run bd (CI, worktrees without a board)")
-    ap.add_argument("--check", action="store_true", help="exit 1 if the file is out of date with the export; implies --no-export; write nothing")
+    ap.add_argument("--no-export", action="store_true", help="render from the existing export; do not run bd (worktrees without a board)")
     args = ap.parse_args(argv)
     target, board_path = Path(args.file), Path(args.board)
     try:
-        if args.check or args.no_export:
+        if args.no_export:
             export = board_path.read_text(encoding="utf-8")
         else:
             export = board.fresh_export()
@@ -118,11 +117,6 @@ def main(argv: list[str] | None = None) -> int:
     except (BoardError, board.BoardError, board.SecretScanError, gendoc.GenDocError, subprocess.SubprocessError, OSError) as exc:
         print(f"render-progress: {exc}", file=sys.stderr)
         return 2
-    if args.check:
-        if new != old:
-            print(f"{target} is out of date with {board_path}; run scripts/dev/render-progress", file=sys.stderr)
-            return 1
-        return 0
     if not args.no_export and (not board_path.exists() or board_path.read_text(encoding="utf-8") != export):
         board_path.write_text(export, encoding="utf-8")
         print(f"updated {board_path}")

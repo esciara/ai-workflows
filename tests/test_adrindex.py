@@ -1,6 +1,6 @@
 import pytest
 
-from aiwf import adrindex, gendoc, generated
+from aiwf import adrindex, gendoc
 
 DOC = """# ADRs
 
@@ -43,16 +43,8 @@ def test_malformed_adr_is_an_error(tmp_path):
         adrindex.index(tmp_path)
 
 
-def test_main_check_and_write(tmp_path):
+def test_main_writes(tmp_path):
     adr(tmp_path, "0001-a.md", "A")
     (tmp_path / "README.md").write_text(DOC)
-    assert adrindex.main(["--dir", str(tmp_path), "--check"]) == 1
     assert adrindex.main(["--dir", str(tmp_path)]) == 0
-    assert adrindex.main(["--dir", str(tmp_path), "--check"]) == 0
-
-
-def test_repo_adr_index_is_up_to_date():
-    branch = generated.current_branch()
-    if not generated.freshness_checked(branch):
-        pytest.skip(f"{branch}: generated files are checked fresh only on sync-* branches (ADR-0015)")
-    assert adrindex.main(["--check"]) == 0
+    assert (tmp_path / "README.md").read_text() == adrindex.render(DOC, tmp_path)

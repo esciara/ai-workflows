@@ -4,6 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D15`
+- Amended by: [ADR-0030](0030-generated-docs-keep-single-writer-drop-enforcement.md)
 
 ## Context
 

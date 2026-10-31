@@ -31,7 +31,6 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="render-diagrams", description=__doc__.splitlines()[0])
     ap.add_argument("--file", default=str(DIAGRAMS_PATH), help="diagrams file to update")
     ap.add_argument("--sources", default=str(SOURCES_DIR), help="directory of .mmd sources")
-    ap.add_argument("--check", action="store_true", help="exit 1 if the file is out of date; write nothing")
     args = ap.parse_args(argv)
     target = Path(args.file)
     try:
@@ -40,11 +39,6 @@ def main(argv: list[str] | None = None) -> int:
     except (gendoc.GenDocError, OSError) as exc:
         print(f"render-diagrams: {exc}", file=sys.stderr)
         return 2
-    if args.check:
-        if new != old:
-            print(f"{target} is out of date; run scripts/dev/render-diagrams", file=sys.stderr)
-            return 1
-        return 0
     if new != old:
         target.write_text(new, encoding="utf-8")
         print(f"updated {target}")

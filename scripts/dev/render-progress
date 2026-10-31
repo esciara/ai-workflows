@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Usage: scripts/dev/render-progress [--check | --no-export] [--board docs/board.jsonl]
+# Usage: scripts/dev/render-progress [--no-export] [--board docs/board.jsonl]
 # Orchestrator only, in the sync PR (ADR-0015): `bd export` -> secret scan (gitleaks) -> docs/board.jsonl -> docs/progress.md.
-# --no-export renders from the committed export; --check (CI) exits 1 if docs/progress.md is out of date with it. Exit 2 on error or a secret finding.
+# --no-export renders from the committed export. Exit 2 on error or a secret finding.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 py="$root/.venv/bin/python"

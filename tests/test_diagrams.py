@@ -44,17 +44,10 @@ def test_fence_in_source_is_an_error(tmp_path):
         diagrams.render(DOC, tmp_path)
 
 
-def test_main_check_and_write(tmp_path):
+def test_main_writes(tmp_path):
     (tmp_path / "a.mmd").write_text("A")
     (tmp_path / "b.mmd").write_text("B")
     doc = tmp_path / "diagrams.md"
     doc.write_text(DOC)
-    args = ["--file", str(doc), "--sources", str(tmp_path)]
-    assert diagrams.main([*args, "--check"]) == 1
-    assert doc.read_text() == DOC
-    assert diagrams.main(args) == 0
-    assert diagrams.main([*args, "--check"]) == 0
-
-
-def test_repo_diagrams_are_up_to_date():
-    assert diagrams.main(["--check"]) == 0
+    assert diagrams.main(["--file", str(doc), "--sources", str(tmp_path)]) == 0
+    assert doc.read_text() == diagrams.render(DOC, tmp_path)
