@@ -5,6 +5,7 @@
 - Deciders: maintainer
 - Alias: `D28`
 - Amends: ADR-0026, ADR-0004
+- Amended by: ADR-0029
 
 ## Context
 
