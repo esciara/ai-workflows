@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Usage: scripts/dev/board-assign <bead> [--agent-type <type>]   (orchestrator only, ADR-0015 push model)
+# Claims <bead> for actor track-<bead> and queues it for the next SubagentStart of that agent type; spawn the track agent right after.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+py="$root/.venv/bin/python"
+[ -x "$py" ] || py=python3
+PYTHONPATH="$root/scripts${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -c 'import sys; from aiwf.claims import main; sys.exit(main(["assign", *sys.argv[1:]]))' "$@"
