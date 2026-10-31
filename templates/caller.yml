@@ -71,19 +71,19 @@ jobs:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-  # Workflow B (WP5+): enabled once triage.yml exists.
-  # triage:
-  #   needs: config
-  #   if: needs.config.outputs.triage == 'true' && (github.event_name == 'issues' || github.event_name == 'schedule' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
-  #   uses: esciara/ai-workflows/.github/workflows/triage.yml@main
-  #   permissions:
-  #     contents: write
-  #     issues: write
-  #     pull-requests: write
-  #   with:
-  #     config: ${{ needs.config.outputs.config }}
-  #   secrets:
-  #     CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-  #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-  #     TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-  #     TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  # Workflow B (WP5: B1 classify on new issues and /retriage).
+  triage:
+    needs: config
+    if: needs.config.outputs.triage == 'true' && (github.event_name == 'issues' || github.event_name == 'schedule' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
+    uses: esciara/ai-workflows/.github/workflows/triage.yml@main
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    with:
+      config: ${{ needs.config.outputs.config }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
