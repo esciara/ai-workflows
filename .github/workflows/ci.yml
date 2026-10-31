@@ -21,3 +21,27 @@ jobs:
           python-version: '3.12'
       - run: pip install -e '.[test]'
       - run: pytest -q
+
+  # Secret scan of the full git history (incl. docs/board.jsonl) with gitleaks' default rules,
+  # as render-progress does locally (ADR-0036). Binary pinned by version + SHA-256; no license or secret needed.
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install gitleaks
+        run: |
+          tgz="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$tgz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$tgz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan git history
+        run: '"$RUNNER_TEMP/gitleaks" git --no-banner --redact --verbose .'
