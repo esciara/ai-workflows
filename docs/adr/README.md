@@ -73,4 +73,5 @@ Why: <rationale>
 | [ADR-0027](0027-plan-stop-bead-is-blocked-awaiting-go.md) | D27 | Plan stop: bead is `blocked` with label `awaiting-go` | Accepted |
 | [ADR-0028](0028-fixed-e2e-caller-on-the-playground.md) | D28 | Fixed e2e caller on the playground | Accepted |
 | [ADR-0029](0029-e2e-pr-routing-by-branch-prefix.md) | D29 | e2e test PRs routed by an `e2e/` branch prefix | Accepted |
+| [ADR-0030](0030-generated-docs-keep-single-writer-drop-enforcement.md) | D30 | Generated docs: single writer kept, enforcement dropped | Accepted |
 <!-- END generated:adr-index -->

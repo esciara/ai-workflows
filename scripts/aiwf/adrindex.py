@@ -43,7 +43,6 @@ def render(text: str, adr_dir: Path) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="render-adr-index", description=__doc__.splitlines()[0])
     ap.add_argument("--dir", default=str(ADR_DIR), help="ADR directory (README.md inside it is updated)")
-    ap.add_argument("--check", action="store_true", help="exit 1 if the index is out of date; write nothing")
     args = ap.parse_args(argv)
     adr_dir = Path(args.dir)
     target = adr_dir / "README.md"
@@ -53,11 +52,6 @@ def main(argv: list[str] | None = None) -> int:
     except (gendoc.GenDocError, OSError) as exc:
         print(f"render-adr-index: {exc}", file=sys.stderr)
         return 2
-    if args.check:
-        if new != old:
-            print(f"{target} is out of date; run scripts/dev/render-adr-index", file=sys.stderr)
-            return 1
-        return 0
     if new != old:
         target.write_text(new, encoding="utf-8")
         print(f"updated {target}")

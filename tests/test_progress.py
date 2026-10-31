@@ -85,15 +85,12 @@ def test_missing_marker_is_an_error():
         progress.render("# Progress\n", BOARD)
 
 
-def test_main_check_and_write_from_export(tmp_path):
+def test_main_writes_from_export(tmp_path):
     board, doc = tmp_path / "board.jsonl", tmp_path / "progress.md"
     board.write_text(boardmod.dumps(BOARD))
     doc.write_text(DOC)
-    args = ["--board", str(board), "--file", str(doc)]
-    assert progress.main([*args, "--check"]) == 1
-    assert doc.read_text() == DOC
-    assert progress.main([*args, "--no-export"]) == 0
-    assert progress.main([*args, "--check"]) == 0
+    assert progress.main(["--board", str(board), "--file", str(doc), "--no-export"]) == 0
+    assert doc.read_text() == progress.render(DOC, BOARD)
 
 
 def test_main_exports_scans_then_writes(tmp_path, monkeypatch):
@@ -104,7 +101,7 @@ def test_main_exports_scans_then_writes(tmp_path, monkeypatch):
     monkeypatch.setattr(boardmod, "scan_secrets", lambda text: [])
     assert progress.main(["--board", str(board), "--file", str(doc)]) == 0
     assert board.read_text() == export
-    assert progress.main(["--board", str(board), "--file", str(doc), "--check"]) == 0
+    assert doc.read_text() == progress.render(DOC, boardmod.parse(export))
 
 
 def test_main_refuses_to_write_on_secret_or_missing_scanner(tmp_path, monkeypatch, capsys):
@@ -119,10 +116,6 @@ def test_main_refuses_to_write_on_secret_or_missing_scanner(tmp_path, monkeypatc
     assert progress.main(["--board", str(board), "--file", str(doc)]) == 2
     assert "gitleaks not installed" in capsys.readouterr().err
     assert not board.exists() and doc.read_text() == DOC
-
-
-def test_repo_progress_matches_committed_export():
-    assert progress.main(["--check"]) == 0
 
 
 def test_repo_progress_file_has_all_generated_blocks():

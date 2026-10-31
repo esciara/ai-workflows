@@ -270,17 +270,6 @@ def start_loop(root: Path, session_id: str, parent_pid: int) -> None:
         s["loops"][session_id] = proc.pid
 
 
-def stale_warning(cwd: str) -> str | None:
-    from aiwf import board, generated
-
-    top = RUN(["git", "rev-parse", "--show-toplevel"], cwd=cwd, capture_output=True, text=True, timeout=5)
-    root = Path(top.stdout.strip())
-    msgs = generated.stale(root, board.fresh_export(root, timeout=15))
-    if not msgs:
-        return None
-    return "aiwf (ADR-0015): a sync PR is due: " + "; ".join(msgs) + ". Orchestrator: branch sync-<date>, run render-progress, render-adr-index, render-diagrams."
-
-
 # ---------------------------------------------------------------- hook entry
 
 
@@ -312,10 +301,6 @@ def hook(event: str, payload: dict) -> int:
     if event == "session-start":
         start_loop(root, session_id, claude_pid())
         reap(root, now)
-        if not agent_id:
-            warning = stale_warning(cwd)
-            if warning:
-                print(warning)
     elif event == "pre-agent" and bead:
         reason = claim(root, bead)
         if reason:
