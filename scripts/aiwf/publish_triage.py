@@ -1,12 +1,15 @@
 """Publishers for Workflow B (issue triage). B1: labels and one triage comment from the classifier's checked JSON.
 
-The classifier's references (duplicate issue, fixing commit) are checked against the repo before they are linked:
-an unknown or invalid reference is dropped, never posted. Triage never closes an issue.
+The classifier's references (duplicate issue, fixing commit or PR) are checked against the repo before they are linked:
+an unknown or invalid reference is dropped, never posted. A fix is only "possibly fixed by" (ADR-0035): reproducing the
+bug (B2) confirms it. Triage never closes an issue.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
 from typing import Any
 from urllib.parse import quote
 
@@ -17,6 +20,7 @@ BOT = "github-actions[bot]"  # the workflow's GITHUB_TOKEN identity; only its ma
 TYPE_LABELS = {"bug": "type: bug", "feature": "type: feature", "question": "type: question"}
 DUPLICATE = "triage: duplicate"
 NEEDS_HUMAN = "triage: needs-human"
+RANGE_ENV = "AIWF_FIX_RANGE_CONFIDENCE"  # `low` when the fix candidates were not from the reported version
 B1_LABELS = (*TYPE_LABELS.values(), DUPLICATE, NEEDS_HUMAN)  # cleared on /retriage before the new result
 
 
@@ -51,14 +55,44 @@ def check_commit(gh: publish.GhRunner, repo: str, branch: str, sha: str | None) 
     return commit if cmp and cmp.get("status") in {"ahead", "identical"} else None
 
 
-def body(data: dict[str, Any], dup: dict[str, Any] | None, commit: dict[str, Any] | None, run_url: str) -> str:
+def check_pr(gh: publish.GhRunner, repo: str, branch: str, number: int) -> dict[str, Any] | None:
+    """The pull request when it exists and was merged into `branch`; else None."""
+    pr = get(gh, f"repos/{repo}/pulls/{number}")
+    if not pr or not pr.get("merged_at") or (pr.get("base") or {}).get("ref") != branch:
+        return None
+    return pr
+
+
+def check_fix(gh: publish.GhRunner, repo: str, branch: str, ref: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The commit or merged PR the classifier names, when it is real and on the default branch; else None."""
+    if not ref:
+        return None
+    if ref["kind"] == "commit":
+        return check_commit(gh, repo, branch, ref["ref"]) if re.fullmatch(r"[0-9a-f]{7,40}", ref["ref"]) else None
+    return check_pr(gh, repo, branch, int(ref["ref"])) if ref["ref"].isdigit() else None
+
+
+def fix_confidence(data: dict[str, Any], range_confidence: str) -> str:
+    """The agent's confidence in the fix, capped at low when the commit range was a guess (no tag for the version)."""
+    return "low" if range_confidence == "low" else data["possibly_fixed_by"]["confidence"]
+
+
+def is_duplicate(data: dict[str, Any], dup: dict[str, Any] | None) -> bool:
+    return bool(dup) and data["duplicate_of"]["confidence"] in {"high", "medium"}
+
+
+def body(data: dict[str, Any], dup: dict[str, Any] | None, fix: dict[str, Any] | None, fix_conf: str,
+         run_url: str) -> str:
     lines = [MARKER, f"**AI triage:** {data['type']} ({data['confidence']} confidence). {data['reason']}"]
-    if dup:
-        lines += ["", f"Duplicate of #{dup['number']}. Labelled `{DUPLICATE}`; a person takes over. Not closed."]
-    elif commit:
-        lines += ["", f"Already fixed on the default branch by {commit['html_url']}. Labelled `{DUPLICATE}`; a person "
-                  "takes over. Not closed."]
-    elif data["confidence"] == "low":
+    if is_duplicate(data, dup):
+        lines += ["", f"Duplicate of #{dup['number']} ({data['duplicate_of']['confidence']} confidence). Labelled "
+                  f"`{DUPLICATE}`; a person takes over. Not closed."]
+    elif dup:
+        lines += ["", f"May duplicate #{dup['number']} (low confidence); not labelled as a duplicate."]
+    if fix:
+        lines += ["", f"Possibly fixed on the default branch by {fix['html_url']} ({fix_conf} confidence). Not "
+                  "confirmed: reproducing the bug checks it. Not closed."]
+    if data["confidence"] == "low":
         lines += ["", f"Low confidence: labelled `{NEEDS_HUMAN}`; a person takes over."]
     if run_url:
         lines += ["", f"[Run]({run_url})"]
@@ -95,7 +129,7 @@ def labels_for(data: dict[str, Any], duplicate: bool) -> list[str]:
     out = [TYPE_LABELS[data["type"]]]
     if duplicate:
         out.append(DUPLICATE)
-    elif data["confidence"] == "low":
+    if data["confidence"] == "low":
         out.append(NEEDS_HUMAN)
     return out
 
@@ -103,17 +137,20 @@ def labels_for(data: dict[str, Any], duplicate: bool) -> list[str]:
 def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
     current = {lb["name"] for lb in (get(gh, f"repos/{repo}/issues/{issue}") or {}).get("labels", [])}
     branch = (get(gh, f"repos/{repo}") or {}).get("default_branch", "main")
-    dup = check_duplicate(gh, repo, issue, data.get("duplicate_of"))
-    commit = None if dup else check_commit(gh, repo, branch, data.get("fixed_by_commit"))
-    for dropped, value in (("duplicate_of", data.get("duplicate_of")), ("fixed_by_commit", data.get("fixed_by_commit"))):
-        if value and not (dup if dropped == "duplicate_of" else commit):
-            print(f"::warning title=Classifier reference dropped::{dropped}={value} is not a valid reference")
-    want = labels_for(data, bool(dup or commit))
+    dup_ref = (data.get("duplicate_of") or {}).get("number")
+    dup = check_duplicate(gh, repo, issue, dup_ref)
+    fix_ref = data.get("possibly_fixed_by") if data["type"] == "bug" else None
+    fix = check_fix(gh, repo, branch, fix_ref)
+    for name, value, ok in (("duplicate_of", dup_ref, dup), ("possibly_fixed_by", data.get("possibly_fixed_by"), fix)):
+        if value and not ok:
+            print(f"::warning title=Classifier reference dropped::{name}={json.dumps(value)} is not a valid reference")
+    fix_conf = fix_confidence(data, os.environ.get(RANGE_ENV, "")) if fix else ""
+    want = labels_for(data, is_duplicate(data, dup))
     for label in B1_LABELS:
         if label in current and label not in want:
             remove_label(gh, repo, issue, label)
     publish.add_labels(gh, repo, issue, *want)
-    upsert_comment(gh, repo, issue, body(data, dup, commit, run_url))
+    upsert_comment(gh, repo, issue, body(data, dup, fix, fix_conf, run_url))
     print(f"triaged {repo}#{issue}: {', '.join(want)}")
 
 
