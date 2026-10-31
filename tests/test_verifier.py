@@ -43,6 +43,24 @@ def test_missing_acceptance_test_is_an_error():
         verifier.test_files("WP99")
 
 
+def test_split_wp_uses_its_own_test_else_its_wps(tmp_path, monkeypatch):
+    monkeypatch.setattr(verifier, "E2E_DIR", tmp_path)
+    monkeypatch.setattr(verifier, "ROOT", tmp_path.parent)
+    (tmp_path / "test_wp2.py").write_text("")
+    assert verifier.test_files("WP2a")[0].name == "test_wp2.py"
+    (tmp_path / "test_wp2a.py").write_text("")
+    assert verifier.test_files("WP2a")[0].name == "test_wp2a.py"
+    with pytest.raises(verifier.VerifyError, match="test_wp3a.py"):
+        verifier.test_files("WP3a")
+
+
+def test_split_rows_in_real_plan():
+    text = (verifier.ROOT / "docs" / "plan.md").read_text()
+    for wp in ("WP2a", "WP2b", "WP11a", "WP11b", "WP12a", "WP12b"):
+        assert verifier.done_when(text, wp)
+    assert "workflow_dispatch" in verifier.done_when(text, "WP11a")
+
+
 def envelope(verdict):
     return json.dumps({"type": "result", "result": json.dumps(verdict), "structured_output": verdict})
 

@@ -66,10 +66,15 @@ def parse_verdict(raw: str) -> dict[str, Any]:
 
 
 def test_files(wp: str) -> list[Path]:
-    """The WP's acceptance test followed by its helpers (every other non-test module in tests/e2e)."""
+    """The WP's acceptance test followed by its helpers (every other non-test module in tests/e2e).
+
+    A split WP (WP2a) uses its own test_wp2a.py, else its WP's test_wp2.py (ADR-0046).
+    """
     test = E2E_DIR / f"test_{wp.lower()}.py"
+    if not test.is_file() and wp[-1:].isalpha():
+        test = E2E_DIR / f"test_{wp[:-1].lower()}.py"
     if not test.is_file():
-        raise VerifyError(f"no acceptance test {test.relative_to(ROOT)}")
+        raise VerifyError(f"no acceptance test {(E2E_DIR / f'test_{wp.lower()}.py').relative_to(ROOT)}")
     helpers = sorted(p for p in E2E_DIR.glob("*.py") if not p.name.startswith("test_") and p.name != "__init__.py")
     return [test, *helpers]
 

@@ -32,6 +32,8 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 | WP0 | Repo bootstrap | — | Repo layout, `CLAUDE.md`, config schema + validator, caller template | Caller in the test repo loads and validates `.github/ai-workflows.yml` in a green run |
 | WP1 | Shared runtime | WP0 | Reusable job running Claude Code on `CLAUDE_CODE_OAUTH_TOKEN`; orchestrator that applies agents' JSON outputs via `gh api`; label bootstrap; command parser with permission check | `/ping` from a maintainer gets a reply; from a non-maintainer is ignored; all labels exist |
 | WP2 | A · core review | WP1 | Steps 1–7 and 9: context, CI wait, risk tier, 4 passes, verify, rubric, summary comment with hidden marker, verdict label | Dummy PR gets one comment + one label; a new push updates the same comment |
+| WP2a | A · context, CI wait, one pass, summary + label | WP1 | Context job, CI wait + risk tier, pending label, one pass, rubric, summary comment by marker, verdict label swap; usage measured | Dummy PR gets one comment + one label; a new push updates the same comment (`tests/e2e/test_wp2.py`) |
+| WP2b | A · 4 passes, verify, severity, step 9 | WP2a | 4 passes as a matrix, verify (refute) pass, severity tags, resolved / still-open matching (step 9); real 5-agent usage | WP2a's Done when still holds with 4 passes and verify (`tests/e2e/test_wp2.py` still passes) |
 | WP3 | A · placement + formal review | WP2 | Inline vs general rule, `suggestion` blocks, one GitHub review, never Approve | Seeded-bug PR gets an inline comment and Request changes; a nit on a low-risk path stays in the summary |
 | WP4 | A · fork PRs | WP2 | `fork_prs: on-command` handling | Fork PR is not reviewed until a maintainer comments `/review` |
 | WP5 | B1 · classify | WP1 | Classifier agent, dedup, already-fixed check | 3 test issues get `type: bug`, `feature`, `question`; a duplicate gets `triage: duplicate` |
@@ -41,9 +43,15 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 | WP9 | B5 · fix loop | WP8 | Implementer + adversarial reviewer, 3-round cap, `ai-fix/*` branch, escalation | Seeded bug fixed in ≤ 3 rounds; a forced failure gives a draft PR, `fix: needs-maintainer`, assignment and review request |
 | WP10 | B6 · PR into A | WP9, WP3 | PR body, `ai-fix` label, A runs on it | One issue goes from opened to a verdict label with no manual step except `/fix` |
 | WP11 | Notifications | WP1 | Slack and Telegram senders, the 5 events | Each event sends one message with a working link, on both channels |
+| WP11a | Notification senders | WP1 | Slack and Telegram senders + a notify step (ADR-0024) | A `workflow_dispatch` test event sends one message with a working link, on both channels |
+| WP11b | Notification events | WP11a, WP9, WP12 | Wiring of the 5 events (ADR-0024) | Each event sends one message with a working link, on both channels |
 | WP12 | Guardrails | WP1 | `ai: off`, budgets, `ai: error`, injection reporting | `ai: off` stops a run; a forced crash gives `ai: error` + comment; an injected instruction is reported, not obeyed |
+| WP12a | Guardrails: `ai: off`, `ai: error` | WP1 | `ai: off`, `ai: error` | `ai: off` stops a run; a forced crash gives `ai: error` + comment |
+| WP12b | Guardrails: injection, budgets | WP1 | Budgets, injection reporting | An injected instruction is reported, not obeyed |
 | WP13 | Contributor mode | WP3, WP8 | Fork caller guide (level 1); local Claude Code plugin with review and analyse skills (level 0) | Review runs on a branch locally and in a fork, with nothing posted upstream |
 | WP14 | Onboarding kit | WP3 | Install guide, rights checklist, caller + config templates | A second repo is set up from the guide alone in under 30 minutes |
+
+Rows with a letter (WP2a, WP2b, …) split the WP above them into PRs (ADR-0046); the WP's own row keeps the full Done when, and each split's Done when is what its PR proves (`scripts/dev/verify-wp WP2a`).
 
 Metrics logging from the spec is left out of this plan; it is worth adding once both workflows have run for a few weeks.
 
