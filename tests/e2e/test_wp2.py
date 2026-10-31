@@ -92,10 +92,12 @@ def test_dummy_pr_gets_one_comment_and_one_label_and_a_push_updates_the_same_com
 
         pushed_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 5))
         content = base64.b64encode(f"second push {time.time_ns()}\n".encode()).decode()
-        pg.api(f"repos/{pg.REPO}/contents/e2e/{pr['branch'].replace('/', '-')}-2.md", "message=test: e2e second push",
-               f"content={content}", f"branch={pr['branch']}", method="PUT")
-        sha2 = head_sha(number)
-        assert sha2 != sha1, "the push did not move the PR head"
+        put = pg.api(f"repos/{pg.REPO}/contents/e2e/{pr['branch'].replace('/', '-')}-2.md",
+                     "message=test: e2e second push", f"content={content}", f"branch={pr['branch']}", method="PUT")
+        sha2 = put["commit"]["sha"]  # the pulls API can serve a stale head right after the PUT
+        assert sha2 != sha1, "the push did not create a new commit"
+        pg.poll(lambda: True if head_sha(number) == sha2 else None, f"PR #{number} head to move to {sha2[:7]}",
+                timeout=300)
         review_run(sha2, after=pushed_at)
         second = check_review(number, sha2, e2e_target)
 
