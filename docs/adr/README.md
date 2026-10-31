@@ -77,4 +77,5 @@ Why: <rationale>
 | [ADR-0031](0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md) | D31 | Agents act as their own GitHub App; main protected by a ruleset | Accepted |
 | [ADR-0032](0032-workflow-b-runs-workflow-a-on-its-own-fix-prs.md) | D32 | Workflow B runs Workflow A on its own fix PRs | Accepted |
 | [ADR-0033](0033-stall-only-risks-get-no-mechanism-claims-retired.md) | D33 | Stall-only risks get no mechanism; claims retired | Accepted |
+| [ADR-0034](0034-workflow-a-agent-inputs-and-ci-gate.md) | D34 | Workflow A agent inputs and CI gate | Accepted |
 <!-- END generated:adr-index -->

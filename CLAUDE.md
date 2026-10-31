@@ -21,8 +21,9 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 - Stop-WPs: WP1, WP4, WP9 and WP12. Before writing code, post a short plan (files, approach, how you'll run the check) and wait for "go" unless the maintainer has said to proceed without asking; after the PR, stop and wait for review.
 - Other WPs: no plan stop. When the review passes and the acceptance test passes, put both in the PR description and continue to the next WP without waiting. The maintainer reviews these PRs in batches and always does the merges.
 - Always stop and ask when a new decision is needed, when `scripts/dev/verify-wp` fails or errors, or when the policy tests (`tests/test_workflow_policy.py`) fail.
+- Ask the maintainer only for: the stops above (acceptance-test change after review, verify-wp or policy-test failure, stop-WP plans, spec/plan/code conflicts), a new design decision (new ADR), relaxing a hard rule or a security boundary, and irreversible actions outside this repo and the playground. The orchestrator decides shared-path edits, ADR numbers, PR splits, merge order and rebases, and reports them.
 - At the end of every WP, the orchestrator sets the WP bead's `metrics` metadata; the next sync PR re-renders `docs/progress.md`.
-- Keep PRs small. If a WP grows past roughly 600 changed lines, propose splitting it.
+- Keep PRs small. If a WP grows past roughly 600 changed lines, the orchestrator decides whether to split it and says so in the PR.
 - When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer as a new ADR in `docs/adr/` (number allocated by the orchestrator, copy the template in `docs/adr/README.md`; the index is generated in the sync PR, don't edit it). The new ADR starts as `Proposed`, lists the options considered, and becomes `Accepted` when the maintainer approves it.
 
 ## Roles (parallel tracks, ADR-0015)
@@ -69,6 +70,7 @@ tests/                  unit tests for scripts (no network)
 ## Tooling
 
 - Use the `gh` CLI for GitHub operations from this machine. Agents run every GitHub write as the App `esciara-ai-workflows-agent` (ADR-0031): `scripts/dev/as-agent gh …` and `scripts/dev/as-agent git push …`; bare `gh` may only read. A `PreToolUse` hook (`scripts/dev/guard-bash`) blocks bare `gh` writes, bare `git push`, merges, agent approvals, `gh auth token`, pushes to `main`, force pushes without `--force-with-lease` and remote branch deletion; it matches command text, so e.g. `echo "gh pr merge"` is blocked too.
+- Branches are pushed only by the App (`scripts/dev/as-agent git push`), and worktree commits use the App identity; a branch the maintainer has pushed to can't be approved by them (ruleset: last push approval).
 - Maintainer setup (App, Keychain entry `ai-workflows-agent`, `AI_WORKFLOWS_AGENT_APP_ID`, ruleset on `main`): ADR-0031, section Maintainer setup.
 - Prefer a small, boring stack for scripts (e.g. TypeScript on Node 20 or Python 3.12 — pick one in WP0 and record it as an ADR in `docs/adr/`).
 - Pin third-party actions to a full commit SHA, with the version in a comment.
