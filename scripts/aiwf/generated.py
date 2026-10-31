@@ -3,7 +3,7 @@
 `docs/progress.md`, `docs/board.jsonl`, the ADR index and `docs/diagrams.md` are written only by the orchestrator, in a
 serial sync PR on a `sync-*` branch after each merge batch. Track PRs change only sources (ADR files, `.mmd` files).
 `check-branch` fails when another branch changes a generated file; `stale` reports generated files out of date with
-their sources and is checked only on sync-* branches and main. Both run locally and in CI.
+their sources and is checked only on sync-* branches (a stale main shows as the SessionStart sync-due warning). Both run locally and in CI.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GENERATED = ("docs/progress.md", "docs/board.jsonl", "docs/adr/README.md", "docs/diagrams.md")
 SYNC_PREFIX = "sync-"
-MAIN = "main"
 MARKER = "<!-- BEGIN generated:"
 
 
@@ -26,8 +25,8 @@ def is_sync_branch(branch: str) -> bool:
 
 
 def freshness_checked(branch: str) -> bool:
-    """Generated files must be fresh only on sync-* branches and main; other branches may not regenerate them (ADR-0015)."""
-    return is_sync_branch(branch) or branch == MAIN
+    """Generated files must be fresh only on sync-* branches; other branches may not regenerate them (ADR-0015)."""
+    return is_sync_branch(branch)
 
 
 def in_force(path: str, base_text: str | None) -> bool:

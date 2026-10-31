@@ -41,8 +41,8 @@ def test_stale_reports_out_of_date_generated_files(tmp_path):
     assert msgs == ["docs/board.jsonl differs from the local beads board", "docs/progress.md is out of date with its sources", "docs/adr/README.md is out of date with its sources"]
 
 
-@pytest.mark.parametrize("branch, checked", [("sync-2026-11-01", True), ("main", True), ("wp2-foo", False), ("HEAD", False)])
-def test_freshness_is_checked_only_on_sync_and_main(branch, checked):
+@pytest.mark.parametrize("branch, checked", [("sync-2026-11-01", True), ("main", False), ("wp2-foo", False), ("HEAD", False)])
+def test_freshness_is_checked_only_on_sync_branches(branch, checked):
     assert generated.freshness_checked(branch) is checked
 
 
@@ -66,5 +66,5 @@ def test_current_branch_prefers_actions_env_then_git(monkeypatch, env, expected)
 def test_repo_generated_files_are_up_to_date():
     branch = generated.current_branch()
     if not generated.freshness_checked(branch):
-        pytest.skip(f"{branch}: generated files are checked fresh only on sync-* and main (ADR-0015)")
+        pytest.skip(f"{branch}: generated files are checked fresh only on sync-* branches (ADR-0015)")
     assert generated.stale() == []
