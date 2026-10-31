@@ -1,6 +1,6 @@
 # ADR-0012 · Agents use `claude-code-action/base-action`
 
-- Status: Accepted
+- Status: Superseded by ADR-0039
 - Date: 2026-10-30
 - Alias: `D12`
 - Amended by: [ADR-0018](0018-agent-jobs-get-no-token-permissions.md)

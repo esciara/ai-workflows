@@ -4,7 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D36`
-- Supersedes: [ADR-0015](0015-parallel-operating-model.md)
+- Supersedes: [ADR-0015](0015-parallel-operating-model.md), [ADR-0027](0027-plan-stop-bead-is-blocked-awaiting-go.md)
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR-0029 · e2e test PRs routed by an `e2e/` branch prefix
 
-- Status: Accepted
+- Status: Superseded by ADR-0043
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D29`

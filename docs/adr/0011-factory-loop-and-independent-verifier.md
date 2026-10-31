@@ -1,6 +1,6 @@
 # ADR-0011 · Factory loop and independent verifier
 
-- Status: Accepted
+- Status: Superseded by ADR-0042
 - Date: 2026-10-30
 - Alias: `D11`
 - Amended by: [ADR-0014](0014-executable-acceptance-tests.md) (what `scripts/dev/verify-wp` judges)

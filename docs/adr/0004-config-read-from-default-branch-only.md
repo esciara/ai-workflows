@@ -4,6 +4,7 @@
 - Date: 2026-10-30
 - Alias: `D4`
 - Amended by: [ADR-0028](0028-fixed-e2e-caller-on-the-playground.md)
+- Amended by: [ADR-0043](0043-e2e-on-the-playground-consolidated.md)
 
 ## Context
 

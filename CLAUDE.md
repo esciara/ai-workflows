@@ -8,7 +8,7 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 ## Source of truth
 
 - `docs/spec.md` says **what** to build. `docs/plan.md` says **in which order** and **how we know it works**.
-- The status board is beads (`bd`, ADR-0015), exported to `docs/board.jsonl`; `docs/progress.md` is rendered from the export by `scripts/dev/render-progress`. Read `bd list --all` or `docs/progress.md` at the start of every session. Only the orchestrator edits the board and the generated files; never hand-edit generated blocks.
+- The status board is beads (`bd`, ADR-0036), exported to `docs/board.jsonl`; `docs/progress.md` is rendered from the export by `scripts/dev/render-progress`. Read `bd list --all` or `docs/progress.md` at the start of every session. Only the orchestrator edits the board and the generated files; never hand-edit generated blocks.
 - `docs/known-issues.md` lists open design issues and accepted risks; read it at the start of every session and before changing e2e or secrets handling.
 - If the spec, the plan and the code disagree, stop and ask the maintainer. Never resolve a conflict by guessing.
 - The spec's feature IDs (REV-01, TRI-08, …) link to a reference architecture; ignore those links, the spec is self-contained.
@@ -16,7 +16,7 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 ## How to work
 
 - One work package (WP) at a time per track, in the order of `docs/plan.md`, unless the maintainer or the orchestrator says otherwise (tracks: see Roles below).
-- Each WP: branch `wp<N>-<slug>` → write the acceptance test `tests/e2e/test_wp<N>.py` (asserts every "Done when" condition on the test repo) → `scripts/dev/verify-wp <WP>` reviews it → build → the WP is done when `AIWF_E2E=1 pytest -n 4 tests/e2e/test_wp<N>.py -v` passes (add `AIWF_E2E_SLOT=1` when a test uses the `e2e_target` fixture: it takes the e2e slot and points `e2e-target` at HEAD; without it such tests fail, ADR-0026, ADR-0028) → open a PR on this repo whose description holds the e2e output and run IDs, plus the review verdict (ADR-0014).
+- Each WP: branch `wp<N>-<slug>` → write the acceptance test `tests/e2e/test_wp<N>.py` (asserts every "Done when" condition on the test repo) → `scripts/dev/verify-wp <WP>` reviews it → build → the WP is done when `AIWF_E2E=1 pytest -n 4 tests/e2e/test_wp<N>.py -v` passes (add `AIWF_E2E_SLOT=1` when a test uses the `e2e_target` fixture: it takes the e2e slot and points `e2e-target` at HEAD; without it such tests fail, ADR-0043) → open a PR on this repo whose description holds the e2e output and run IDs, plus the review verdict (ADR-0042).
 - Any change to an acceptance test after its review: stop and ask the maintainer.
 - Stop-WPs: WP1, WP4, WP9 and WP12. Before writing code, post a short plan (files, approach, how you'll run the check) and wait for "go" unless the maintainer has said to proceed without asking; after the PR, stop and wait for review.
 - Other WPs: no plan stop. When the review passes and the acceptance test passes, put both in the PR description and continue to the next WP without waiting. The maintainer reviews these PRs in batches and always does the merges.

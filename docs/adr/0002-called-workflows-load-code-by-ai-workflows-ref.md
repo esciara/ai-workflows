@@ -1,6 +1,6 @@
 # ADR-0002 · Called workflows load code by `ai_workflows_ref`
 
-- Status: Accepted
+- Status: Superseded by ADR-0040
 - Date: 2026-10-30
 - Alias: `D2`
 - Amended by: [ADR-0019](0019-scripts-ref-follows-the-workflow-sha.md)

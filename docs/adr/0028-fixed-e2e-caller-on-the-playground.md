@@ -1,6 +1,6 @@
 # ADR-0028 · Fixed e2e caller on the playground
 
-- Status: Accepted
+- Status: Superseded by ADR-0043
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D28`
