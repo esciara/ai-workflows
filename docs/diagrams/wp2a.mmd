@@ -1,0 +1,10 @@
+flowchart TD
+  O["PR opened or new push<br/>(not a draft)"] --> S["Start job<br/>drop old verdict, label 'ai-review: pending'"]
+  S --> C["Context job, read-only token<br/>diff, touched files, callers, linked issue"]
+  C --> W{"CI wait (20 min budget)<br/>+ risk tier from risk paths"}
+  W --> P["Review pass agent job<br/>no GitHub token, code inline<br/>JSON only"]
+  P -- JSON --> V{"Orchestrator<br/>matches the review schema?"}
+  V -- no --> E["Label 'ai: error'"]
+  V -- yes --> R["Rubric: blocking finding or red CI,<br/>high tier, no linked issue, big diff, CI timeout"]
+  R --> M["Summary comment, found by its hidden marker<br/>created once, updated on each push"]
+  M --> L["Verdict label replaces 'ai-review: pending'<br/>merge / changes-requested / human-review"]

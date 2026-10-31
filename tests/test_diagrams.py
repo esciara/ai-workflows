@@ -170,3 +170,59 @@ def test_repo_overview_renders_from_the_repo_board_and_plan():
     records = boardmod.parse(boardmod.BOARD_PATH.read_text())
     out = diagrams.render(diagrams.DIAGRAMS_PATH.read_text(), diagrams.SOURCES_DIR, records, diagrams.PLAN_PATH.read_text())
     assert "class WP0 baseDone" in out and ":::" not in out
+
+
+# per-WP sections (ADR-0048)
+
+WP_PLAN = """| ID | Package | Depends on | Delivers | Done when |
+| --- | --- | --- | --- | --- |
+| WP1 | Shared runtime | WP0 | x | `/ping` gets a reply |
+| WP2 | A · core review | WP1 | x | one comment |
+| WP2a | A · one pass | WP1 | x | one label |
+| WP10 | B6 · PR into A | WP9 | x | verdict label |
+"""
+WP_DOC = "# D\n\n<!-- BEGIN generated:per-wp -->\nstale\n<!-- END generated:per-wp -->\n"
+
+
+def test_per_wp_section_from_mmd_and_plan_row(tmp_path):
+    (tmp_path / "wp1.mmd").write_text("flowchart TD\n  A --> B\n")
+    out = diagrams.render(WP_DOC, tmp_path, None, WP_PLAN)
+    assert "## WP1 — Shared runtime\n\n" in out
+    assert f"Done when ([docs/plan.md, line 3]({diagrams.PLAN_URL}#L3)): `/ping` gets a reply\n\n```mermaid\nflowchart TD\n  A --> B\n```\n<!-- END" in out
+    assert "stale" not in out
+    assert diagrams.render(out, tmp_path, None, WP_PLAN) == out
+
+
+def test_per_wp_sections_follow_plan_order_and_split_stems_work(tmp_path):
+    for stem in ("wp10", "wp2a", "wp1", "wp2"):
+        (tmp_path / f"{stem}.mmd").write_text(f"flowchart TD\n  {stem}")
+    out = diagrams.render(WP_DOC, tmp_path, None, WP_PLAN)
+    heads = [line for line in out.splitlines() if line.startswith("## ")]
+    assert heads == ["## WP1 — Shared runtime", "## WP2 — A · core review", "## WP2a — A · one pass", "## WP10 — B6 · PR into A"]
+    assert "#L5)): one label\n\n```mermaid\nflowchart TD\n  wp2a\n```" in out
+
+
+def test_per_wp_stem_without_plan_row_is_an_error(tmp_path):
+    (tmp_path / "wp4x.mmd").write_text("flowchart TD")
+    with pytest.raises(diagrams.DiagramError, match="wp4x.mmd: no WP4x row"):
+        diagrams.render(WP_DOC, tmp_path, None, WP_PLAN)
+    with pytest.raises(diagrams.DiagramError, match="need docs/plan.md"):
+        diagrams.render(WP_DOC, tmp_path, None, None)
+
+
+def test_per_wp_diagrams_need_no_marker_of_their_own(tmp_path):
+    (tmp_path / "a.mmd").write_text("A")
+    (tmp_path / "wp1.mmd").write_text("W")
+    doc = "<!-- BEGIN generated:a -->\n<!-- END generated:a -->\n" + WP_DOC
+    out = diagrams.render(doc, tmp_path, None, WP_PLAN)
+    assert "```mermaid\nA\n```" in out and "## WP1 — Shared runtime" in out
+    with pytest.raises(diagrams.DiagramError, match="lanes are for status views"):
+        (tmp_path / "wp2.mmd").write_text("flowchart TD\n  %% lane a: WP2\n")
+        diagrams.render(doc, tmp_path, None, WP_PLAN)
+
+
+def test_repo_per_wp_diagrams_render_into_the_per_wp_block():
+    records = boardmod.parse(boardmod.BOARD_PATH.read_text())
+    out = diagrams.render(diagrams.DIAGRAMS_PATH.read_text(), diagrams.SOURCES_DIR, records, diagrams.PLAN_PATH.read_text())
+    for src in diagrams.SOURCES_DIR.glob("wp*.mmd"):
+        assert f"## {'WP' + src.stem[2:]} — " in out

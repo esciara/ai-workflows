@@ -1,0 +1,12 @@
+flowchart TD
+  F["Confirmed findings<br/>(after verify, WP2b)"] --> PL{"Placement rule, per finding<br/>first matching row wins"}
+  PL -- "no line, or spread wide" --> G["General: summary table only"]
+  PL -- "nit, one place, low/medium-risk path" --> N["Collapsed nits section<br/>of the summary"]
+  PL -- "line inside a diff hunk" --> I["Inline comment<br/>+ suggestion block when the fix is a few lines<br/>on a low/medium-risk path"]
+  PL -- "line GitHub cannot comment on" --> G
+  I --> RV{"At most one GitHub review per run<br/>never Approve"}
+  RV -- changes-requested --> RC["Request changes"]
+  RV -- otherwise --> CM["Comment<br/>earlier Request changes dismissed"]
+  RC & CM --> S["Summary comment links<br/>each inline thread"]
+  G & N --> S
+  S --> L["Verdict label"]

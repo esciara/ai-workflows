@@ -14,6 +14,8 @@ ADR_DIR = ROOT / "docs" / "adr"
 PLAN = ROOT / "docs" / "plan.md"
 OVERVIEW = ROOT / "docs" / "diagrams" / "overview.mmd"
 KNOWN_ISSUES = ROOT / "docs" / "known-issues.md"
+E2E_DIR = ROOT / "tests" / "e2e"
+DIAGRAMS_DIR = ROOT / "docs" / "diagrams"
 
 ADR_FILE = re.compile(r"^(\d{4})-[a-z0-9-]+\.md$")
 ADR_REF = re.compile(r"ADR-(\d{4})")
@@ -120,6 +122,29 @@ def known_issue_problems(text: str, adr_dir: Path = ADR_DIR) -> list[str]:
     return problems
 
 
+def acceptance_test(wp: str, e2e_dir: Path) -> Path | None:
+    """The WP's acceptance test as scripts/dev/verify-wp finds it: test_wp2a.py, else for a split its WP's test_wp2.py."""
+    for name in (wp, *([wp[:-1]] if wp[-1].isalpha() else [])):
+        if (path := e2e_dir / f"test_{name.lower()}.py").is_file():
+            return path
+    return None
+
+
+def diagram_problems(plan_text: str, e2e_dir: Path = E2E_DIR, diagrams_dir: Path = DIAGRAMS_DIR) -> list[str]:
+    """Every plan row whose acceptance test exists has docs/diagrams/<row>.mmd (ADR-0048). A WP split into rows (WP2a,
+    WP2b) gets one diagram per split and none of its own."""
+    rows = plan_rows(plan_text)
+    split = {sid[:-1] for sid in rows if sid[-1].isalpha()}
+    problems = []
+    for wp in rows:
+        if wp in split or (test := acceptance_test(wp, e2e_dir)) is None:
+            continue
+        if not (mmd := diagrams_dir / f"{wp.lower()}.mmd").is_file():
+            problems.append(f"{wp}: acceptance test {test.relative_to(test.parents[2])} exists but no diagram; "
+                            f"add {mmd.relative_to(mmd.parents[2])} (ADR-0048)")
+    return problems
+
+
 # --- the repo ---
 
 
@@ -129,6 +154,10 @@ def test_adr_status_and_relations_are_symmetric():
 
 def test_plan_wp_rows_match_overview_nodes_and_edges():
     assert plan_vs_overview_problems(PLAN.read_text(encoding="utf-8"), OVERVIEW.read_text(encoding="utf-8")) == []
+
+
+def test_wps_with_an_acceptance_test_have_a_diagram():
+    assert diagram_problems(PLAN.read_text(encoding="utf-8")) == []
 
 
 def test_known_issues_adr_references_resolve():
@@ -211,3 +240,21 @@ def test_known_issue_dangling_adr_is_reported(tmp_path):
     (tmp_path / "0001-a.md").write_text("")
     text = "See ADR-0001 and [ADR-0002](adr/0002-b.md), [ok](adr/0001-a.md), bead aiwf-zzz."
     assert known_issue_problems(text, tmp_path) == ["ADR-0002 has no file", "link adr/0002-b.md has no file"]
+
+
+def test_missing_wp_diagram_names_the_file_to_add(tmp_path):
+    e2e, mmd = tmp_path / "tests" / "e2e", tmp_path / "docs" / "diagrams"
+    e2e.mkdir(parents=True)
+    mmd.mkdir(parents=True)
+    for name in ("test_wp1.py", "test_wp2.py"):
+        (e2e / name).write_text("")
+    (mmd / "wp2a.mmd").write_text("")
+    plan = PLAN_T + "| WP3 | d | WP2 | x | y |\n"  # WP0 and WP3 have no test: no diagram needed yet
+    assert diagram_problems(plan, e2e, mmd) == [
+        "WP1: acceptance test tests/e2e/test_wp1.py exists but no diagram; add docs/diagrams/wp1.mmd (ADR-0048)",
+        "WP2b: acceptance test tests/e2e/test_wp2.py exists but no diagram; add docs/diagrams/wp2b.mmd (ADR-0048)",
+    ]  # WP2 itself is split: its diagrams are wp2a and wp2b
+    (e2e / "test_wp2b.py").write_text("")
+    (mmd / "wp1.mmd").write_text("")
+    (mmd / "wp2b.mmd").write_text("")
+    assert diagram_problems(plan, e2e, mmd) == []
