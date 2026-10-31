@@ -1,5 +1,6 @@
 # Reusable: Workflow A (PR review): 4 review passes in parallel, a verify (refute) pass, the summary comment and the
-# verdict label (WP2), one GitHub review per run with the inline comments, never Approve (WP3). `/review` comes with WP4.
+# verdict label (WP2), one GitHub review per run with the inline comments, never Approve (WP3). The gate (WP4,
+# ADR-0044) starts a review for same-repo PR events and for a maintainer's `/review`; fork PRs only on `/review`.
 # PR text and code are untrusted: they reach scripts through env vars or files, and the agent as inline context
 # (ADR-0034). The agent jobs hold no GitHub token scope and no secret but the OAuth token (ADR-0012, ADR-0018); they
 # pass their answers on as same-run artifacts, which only the publish job reads, after schema validation.
@@ -19,9 +20,50 @@ on:
 permissions: {}
 
 jobs:
+  # Which PR head to review, if any (ADR-0044): PR events of same-repo non-draft PRs, or `/review` from a maintainer
+  # (ADR-0005) on any open PR. Fork PR events never start a review; their code is only ever read as text.
+  gate:
+    if: github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+      pr: ${{ steps.gate.outputs.pr }}
+      sha: ${{ steps.gate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - id: python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - id: venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.aiwf-venv
+          key: aiwf-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/pyproject.toml') }}
+      - if: steps.venv.outputs.cache-hit != 'true'
+        run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
+      - run: echo "$HOME/.aiwf-venv/bin" >> "$GITHUB_PATH"
+      # The event payload (comment text, PR fields) is read from $GITHUB_EVENT_PATH as data.
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          AIWF_CONFIG: ${{ inputs.config }}
+        run: aiwf review-gate --repo "$REPO"
+
   # Step 1: mark in progress.
   start:
-    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -31,7 +73,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ needs.gate.outputs.pr }}
         run: |
           for old in "ai-review: merge" "ai-review: changes-requested" "ai-review: human-review" "ai: error"; do
             gh api -X DELETE "repos/$REPO/issues/$PR/labels/$(jq -rn --arg l "$old" '$l|@uri')" >/dev/null 2>&1 || true
@@ -40,7 +82,7 @@ jobs:
 
   # Steps 2-4 with a read-only token: diff, touched files, callers, linked issue; CI gate; risk tier.
   context:
-    needs: start
+    needs: [gate, start]
     runs-on: ubuntu-latest
     timeout-minutes: 30  # CI budget is 20 min (ADR-0034)
     permissions:
@@ -57,12 +99,18 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .ai-workflows
           persist-credentials: false
-      # The PR head, read as text (touched files, git grep for callers); nothing from it is executed.
+      # The PR head, read as text (touched files, git grep for callers); nothing from it is executed. A fork's head
+      # comes from this repo's refs/pull/<n>/head; it must still be the commit the gate chose.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: refs/pull/${{ needs.gate.outputs.pr }}/head
           path: head
           persist-credentials: false
+      - env:
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: |
+          got="$(git -C head rev-parse HEAD)"
+          [ "$got" = "$SHA" ] || { echo "::error::PR head moved to $got after the gate chose $SHA; run /review again"; exit 1; }
       - id: python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -79,8 +127,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ needs.gate.outputs.pr }}
+          SHA: ${{ needs.gate.outputs.sha }}
           AIWF_CONFIG: ${{ inputs.config }}
         run: >-
           aiwf review-context --repo "$REPO" --pr "$PR" --sha "$SHA" --workdir head
@@ -210,7 +258,7 @@ jobs:
   # Steps 6-9, orchestrator side: validate the 5 answers, keep confirmed findings, verdict, the one summary comment
   # (found by its marker), the verdict label. The passes' answers are read as data, after schema validation.
   publish:
-    needs: [start, context, verify]
+    needs: [gate, start, context, verify]
     if: always() && needs.start.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -245,7 +293,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ needs.gate.outputs.pr }}
           FACTS: ${{ needs.context.outputs.facts }}
           VERIFY_JSON: ${{ needs.verify.outputs.json }}
           USAGE: ${{ needs.verify.outputs.usage }}
