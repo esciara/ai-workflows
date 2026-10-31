@@ -9,6 +9,7 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 
 - `docs/spec.md` says **what** to build. `docs/plan.md` says **in which order** and **how we know it works**.
 - The status board is beads (`bd`, ADR-0015), exported to `docs/board.jsonl`; `docs/progress.md` is rendered from the export by `scripts/dev/render-progress`. Read `bd list --all` or `docs/progress.md` at the start of every session. Only the orchestrator edits the board and the generated files; never hand-edit generated blocks.
+- `docs/known-issues.md` lists open design issues and accepted risks; read it at the start of every session and before changing e2e or secrets handling.
 - If the spec, the plan and the code disagree, stop and ask the maintainer. Never resolve a conflict by guessing.
 - The spec's feature IDs (REV-01, TRI-08, …) link to a reference architecture; ignore those links, the spec is self-contained.
 

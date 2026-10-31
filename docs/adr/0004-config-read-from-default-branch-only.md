@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Alias: `D4`
+- Amended by: [ADR-0028](0028-fixed-e2e-caller-on-the-playground.md)
 
 ## Context
 
