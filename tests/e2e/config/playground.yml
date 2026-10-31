@@ -9,4 +9,4 @@ risk_paths:
   high: [".github/**"]
 workflows:
   review: true
-  triage: false
+  triage: true
