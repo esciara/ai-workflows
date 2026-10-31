@@ -67,4 +67,9 @@ Why: <rationale>
 | [ADR-0021](0021-run-state-on-the-item-labels-and-marker-comment.md) | D21 | Run state lives on the item: labels plus a marker comment | Accepted |
 | [ADR-0022](0022-own-reusable-workflow-refs-pinned-to-a-sha-from-wp14.md) | D22 | Own reusable-workflow refs pinned to a SHA from WP14 | Accepted |
 | [ADR-0023](0023-labels-sync-on-dispatch-and-schedule-only.md) | D23 | Labels sync on dispatch and schedule only | Accepted |
+| [ADR-0024](0024-split-wp11-senders-early-event-wiring-late.md) | D24 | Split WP11: senders early, event wiring late | Accepted |
+| [ADR-0025](0025-seams-pr-before-fan-out.md) | D25 | Seams PR before fan-out | Accepted |
+| [ADR-0026](0026-e2e-isolation-base-branch-per-wp-and-one-e2e-slot.md) | D26 | e2e isolation: base branch per WP and one e2e slot | Accepted |
+| [ADR-0027](0027-plan-stop-bead-is-blocked-awaiting-go.md) | D27 | Plan stop: bead is `blocked` with label `awaiting-go` | Accepted |
+| [ADR-0028](0028-fixed-e2e-caller-on-the-playground.md) | D28 | Fixed e2e caller on the playground | Accepted |
 <!-- END generated:adr-index -->
