@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: scripts/dev/render-adr-index   (regenerates the ADR index in docs/adr/README.md from docs/adr/NNNN-*.md); orchestrator only, in the sync PR (ADR-0015)
+# Usage: scripts/dev/render-adr-index   (regenerates the ADR index in docs/adr/README.md from docs/adr/NNNN-*.md); orchestrator only, in the sync PR (ADR-0036)
 # Exit 0 ok, 2 error (missing marker or malformed ADR).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"

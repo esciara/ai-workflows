@@ -19,7 +19,7 @@ Option 1 was rejected as a permanent state, option 2 because a movable ref is wh
 
 ## Decision
 
-Proposed: keep the exemption until the first release tag, then, no later than WP14, remove the `esciara/ai-workflows/` prefix from `is_exempt` so own reusable-workflow refs follow the same SHA-plus-version-comment rule as third-party actions. Local `./` refs stay exempt. The playground caller lives in the playground repo, outside this test, so it can keep `@wp<N>-…` branches (ADR-0002, ADR-0019).
+Keep the exemption until the first release tag, then, no later than WP14, remove the `esciara/ai-workflows/` prefix from `is_exempt` so own reusable-workflow refs follow the same SHA-plus-version-comment rule as third-party actions. Local `./` refs stay exempt. The playground caller lives in the playground repo, outside this test, so it can keep `@wp<N>-…` branches (ADR-0002, ADR-0019).
 
 Why: the template is what reaches real repos, so it must meet the same bar as any other dependency; before a tag exists there is nothing to pin to.
 

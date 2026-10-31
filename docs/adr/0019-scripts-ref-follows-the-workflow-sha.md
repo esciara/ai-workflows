@@ -21,7 +21,7 @@ Options 2 and 3 were rejected for the permission cost and the double bookkeeping
 
 ## Decision
 
-Proposed: reusable workflows load scripts, prompts and schema at `${{ job.workflow_sha }}` from `${{ job.workflow_repository }}` (checkout in orchestrator jobs, the token-free `git fetch` of that SHA in agent jobs), and the `ai_workflows_ref` input is removed. Pinning plan: this repo cuts semver tags (`v0.x.y`) from `main`; `templates/caller.yml` references each reusable workflow as `@<40-hex SHA> # v0.x.y`; every install other than the playground pins this way, introduced with WP14 at the latest; the playground keeps `@wp<N>-…` branches during checks (ADR-0002), which now also selects the scripts.
+Reusable workflows load scripts, prompts and schema at `${{ job.workflow_sha }}` from `${{ job.workflow_repository }}` (checkout in orchestrator jobs, the token-free `git fetch` of that SHA in agent jobs), and the `ai_workflows_ref` input is removed. Pinning plan: this repo cuts semver tags (`v0.x.y`) from `main`; `templates/caller.yml` references each reusable workflow as `@<40-hex SHA> # v0.x.y`; every install other than the playground pins this way, introduced with WP14 at the latest; the playground keeps `@wp<N>-…` branches during checks (ADR-0002), which now also selects the scripts.
 
 Why: the YAML and the code it runs come from one commit by construction, and a pinned SHA in the caller fixes both at once.
 

@@ -20,7 +20,7 @@ Option 1 was rejected because it relies on the default token, which the installe
 
 ## Decision
 
-Proposed: every workflow in this repo and in `templates/` starts with a top-level `permissions: {}`, and every job, including each caller job that `uses:` a reusable workflow, keeps its own `permissions:` block with the most it needs (ADR-0001's per-job rule stands). The policy test is extended to require the top-level `{}` (`ci.yml` may keep `contents: read`). ADR-0001's ban on a caller-level `{}` is lifted: starvation happens only to a caller job with no block of its own, which the policy test already forbids.
+Every workflow in this repo and in `templates/` starts with a top-level `permissions: {}`, and every job, including each caller job that `uses:` a reusable workflow, keeps its own `permissions:` block with the most it needs (ADR-0001's per-job rule stands). The policy test is extended to require the top-level `{}` (`ci.yml` may keep `contents: read`). ADR-0001's ban on a caller-level `{}` is lifted: starvation happens only to a caller job with no block of its own, which the policy test already forbids.
 
 Why: job-level settings are applied after workflow-level ones, so `{}` plus per-job grants is least privilege, and any job that forgets its block fails closed instead of inheriting the repo default.
 

@@ -21,7 +21,7 @@ Labels alone are too thin, a state branch breaks the hard rules, and caches can 
 
 ## Decision
 
-Proposed: state lives on the item. Labels carry the phase (as today). The orchestrator's sticky comment (ADR-0008, ADR-0016) ends with a hidden marker and a JSON state block (schema-validated, versioned): finding IDs and status, info-request count, fix-round count, last run link. The repro test and its output go in that comment when they fit, otherwise in the B2 comment as a collapsed block. Bulky per-run material (transcripts, metrics, logs) goes to workflow artifacts linked from the comment. When reading state, the orchestrator only trusts marker comments authored by the workflow's own bot identity, and treats a missing or invalid block as "no prior state".
+State lives on the item. Labels carry the phase (as today). The orchestrator's sticky comment (ADR-0008, ADR-0016) ends with a hidden marker and a JSON state block (schema-validated, versioned): finding IDs and status, info-request count, fix-round count, last run link. The repro test and its output go in that comment when they fit, otherwise in the B2 comment as a collapsed block. Bulky per-run material (transcripts, metrics, logs) goes to workflow artifacts linked from the comment. When reading state, the orchestrator only trusts marker comments authored by the workflow's own bot identity, and treats a missing or invalid block as "no prior state".
 
 Why: it reuses permissions and the marker pattern already in place, keeps state where the maintainer looks, and adds no store to secure.
 

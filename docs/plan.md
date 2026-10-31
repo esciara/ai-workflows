@@ -47,6 +47,8 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 
 Metrics logging from the spec is left out of this plan; it is worth adding once both workflows have run for a few weeks.
 
+**WP11 maintainer setup (chat alerts).** Before WP11 can pass, the maintainer sets these repository secrets on the test repo (and later on each target repo that wants alerts): Slack, create an Incoming Webhook for a channel and store it as `SLACK_WEBHOOK_URL`; Telegram, create a bot with @BotFather, get your chat ID, and store them as `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+
 ## Milestones and test setup
 
 | **TL;DR** — Three milestones: A usable on your repos (M1), bugs triaged and analysed (M2), bugs fixed end to end (M3). Everything is tested on a throwaway repo with seeded bugs, plus a fork in my organization and a small tester GitHub App standing in for outsiders, so no second account is needed. |
@@ -64,25 +66,6 @@ Metrics logging from the spec is left out of this plan; it is worth adding once 
 - **Outsider stand-ins, no second account.** A fork of the playground in `opinionated-digital-center` sends real fork PRs (WP4). A tester GitHub App opens issues, replies as the reporter and tries commands without maintainer status (WP1, WP6, WP7).
 - **Your first real repo** gets Workflow A only after M1, then B after M3.
 - **Secrets** on the test repo: `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`), then `SLACK_WEBHOOK_URL` or `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` by WP11.
-
-## Starter pack
-
-| **TL;DR** — Unzip `ai-workflows-starter.zip` as the first commit of the new repo, do the manual steps in `SETUP.md`, then open Claude Code in the repo and paste the prompt from `KICKOFF.md`. |
-| --- |
-
-| File | What it is |
-| --- | --- |
-| `README.md` | What the repo is and how it is laid out |
-| `CLAUDE.md` | Standing rules for every Claude Code session in this repo: source of truth, one package per PR, security rules |
-| `KICKOFF.md` | The prompt for the first session |
-| `SETUP.md` | Your manual checklist: repos, fork, token, secrets, tester App, branch protection |
-| `docs/spec.md` | The spec, exported from the doc |
-| `docs/plan.md` | This plan, exported from the doc |
-| `docs/progress.md` | Status of each work package, kept up to date by the session |
-| `templates/ai-workflows.example.yml` | Per-repo config example |
-| `templates/caller.example.yml` | Draft of the short workflow a target repo adds; WP0 finalises it |
-
-When the spec or this plan changes, export the doc again as Markdown and replace the file in `docs/`, so the session always reads the current version.
 
 ## Open points
 

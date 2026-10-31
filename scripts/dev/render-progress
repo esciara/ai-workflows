@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: scripts/dev/render-progress [--no-export] [--board docs/board.jsonl]
-# Orchestrator only, in the sync PR (ADR-0015): `bd export` -> secret scan (gitleaks) -> docs/board.jsonl -> docs/progress.md.
+# Orchestrator only, in the sync PR (ADR-0036): `bd export` -> secret scan (gitleaks) -> docs/board.jsonl -> docs/progress.md.
 # --no-export renders from the committed export. Exit 2 on error or a secret finding.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"

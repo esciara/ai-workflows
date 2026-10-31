@@ -20,7 +20,7 @@ Option 1 was rejected because it is the spam that `spec.md:296` forbids, and opt
 
 ## Decision
 
-Proposed: option 3. The summary stays in the sticky comment (ADR-0008). Each run submits at most one GitHub review, never Approve: Request changes when the verdict is `changes-requested`, Comment otherwise, carrying that run's new inline comments and a one-line body linking to the summary. No review is submitted when the run has no new inline comments and the review state would not change. When the verdict stops being `changes-requested`, the orchestrator dismisses its own last Request changes review with a message linking to the summary. `spec.md:102` is read as "inline comments and verdict go out together in one review per run, never split".
+Option 3. The summary stays in the sticky comment (ADR-0008). Each run submits at most one GitHub review, never Approve: Request changes when the verdict is `changes-requested`, Comment otherwise, carrying that run's new inline comments and a one-line body linking to the summary. No review is submitted when the run has no new inline comments and the review state would not change. When the verdict stops being `changes-requested`, the orchestrator dismisses its own last Request changes review with a message linking to the summary. `spec.md:102` is read as "inline comments and verdict go out together in one review per run, never split".
 
 Why: it meets `spec.md:62`, `:102` and `:296` together, keeps the timeline quiet on reruns, and keeps branch protection in step with the verdict.
 
