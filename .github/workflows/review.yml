@@ -1,0 +1,24 @@
+# Reusable: Workflow A (PR review). Placeholder until WP2 replaces it (ADR-0025): it fixes the interface of the
+# commented `review` job in templates/caller.yml so the playground's caller-e2e.yml can call it before WP2 lands.
+name: ai-workflows review
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: Normalised config JSON (output of config.yml)
+        type: string
+        required: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  pending:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - run: echo "Workflow A is built in WP2"

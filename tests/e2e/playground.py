@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Iterator, TypeVar
 
 import pytest
 
@@ -17,6 +18,7 @@ WORKFLOW = "AI workflows"  # name of the caller workflow in the target repo
 BOT = "github-actions[bot]"
 PING_MARKER = "<!-- ai-workflows:ping -->"
 FIXTURE_LABEL = "test-fixture"
+E2E_LABEL = "e2e-target"  # routes an item to the playground's caller-e2e.yml (@e2e-target) instead of the normal one
 RUN_TIMEOUT = int(os.environ.get("AIWF_E2E_TIMEOUT", "600"))
 POLL_INTERVAL = int(os.environ.get("AIWF_E2E_POLL", "5"))
 
@@ -101,3 +103,60 @@ def bot_pings_after(number: int, comment_id: int) -> list[dict[str, Any]]:
         c for c in comments
         if c["id"] > comment_id and c["user"]["login"] == BOT and PING_MARKER in (c["body"] or "")
     ]
+
+
+def ensure_label(name: str = E2E_LABEL, color: str = "5319e7", description: str = "e2e: runs ai-workflows@e2e-target") -> None:
+    if not any(lb["name"] == name for lb in api(f"repos/{REPO}/labels?per_page=100")):
+        api(f"repos/{REPO}/labels", f"name={name}", f"color={color}", f"description={description}", method="POST")
+
+
+def _labels(e2e: bool) -> list[str]:
+    if e2e:
+        ensure_label()
+    return [FIXTURE_LABEL, E2E_LABEL] if e2e else [FIXTURE_LABEL]
+
+
+def open_issue(title: str, body: str, *, e2e: bool, as_tester: bool = False) -> dict[str, Any]:
+    """New issue, labels set at creation (so the `opened` event already carries `e2e-target` when `e2e`)."""
+    want = _labels(e2e)
+    issue = api(f"repos/{REPO}/issues", f"title={title}", f"body={body}", *[f"labels[]={lb}" for lb in want],
+                method="POST", as_tester=as_tester)
+    got = {lb["name"] for lb in issue["labels"]}
+    if not set(want) <= got:  # GitHub silently drops labels an author may not set
+        pytest.fail(f"issue #{issue['number']} created without labels {sorted(set(want) - got)} (not a pass)", pytrace=False)
+    return {"number": issue["number"], "title": issue["title"]}
+
+
+def reusable_issue(title: str, body: str, *, e2e: bool) -> dict[str, Any]:
+    """The open test-fixture issue with this exact title, created once and reused (never deleted)."""
+    found = api(f"repos/{REPO}/issues?labels={FIXTURE_LABEL}&state=open&per_page=100")
+    for issue in found:
+        if issue["title"] == title and "pull_request" not in issue:
+            return {"number": issue["number"], "title": issue["title"]}
+    return open_issue(title, body, e2e=e2e)
+
+
+@contextlib.contextmanager
+def throwaway_pr(title: str, *, e2e: bool, base: str | None = None) -> Iterator[dict[str, Any]]:
+    """A test-fixture PR on its own branch from `base` (default branch if None); branch deleted, PR closed on exit.
+
+    The pulls API cannot set labels at creation, so they are added right after: the `opened` event never carries
+    them (PR-opened tests use a per-WP base branch, ADR-0026); every later event does.
+    """
+    branch = f"e2e-{time.time_ns()}"
+    base = base or api(f"repos/{REPO}")["default_branch"]
+    sha = api(f"repos/{REPO}/git/ref/heads/{base}")["object"]["sha"]
+    api(f"repos/{REPO}/git/refs", f"ref=refs/heads/{branch}", f"sha={sha}", method="POST")
+    pr = None
+    try:
+        api(f"repos/{REPO}/contents/e2e/{branch}.md", f"message=test: e2e throwaway {branch}",
+            "content=dGhyb3dhd2F5Cg==", f"branch={branch}", method="PUT")  # "throwaway\n"
+        title = f"{title} ({branch})"
+        pr = api(f"repos/{REPO}/pulls", f"title={title}", f"head={branch}", f"base={base}",
+                 "body=Throwaway e2e PR from esciara/ai-workflows tests; closed by its teardown.", method="POST")
+        api(f"repos/{REPO}/issues/{pr['number']}/labels", *[f"labels[]={lb}" for lb in _labels(e2e)], method="POST")
+        yield {"number": pr["number"], "title": title, "branch": branch}
+    finally:
+        gh(["api", "-X", "DELETE", f"repos/{REPO}/git/refs/heads/{branch}"])
+        if pr and api(f"repos/{REPO}/pulls/{pr['number']}")["state"] == "open":
+            api(f"repos/{REPO}/pulls/{pr['number']}", "state=closed", method="PATCH")

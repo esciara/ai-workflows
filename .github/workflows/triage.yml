@@ -1,0 +1,30 @@
+# Reusable: Workflow B (issue triage and fixes). Placeholder until WP5 replaces it (ADR-0025): it fixes the interface
+# of the commented `triage` job in templates/caller.yml so the playground's caller-e2e.yml can call it before WP5 lands.
+name: ai-workflows triage
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: Normalised config JSON (output of config.yml)
+        type: string
+        required: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      SLACK_WEBHOOK_URL:
+        required: false
+      TELEGRAM_BOT_TOKEN:
+        required: false
+      TELEGRAM_CHAT_ID:
+        required: false
+
+permissions: {}
+
+jobs:
+  pending:
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - run: echo "Workflow B is built in WP5"

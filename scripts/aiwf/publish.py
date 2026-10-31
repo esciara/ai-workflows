@@ -1,8 +1,16 @@
-"""Validate an agent's JSON answer against its schema, then write to GitHub (orchestrator only)."""
+"""Validate an agent's JSON answer against its schema, then write to GitHub (orchestrator only).
+
+Per-workflow publishers (ADR-0025): each `aiwf.publish_<workflow>` module (commands, review = Workflow A,
+triage = Workflow B) exports `PUBLISHERS = {kind: fn(data, repo, issue, run_url, gh)}`; this module validates, then
+dispatches by kind. A new workflow adds a module, never a line here. Shared low-level gh helpers live here.
+"""
 
 from __future__ import annotations
 
+import importlib
 import json
+import pkgutil
+from functools import cache
 from pathlib import Path
 from typing import Any, Callable
 
@@ -36,23 +44,43 @@ def validate(kind: str, raw: str | None) -> dict[str, Any]:
     return data
 
 
-def ping_body(data: dict[str, Any], run_url: str) -> str:
-    lines = ["<!-- ai-workflows:ping -->", f"🏓 pong: {data['reply']}"]
-    if run_url:
-        lines += ["", f"[Run]({run_url})"]
-    return "\n".join(lines)
+def comment(gh: GhRunner, repo: str, issue: int, body: str) -> None:
+    gh(["api", "-X", "POST", f"repos/{repo}/issues/{issue}/comments", "-f", f"body={body}"])
+
+
+def add_labels(gh: GhRunner, repo: str, issue: int, *labels: str) -> None:
+    gh(["api", "-X", "POST", f"repos/{repo}/issues/{issue}/labels", *[a for lb in labels for a in ("-f", f"labels[]={lb}")]])
+
+
+Publisher = Callable[[dict[str, Any], str, int, str, GhRunner], None]
+
+
+@cache
+def publishers() -> dict[str, Publisher]:
+    """kind -> publisher, collected from every `aiwf.publish_*` module. Two modules claiming one kind is an error."""
+    import aiwf
+
+    found: dict[str, Publisher] = {}
+    for info in sorted(pkgutil.iter_modules(aiwf.__path__), key=lambda m: m.name):
+        if not info.name.startswith("publish_"):
+            continue
+        for kind, fn in importlib.import_module(f"aiwf.{info.name}").PUBLISHERS.items():
+            if kind in found:
+                raise RuntimeError(f"publish kind {kind!r} registered twice (aiwf.{info.name})")
+            found[kind] = fn
+    return found
 
 
 def publish(kind: str, raw: str | None, repo: str, issue: int, run_url: str, gh: GhRunner) -> bool:
-    """Post the reply when the output is valid; otherwise add `ai: error` and post nothing."""
+    """Publish when the output is valid; otherwise add `ai: error` and post nothing."""
+    publisher = publishers().get(kind)
+    if publisher is None:
+        raise ValueError(f"no publisher for {kind}")
     try:
         data = validate(kind, raw)
     except InvalidOutput as exc:
         print(f"::error title=Invalid agent output::{exc}")
-        gh(["api", "-X", "POST", f"repos/{repo}/issues/{issue}/labels", "-f", f"labels[]={ERROR_LABEL}"])
+        add_labels(gh, repo, issue, ERROR_LABEL)
         return False
-    if kind != "ping":
-        raise ValueError(f"no publisher for {kind}")
-    gh(["api", "-X", "POST", f"repos/{repo}/issues/{issue}/comments", "-f", f"body={ping_body(data, run_url)}"])
-    print(f"replied on {repo}#{issue}")
+    publisher(data, repo, issue, run_url, gh)
     return True

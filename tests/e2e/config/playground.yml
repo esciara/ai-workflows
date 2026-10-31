@@ -1,0 +1,12 @@
+# Config for the playground's e2e caller (ADR-0028): caller-e2e.yml passes `e2e_config: playground.yml`, so the
+# reusable config.yml reads this file from the ai-workflows commit on `e2e-target`, not the playground's own config.
+# A WP changes it on its own branch (e.g. `triage: true` for WP5); no playground PR. Normal runs never read it.
+maintainers: [esciara]
+default_branch: main
+setup: pip install -e '.[test]'
+test: pytest
+risk_paths:
+  high: [".github/**"]
+workflows:
+  review: true
+  triage: false
