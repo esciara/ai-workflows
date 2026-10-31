@@ -56,20 +56,20 @@ jobs:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-  # Workflow A (WP2+): enabled once review.yml exists.
-  # review:
-  #   needs: config
-  #   if: needs.config.outputs.review == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
-  #   uses: esciara/ai-workflows/.github/workflows/review.yml@main
-  #   permissions:
-  #     contents: read
-  #     pull-requests: write
-  #     issues: write
-  #     checks: read
-  #   with:
-  #     config: ${{ needs.config.outputs.config }}
-  #   secrets:
-  #     CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+  # Workflow A (WP2a: core review; /review on PR comments arrives in WP4).
+  review:
+    needs: config
+    if: needs.config.outputs.review == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
+    uses: esciara/ai-workflows/.github/workflows/review.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      checks: read
+    with:
+      config: ${{ needs.config.outputs.config }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   # Workflow B (WP5+): enabled once triage.yml exists.
   # triage:
