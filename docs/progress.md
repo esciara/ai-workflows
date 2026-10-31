@@ -8,7 +8,7 @@ Generated from the beads status board (ADR-0015): the orchestrator updates the b
 | WP0 | Repo bootstrap | — | done | [#2](https://github.com/esciara/ai-workflows/pull/2) | Python 3.12; config read from default branch |
 | WP1 | Shared runtime | WP0 | done | [#7](https://github.com/esciara/ai-workflows/pull/7), [#8](https://github.com/esciara/ai-workflows/pull/8), [#9](https://github.com/esciara/ai-workflows/pull/9) | Agents on base-action (ADR-0012); publish gets `pull-requests: write` (ADR-0013) |
 | WP2 | A · core review | WP1 | done | [#33](https://github.com/esciara/ai-workflows/pull/33), [#37](https://github.com/esciara/ai-workflows/pull/37) | Split WP2a/WP2b; code inline, no file tools, 20-min CI wait ([ADR-0034](adr/0034-workflow-a-agent-inputs-and-ci-gate.md)) |
-| WP3 | A · placement + formal review | WP2 | in progress | | |
+| WP3 | A · placement + formal review | WP2 | done | [#41](https://github.com/esciara/ai-workflows/pull/41) | Spec reading 'same pattern ≤5 places → inline' (spec.md:97); +650/-39, not split |
 | WP4 | A · fork PRs | WP2 | in progress | | |
 | WP5 | B1 · classify | WP1 | done | [#35](https://github.com/esciara/ai-workflows/pull/35) | Two-pass classifier, candidate search across all issues + version fix range; possible fix = comment link only, B2 confirms ([ADR-0035](adr/0035-workflow-b-classifier-inputs-dedup-and-already-fixed.md)); spec line 128 amended |
 | WP6 | B2 · reproduce | WP5 | todo | | |
@@ -17,7 +17,7 @@ Generated from the beads status board (ADR-0015): the orchestrator updates the b
 | WP9 | B5 · fix loop | WP8 | todo | | |
 | WP10 | B6 · PR into A | WP3, WP9 | todo | | |
 | WP11 | Notifications | WP1 | todo | | |
-| WP12 | Guardrails | WP1 | todo | | |
+| WP12 | Guardrails | WP1 | in progress | | |
 | WP13 | Contributor mode | WP3, WP8 | todo | | |
 | WP14 | Onboarding kit | WP3 | todo | | |
 <!-- END generated:wp-table -->
@@ -32,6 +32,7 @@ Baseline for a later comparison of build loops. One row per finished WP, from th
 | WP0 | n/a (pre-loop) | n/a (pre-loop) | 0 | 0 | Built before [D11](adr/0011-factory-loop-and-independent-verifier.md): plan "go" + one review; kept as one PR over ~600 lines at the maintainer's call. Verifier run afterwards on #2: pass |
 | WP1 | 2 decisions (base-action, PR-write scope) + 3 playground merges (#4, #7, #10) | 2 (1 evidence, 1 review) | 0 | 0 | Split into 3 stacked PRs (#7, #8, #9) for size; 3 agent/publish fixes found by the playground check; verifier fail: tester-ignored evidence cut by log truncation → [ADR-0014](adr/0014-executable-acceptance-tests.md); review fail: label test trusted `schema/labels.yml` (empty file would pass) → spec labels hard-coded |
 | WP2 | 2 decisions + 2 merges | 0 | 1 (#31 → #33) | 2 (push identity, scratchpad clash) | Split in 2 PRs for size. #31 unmergeable (branch pushed with maintainer SSH key before #32) → replaced by #33. Acceptance test fixed once after review (stale PR head), maintainer-approved |
+| WP3 | 1 merge | 0 | 0 | 0 | Rebased once on docs-only main before merge; ~$0.34 e2e |
 | WP5 | 3 decisions (shared paths, ADR-0035 design, spec amendment) + 1 merge | 0 | 0 (1 design rework before PR) | 2 (worktreeConfig unset, scratchpad file clash) | +1578/-23 kept as one PR (~480 tests). First build (recent-window dedup) rejected by maintainer → reworked to two-pass design. Spec deviation (possible fix not labelled duplicate) approved, spec amended in PR. Agent unset shared extensions.worktreeConfig (restored); PR body clobbered via shared scratchpad pr.md (restored) |
 <!-- END generated:metrics -->
 
@@ -49,5 +50,6 @@ Baseline for a later comparison of build loops. One row per finished WP, from th
 - 2026-10-30 · WP0 · [#2](https://github.com/esciara/ai-workflows/pull/2) · Caller on playground validates config: green run 41087000415, invalid config red run 41087013620.
 - 2026-10-30 · WP1 · [#7](https://github.com/esciara/ai-workflows/pull/7), [#8](https://github.com/esciara/ai-workflows/pull/8), [#9](https://github.com/esciara/ai-workflows/pull/9) · `/ping`: maintainer reply on issue (run 41136897904) and PR (run 41138098292); tester ignored (run 41137072587); 20 labels synced.
 - 2026-10-31 · WP2 · [#33](https://github.com/esciara/ai-workflows/pull/33), [#37](https://github.com/esciara/ai-workflows/pull/37) · summary comment + verdict label, 4 passes + verify, re-review resolved/still open; runs 41224453402, 41224565551, 41228379748, 41228572672
+- 2026-10-31 · WP3 · [#41](https://github.com/esciara/ai-workflows/pull/41) · inline vs general placement, suggestion blocks, one GitHub review, never Approve; runs 41230000010, 41230210904, 41229995981, 41230159289
 - 2026-10-31 · WP5 · [#35](https://github.com/esciara/ai-workflows/pull/35) · bug/feature/question type labels + duplicate with link: playground runs 41227998480, 41227999598, 41227998828, 41227998505, 41228195217; ~$0.019/issue (2 passes)
 <!-- END generated:log -->
