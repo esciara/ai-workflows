@@ -33,7 +33,7 @@ Recommendation and decision: (a). It is the only option that covers both `gh` an
 ## Decision
 
 - A dedicated GitHub App, `ai-workflows-agent`, owned by the maintainer, is the identity of all development agents. Repository permissions: contents write, pull requests write, issues write, workflows write (agents change `.github/workflows/*.yml` in this repo, and GitHub refuses pushes touching workflow files without it), metadata read (mandatory). No administration, no commit statuses, no checks, no secrets, no actions write.
-- It is installed on `esciara/ai-workflows` and on `esciara/ai-workflows-playground`. On the playground it is needed for e2e setup that does not play the maintainer: pushing test branches, opening test-fixture issues and PRs, labelling them, and reading run results. Actions that must come from the maintainer in e2e tests (maintainer commands such as `/fix` and `/review` under ADR-0005, approvals under ADR-0020) cannot come from the App; they keep using the maintainer's credentials until a follow-up decision (see Consequences).
+- It is installed on `esciara/ai-workflows` and on `esciara/ai-workflows-playground`. On the playground it is needed for e2e setup that does not play the maintainer: pushing test branches, opening test-fixture issues and PRs, labelling them, and reading run results. Actions that must come from the maintainer in e2e tests (maintainer commands such as `/fix` and `/review` under ADR-0005, approvals under ADR-0020) cannot come from the App; they go through `scripts/dev/as-maintainer` (see Maintainer actions in e2e).
 - `main` of `esciara/ai-workflows` is protected by a repository ruleset, enforcement Active, target the default branch, with an empty bypass list:
   - Require a pull request before merging, 1 required approval, dismiss stale approvals when new commits are pushed, require approval of the most recent reviewable push.
   - Require status checks to pass: `test` (the job in `.github/workflows/ci.yml`), source restricted to GitHub Actions so nobody else can set it.
@@ -57,6 +57,16 @@ Merging (`PUT /repos/{owner}/{repo}/pulls/{pull_number}/merge`) needs contents w
 
 Residual, accepted: once the maintainer has approved a PR and `test` is green, the App could technically merge it. That is acceptable, since approval is the maintainer's act on that exact head. The hook also blocks `gh pr merge` and `gh pr review --approve` for agents, so agents do not merge in practice. A second residual: the App could approve a PR authored by the maintainer; the hook blocks it, and the maintainer opens few PRs.
 
+### Maintainer actions in e2e
+
+Some e2e steps must come from the maintainer: maintainer commands such as `/fix` and `/review` (ADR-0005) and approvals of playground PRs (ADR-0020).
+
+- (a) A narrow `scripts/dev/as-maintainer` command that uses the maintainer's `gh` credentials only to post comments and to submit PR reviews and approvals on `esciara/ai-workflows-playground`; the `PreToolUse` hook allows the maintainer's credentials in agent sessions only through it: e2e stays automatic and the exposed surface is two actions on one test repo; but agents can still act as the maintainer on the playground.
+- (b) Treat the App as a maintainer in the playground's config: no maintainer credentials in agent sessions; but it needs a bot exception in the product's permission check, so security logic changes for the sake of tests, and GitHub reports bots' collaborator permission as `none` (verified).
+- (c) The maintainer posts these by hand: no maintainer credentials for agents at all; but e2e is no longer automatic.
+
+Decision (maintainer, 2026-10-31): (a). (b) was rejected because it changes product security logic for tests, (c) because e2e must stay automatic. The script is not implemented in this PR; it is part of the wiring follow-up.
+
 ## Maintainer setup
 
 1. Create the App: GitHub, Settings, Developer settings, GitHub Apps, New GitHub App. Name `ai-workflows-agent`, homepage `https://github.com/esciara/ai-workflows`, webhook off, "Only on this account".
@@ -74,7 +84,7 @@ Residual, accepted: once the maintainer has approved a PR and `test` is green, t
 - Agent PRs, comments and pushes are authored by `ai-workflows-agent[bot]`; the maintainer approves and merges every PR to `main`, including the orchestrator's sync PRs (one more click per PR).
 - A rebase pushed by the orchestrator after the maintainer approved needs a fresh approval (most-recent-push rule). Under ADR-0015 the maintainer merges in the orchestrator's order, so approve right before merging.
 - Commit authorship is unchanged (git `user.name`/`user.email`); only the pusher and PR author change.
-- Follow-up code, as its own PR: `scripts/dev/as-agent` (shipped with this ADR, not yet used) wired into CLAUDE.md, the `PreToolUse` Bash hook in `.claude/settings.json` (shared path, orchestrator's go needed), and the e2e harness.
-- Open question for a follow-up ADR: e2e steps that must come from the maintainer (commands, approvals on the playground) still need the maintainer's credentials in agent sessions, which the hook has to allow narrowly (e.g. only inside the e2e pytest run). Until then, agents can still reach the maintainer's `gh` token through those paths, so the hook is not a hard boundary; the ruleset is.
+- Follow-up code, as its own PR: `scripts/dev/as-agent` (shipped with this ADR, not yet used) wired into CLAUDE.md, `scripts/dev/as-maintainer`, the `PreToolUse` Bash hook in `.claude/settings.json` (shared path, orchestrator's go needed), and the e2e harness.
+- Agents keep a narrow path to the maintainer's credentials through `scripts/dev/as-maintainer` (comments and reviews on the playground), and the maintainer's `gh` token stays on the same machine, so the hook is not a hard boundary; the ruleset is.
 - Pushes to the fork `opinionated-digital-center/ai-workflows-playground` are out of scope; they stay as today.
 - ADR-0020 is unchanged and now matches reality on `esciara/ai-workflows`: approvals there are the maintainer's, never a self-approval.
