@@ -74,4 +74,7 @@ Why: <rationale>
 | [ADR-0028](0028-fixed-e2e-caller-on-the-playground.md) | D28 | Fixed e2e caller on the playground | Accepted |
 | [ADR-0029](0029-e2e-pr-routing-by-branch-prefix.md) | D29 | e2e test PRs routed by an `e2e/` branch prefix | Accepted |
 | [ADR-0030](0030-generated-docs-keep-single-writer-drop-enforcement.md) | D30 | Generated docs: single writer kept, enforcement dropped | Accepted |
+| [ADR-0031](0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md) | D31 | Agents act as their own GitHub App; main protected by a ruleset | Accepted |
+| [ADR-0032](0032-workflow-b-runs-workflow-a-on-its-own-fix-prs.md) | D32 | Workflow B runs Workflow A on its own fix PRs | Accepted |
+| [ADR-0033](0033-stall-only-risks-get-no-mechanism-claims-retired.md) | D33 | Stall-only risks get no mechanism; claims retired | Accepted |
 <!-- END generated:adr-index -->
