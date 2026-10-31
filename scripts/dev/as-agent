@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Usage: scripts/dev/as-agent gh <args...>
 #        scripts/dev/as-agent git <args...>     (e.g. git push origin HEAD)
-# Runs `gh` or `git` as the GitHub App `ai-workflows-agent`, the identity of development agents (ADR-0031).
+# Runs `gh` or `git` as the GitHub App `esciara-ai-workflows-agent`, the identity of development agents (ADR-0031).
 # Mints an installation token for the App's installation on $AI_WORKFLOWS_AGENT_REPO
 # (default esciara/ai-workflows) and hands it to gh as GH_TOKEN; git gets it through
 # `gh auth git-credential` set via GIT_CONFIG_* env vars (no git config file is changed).
@@ -15,7 +15,12 @@ case "${1:-}" in
   *) echo "usage: as-agent gh|git <args...>" >&2; exit 2 ;;
 esac
 
-app_id="${AI_WORKFLOWS_AGENT_APP_ID:?set AI_WORKFLOWS_AGENT_APP_ID to the agent App ID}"
+if [ "$1" = gh ] && [ "${2:-}" = auth ]; then echo "as-agent: gh auth is not allowed" >&2; exit 2; fi
+if [ -z "${AI_WORKFLOWS_AGENT_APP_ID:-}" ]; then
+  echo "as-agent: AI_WORKFLOWS_AGENT_APP_ID is unset; create the App: see ADR-0031, Maintainer setup (steps 1-6)" >&2
+  exit 1
+fi
+app_id="$AI_WORKFLOWS_AGENT_APP_ID"
 repo="${AI_WORKFLOWS_AGENT_REPO:-esciara/ai-workflows}"
 api="https://api.github.com"
 

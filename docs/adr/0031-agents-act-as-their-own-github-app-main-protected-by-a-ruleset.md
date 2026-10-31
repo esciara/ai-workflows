@@ -32,7 +32,7 @@ Recommendation and decision: (a). It is the only option that covers both `gh` an
 
 ## Decision
 
-- A dedicated GitHub App, `ai-workflows-agent`, owned by the maintainer, is the identity of all development agents. Repository permissions: contents write, pull requests write, issues write, workflows write (agents change `.github/workflows/*.yml` in this repo, and GitHub refuses pushes touching workflow files without it), metadata read (mandatory). No administration, no commit statuses, no checks, no secrets, no actions write.
+- A dedicated GitHub App, `esciara-ai-workflows-agent` (App names are global; Keychain entry `ai-workflows-agent`), owned by the maintainer, is the identity of all development agents. Repository permissions: contents write, pull requests write, issues write, workflows write (agents change `.github/workflows/*.yml` in this repo, and GitHub refuses pushes touching workflow files without it), metadata read (mandatory). No administration, no commit statuses, no checks, no secrets, no actions write.
 - It is installed on `esciara/ai-workflows` and on `esciara/ai-workflows-playground`. On the playground it is needed for e2e setup that does not play the maintainer: pushing test branches, opening test-fixture issues and PRs, labelling them, and reading run results. Actions that must come from the maintainer in e2e tests (maintainer commands such as `/fix` and `/review` under ADR-0005, approvals under ADR-0020) cannot come from the App; they go through `scripts/dev/as-maintainer` (see Maintainer actions in e2e).
 - `main` of `esciara/ai-workflows` is protected by a repository ruleset, enforcement Active, target the default branch, with an empty bypass list:
   - Require a pull request before merging, 1 required approval, dismiss stale approvals when new commits are pushed, require approval of the most recent reviewable push.
@@ -69,7 +69,7 @@ Decision (maintainer, 2026-10-31): (a). (b) was rejected because it changes prod
 
 ## Maintainer setup
 
-1. Create the App: GitHub, Settings, Developer settings, GitHub Apps, New GitHub App. Name `ai-workflows-agent`, homepage `https://github.com/esciara/ai-workflows`, webhook off, "Only on this account".
+1. Create the App: GitHub, Settings, Developer settings, GitHub Apps, New GitHub App. Name `esciara-ai-workflows-agent`, homepage `https://github.com/esciara/ai-workflows`, webhook off, "Only on this account".
 2. Repository permissions: Contents read and write, Pull requests read and write, Issues read and write, Workflows read and write, Metadata read-only. Leave everything else at No access (in particular Administration, Commit statuses, Checks, Secrets, Actions).
 3. Install it on `esciara/ai-workflows` and `esciara/ai-workflows-playground` only ("Only select repositories").
 4. Generate a private key (downloads a `.pem`).
@@ -81,7 +81,7 @@ Decision (maintainer, 2026-10-31): (a). (b) was rejected because it changes prod
 
 ## Consequences
 
-- Agent PRs, comments and pushes are authored by `ai-workflows-agent[bot]`; the maintainer approves and merges every PR to `main`, including the orchestrator's sync PRs (one more click per PR).
+- Agent PRs, comments and pushes are authored by `esciara-ai-workflows-agent[bot]`; the maintainer approves and merges every PR to `main`, including the orchestrator's sync PRs (one more click per PR).
 - A rebase pushed by the orchestrator after the maintainer approved needs a fresh approval (most-recent-push rule). Under ADR-0015 the maintainer merges in the orchestrator's order, so approve right before merging.
 - Commit authorship is unchanged (git `user.name`/`user.email`); only the pusher and PR author change.
 - Follow-up code, as its own PR: `scripts/dev/as-agent` (shipped with this ADR, not yet used) wired into CLAUDE.md, `scripts/dev/as-maintainer`, the `PreToolUse` Bash hook in `.claude/settings.json` (shared path, orchestrator's go needed), and the e2e harness.

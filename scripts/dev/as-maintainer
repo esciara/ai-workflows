@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Usage: scripts/dev/as-maintainer <gh args...>
+Runs gh with the maintainer's own gh login, only for e2e maintainer actions on esciara/ai-workflows-playground
+(ADR-0031): issue/PR comments, PR reviews and approvals, and the labels-sync workflow_dispatch. Anything else is
+refused. Examples:
+  as-maintainer pr review 12 -R esciara/ai-workflows-playground --approve
+  as-maintainer api -X POST repos/esciara/ai-workflows-playground/issues/3/comments -f body=/fix
+"""
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from aiwf.devguard import maintainer_allowed  # noqa: E402
+
+allowed, why = maintainer_allowed(sys.argv[1:])
+if not allowed:
+    print(f"as-maintainer refused: {why} (see ADR-0031, Maintainer actions in e2e)", file=sys.stderr)
+    sys.exit(2)
+args = sys.argv[1:]
+args = args[1:] if args[:1] == ["gh"] else args
+env = {k: v for k, v in os.environ.items() if k not in {"GH_TOKEN", "GITHUB_TOKEN"}}  # the maintainer's own gh login
+os.execvpe("gh", ["gh", *args], env)

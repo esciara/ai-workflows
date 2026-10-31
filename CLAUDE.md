@@ -62,11 +62,13 @@ tests/                  unit tests for scripts (no network)
   - Write `scripts/dev/as-tester`. It mints an installation token from the App ID and the private key on this machine, then runs `gh` with that token.
   - The key is read from the macOS Keychain, entry `ai-workflows-tester` (`security find-generic-password -s ai-workflows-tester -w | base64 -d`). Fallback: if the env var `AI_WORKFLOWS_TESTER_KEY_PATH` is set, read the key from that file instead. The App ID comes from the env var `AI_WORKFLOWS_TESTER_APP_ID`. Never commit or print the key or the token.
   - Use the script to open issues, reply as the reporter, and post commands that must be refused.
+- Maintainer actions in e2e (commands such as `/fix`, `/review`, PR approvals, the labels-sync dispatch) go through `scripts/dev/as-maintainer`, which refuses anything else and any repo but the playground; other e2e writes run as the agent App.
 - Unit-test the orchestrator scripts locally; end-to-end checks run on the playground.
 - Unit tests also cover fork detection and the permission logic: author is or isn't a maintainer, has or hasn't write access.
 
 ## Tooling
 
-- Use the `gh` CLI for GitHub operations from this machine.
+- Use the `gh` CLI for GitHub operations from this machine. Agents run every GitHub write as the App `esciara-ai-workflows-agent` (ADR-0031): `scripts/dev/as-agent gh …` and `scripts/dev/as-agent git push …`; bare `gh` may only read. A `PreToolUse` hook (`scripts/dev/guard-bash`) blocks bare `gh` writes, bare `git push`, merges, agent approvals, `gh auth token`, pushes to `main`, force pushes without `--force-with-lease` and remote branch deletion; it matches command text, so e.g. `echo "gh pr merge"` is blocked too.
+- Maintainer setup (App, Keychain entry `ai-workflows-agent`, `AI_WORKFLOWS_AGENT_APP_ID`, ruleset on `main`): ADR-0031, section Maintainer setup.
 - Prefer a small, boring stack for scripts (e.g. TypeScript on Node 20 or Python 3.12 — pick one in WP0 and record it as an ADR in `docs/adr/`).
 - Pin third-party actions to a full commit SHA, with the version in a comment.

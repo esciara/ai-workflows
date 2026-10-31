@@ -146,5 +146,5 @@ def test_throwaway_e2e_pr_uses_prefix_then_labels_and_cleans_up(monkeypatch):
     i_pr = next(i for i, c in enumerate(calls) if c[1].endswith("/pulls") and c[0] == "POST")
     i_lb = next(i for i, c in enumerate(calls) if c[1].endswith("/issues/5/labels"))
     assert i_pr < i_lb and set(calls[i_lb][2]) == {f"labels[]={pg.FIXTURE_LABEL}", f"labels[]={pg.E2E_LABEL}"}
-    assert ("GH", "DELETE", f"repos/{pg.REPO}/git/refs/heads/{pr['branch']}") in calls
+    assert ("DELETE", f"repos/{pg.REPO}/git/refs/heads/{pr['branch']}", ()) in calls
     assert ("PATCH", f"repos/{pg.REPO}/pulls/5", ("state=closed",)) in calls
