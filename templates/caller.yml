@@ -6,6 +6,9 @@ name: AI workflows
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
+  # Fork PRs only, API calls only (ADR-0044): a fork push removes a stale verdict label. Never checks out the PR.
+  pull_request_target:
+    types: [synchronize]
   issue_comment:
     types: [created]
   issues:
@@ -20,7 +23,7 @@ on:
         default: ''
 
 concurrency:
-  group: ai-workflows-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: ai-workflows-${{ github.event_name == 'pull_request_target' && 'fork-push-' || '' }}${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: false
 
 # Least privilege by default (ADR-0017); every job below grants what its called workflow needs.
@@ -70,6 +73,14 @@ jobs:
       config: ${{ needs.config.outputs.config }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # Workflow A, fork PRs (ADR-0044): a fork push after a review removes the verdict label. No secrets, no checkout.
+  review-fork-push:
+    needs: config
+    if: needs.config.outputs.review == 'true' && github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
+    uses: esciara/ai-workflows/.github/workflows/review-fork-push.yml@main
+    permissions:
+      pull-requests: write
 
   # Workflow B (WP5: B1 classify on new issues and /retriage).
   triage:
