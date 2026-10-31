@@ -58,7 +58,7 @@ Why: <rationale>
 | [ADR-0012](0012-agents-use-base-action.md) | D12 | Agents use `claude-code-action/base-action` | Accepted |
 | [ADR-0013](0013-publish-job-pull-requests-write.md) | D13 | Publish job gets `pull-requests: write` | Accepted |
 | [ADR-0014](0014-executable-acceptance-tests.md) | D14 | Executable acceptance tests; verifier reviews the test | Accepted |
-| [ADR-0015](0015-parallel-operating-model.md) | D15 | Parallel operating model: beads board, single writer, agent-lifetime claims, merge rules | Accepted |
+| [ADR-0015](0015-parallel-operating-model.md) | D15 | Parallel operating model: beads board, single writer, agent-lifetime claims, merge rules | Superseded by ADR-0036 |
 | [ADR-0016](0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md) | D16 | Review summary in a sticky comment; GitHub reviews only when needed | Accepted |
 | [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md) | D17 | Top-level `permissions: {}` in caller and reusable workflows | Accepted |
 | [ADR-0018](0018-agent-jobs-get-no-token-permissions.md) | D18 | Agent jobs get `permissions: {}` | Accepted |
@@ -78,4 +78,6 @@ Why: <rationale>
 | [ADR-0032](0032-workflow-b-runs-workflow-a-on-its-own-fix-prs.md) | D32 | Workflow B runs Workflow A on its own fix PRs | Accepted |
 | [ADR-0033](0033-stall-only-risks-get-no-mechanism-claims-retired.md) | D33 | Stall-only risks get no mechanism; claims retired | Accepted |
 | [ADR-0034](0034-workflow-a-agent-inputs-and-ci-gate.md) | D34 | Workflow A agent inputs and CI gate | Accepted |
+| [ADR-0035](0035-workflow-b-classifier-inputs-dedup-and-already-fixed.md) | D35 | Workflow B classifier inputs, dedup and already-fixed check | Accepted |
+| [ADR-0036](0036-parallel-operating-model-consolidated.md) | D36 | Parallel operating model (consolidated) | Accepted |
 <!-- END generated:adr-index -->

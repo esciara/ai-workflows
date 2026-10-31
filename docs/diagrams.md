@@ -109,3 +109,30 @@ Check on the playground:
 - maintainer `/ping` → reply
 - tester App `/ping` → nothing
 - all labels exist
+
+## WP5 — B1 classify
+
+What happens when an issue is opened, or a maintainer types `/retriage` on one: two-pass classification (extract, then classify against candidate issues and the version's fix range).
+
+<!-- BEGIN generated:wp5 (from docs/diagrams/wp5.mmd by scripts/dev/render-diagrams; edit the .mmd, not this block) -->
+```mermaid
+flowchart TD
+  O["Issue opened<br/>or maintainer '/retriage'"] --> G{"Gate<br/>new issue, or accepted<br/>/retriage on an issue?"}
+  G -- no --> X["Nothing"]
+  G -- yes --> C["Context job, read-only token<br/>the issue"]
+  C -- artifact --> P1["Extractor agent job (pass 1)<br/>no GitHub token, no file tools<br/>version, search phrases, file paths"]
+  P1 -- JSON --> K["Candidates job, read-only token<br/>checks pass-1 schema; issue search over all issues;<br/>commits and merged PRs since the version's tag<br/>(fallback: latest release, low confidence)"]
+  K -- artifact --> A["Classifier agent job (pass 2)<br/>no GitHub token, no file tools<br/>JSON only"]
+  K -- invalid pass 1 --> E
+  A -- JSON --> V{"Orchestrator<br/>matches the classifier schema?"}
+  V -- no --> E["Label 'ai: error'"]
+  V -- yes --> R{"References exist?<br/>duplicate issue; commit on / PR merged into<br/>the default branch"}
+  R -- duplicate, high or medium --> D["type label + 'triage: duplicate'<br/>link; never closed"]
+  R -- possible fix --> F["'possibly fixed by' link in the comment<br/>B2 reproduction confirms"]
+  R -- none --> L{"Confidence low?"}
+  D & F --> L
+  L -- yes --> H["type label + 'triage: needs-human'"]
+  L -- no --> T["type label<br/>bug goes on to B2 (WP6)"]
+  H & T --> S["One triage comment<br/>updated in place"]
+```
+<!-- END generated:wp5 -->
