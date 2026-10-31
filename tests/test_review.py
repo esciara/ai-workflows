@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -97,19 +98,49 @@ def test_clean_neutralises_mentions_html_markers_and_pipes():
 
 
 class FakeGh:
-    def __init__(self, comments=()):
+    """GitHub for the publisher: issue comments, reviews (with inline comments) and dismissals."""
+
+    def __init__(self, comments=(), reviews=(), refuse=()):
         self.comments = list(comments)
+        self.reviews = list(reviews)  # {"id", "user", "state", "event", "comments"}
+        self.refuse = list(refuse)  # error messages for the next review POSTs
         self.calls = []
 
     def __call__(self, args):
         self.calls.append(args)
-        if args[:2] == ["api", "--paginate"]:
-            return json.dumps([self.comments])
-        if "-X" in args and args[args.index("-X") + 1] == "POST" and args[3].endswith("/comments"):
-            self.comments.append({"id": 100 + len(self.comments), "user": {"login": pr.BOT}, "body": args[-1][5:]})
-        if "-X" in args and args[args.index("-X") + 1] == "PATCH":
-            cid = int(args[3].rsplit("/", 1)[1])
+        method = args[args.index("-X") + 1] if "-X" in args else "GET"
+        url = next(a for a in args[1:] if a.startswith("repos/"))
+        if url.endswith("/reviews") and method == "POST":
+            if self.refuse:
+                raise RuntimeError(self.refuse.pop(0))
+            payload = json.loads(Path(args[args.index("--input") + 1]).read_text())
+            rid = 900 + len(self.reviews)
+            comments = [dict(c, html_url=f"https://github.com/o/r/pull/5#discussion_r{rid}{i}")
+                        for i, c in enumerate(payload["comments"])]
+            state = {"REQUEST_CHANGES": "CHANGES_REQUESTED", "COMMENT": "COMMENTED"}[payload["event"]]
+            self.reviews.append({"id": rid, "user": {"login": pr.BOT}, "state": state, "payload": payload,
+                                 "comments": comments})
+            return json.dumps({"id": rid})
+        if "/reviews/" in url and url.split("?")[0].endswith("/comments"):
+            rid = int(url.split("/reviews/")[1].split("/")[0])
+            return json.dumps([next(r for r in self.reviews if r["id"] == rid)["comments"]])
+        if url.endswith("/dismissals"):
+            rid = int(url.split("/reviews/")[1].split("/")[0])
+            next(r for r in self.reviews if r["id"] == rid)["state"] = "DISMISSED"
+            return "{}"
+        if "/reviews" in url:
+            return json.dumps([[{k: r[k] for k in ("id", "user", "state")} for r in self.reviews]])
+        if method == "POST" and url.endswith("/comments"):
+            c = {"id": 100 + len(self.comments), "user": {"login": pr.BOT}, "body": args[-1][5:],
+                 "html_url": "https://github.com/o/r/pull/5#issuecomment-1"}
+            self.comments.append(c)
+            return json.dumps(c)
+        if method == "PATCH":
+            cid = int(url.rsplit("/", 1)[1])
             next(c for c in self.comments if c["id"] == cid)["body"] = args[-1][5:]
+            return json.dumps({"id": cid, "html_url": "https://github.com/o/r/pull/5#issuecomment-1"})
+        if url.endswith("/comments?per_page=100"):
+            return json.dumps([self.comments])
         return "{}"
 
 
@@ -276,3 +307,152 @@ def test_cmd_reads_answers_and_usage_from_the_passes_dir(tmp_path, monkeypatch):
     args = type("A", (), {"repo": "o/r", "pr": 5, "run_url": "", "passes_dir": str(tmp_path)})
     assert pr.cmd_review_publish(args) == 0
     assert state_of(gh)["usage"]["cost_usd"] == 2.5
+
+
+# WP3: placement, suggestion blocks, one GitHub review per run, never Approve.
+
+from aiwf import review_placement as placement  # noqa: E402
+
+DIFF = """diff --git a/src/x.py b/src/x.py
+--- a/src/x.py
++++ b/src/x.py
+@@ -1,3 +1,4 @@ def f():
+@@ -20 +21 @@
+@@ -30,2 +31,0 @@
+diff --git a/gone.py b/gone.py
+--- a/gone.py
++++ /dev/null
+@@ -1,2 +0,0 @@
+diff --git a/.github/ci.yml b/.github/ci.yml
+--- a/.github/ci.yml
++++ b/.github/ci.yml
+@@ -5,6 +5,7 @@
+"""
+PFACTS = {**FACTS, "commentable": review.commentable(DIFF), "high_paths": [".github/ci.yml"]}
+
+
+def test_commentable_lines_are_the_head_side_hunk_ranges():
+    assert review.commentable(DIFF) == {"src/x.py": [[1, 4], [21, 21]], ".github/ci.yml": [[5, 11]]}
+
+
+@pytest.mark.parametrize("finding,where", [
+    (dict(FINDING, line=None), placement.GENERAL),  # something absent / the PR itself
+    (dict(FINDING, severity="blocking"), placement.INLINE),
+    (dict(FINDING, line=9), placement.GENERAL),  # not in the diff: GitHub cannot comment there
+    (dict(FINDING, severity="nit"), placement.COLLAPSED),
+    (dict(FINDING, severity="nit", line=9), placement.COLLAPSED),
+    (dict(FINDING, severity="nit", path=".github/ci.yml", line=6), placement.INLINE),  # high risk: nits inline
+    (dict(FINDING, severity="nit", also=[{"path": "src/y.py", "line": 2}]), placement.INLINE),  # same pattern
+    (dict(FINDING, also=[{"path": "src/x.py", "line": i} for i in range(5)]), placement.GENERAL),  # 6 places
+    (dict(FINDING, also=[{"path": f"src/{i}.py", "line": 1} for i in range(3)]), placement.GENERAL),  # 4 files
+])
+def test_placement_rule(finding, where):
+    assert placement.place(finding, PFACTS) == where
+
+
+def test_suggestion_only_for_a_few_lines_in_one_hunk_on_lower_risk_paths():
+    f = dict(FINDING, line=2, end_line=3, replacement="a = 1\r\nb = 2\n")
+    assert placement.suggestion(f, PFACTS) == (2, 3, "a = 1\nb = 2")
+    assert placement.suggestion(dict(f, end_line=5), PFACTS) is None  # runs past the hunk
+    assert placement.suggestion(dict(f, replacement="x\n" * 11), PFACTS) is None
+    assert placement.suggestion(dict(f, path=".github/ci.yml", line=6, end_line=6), PFACTS) is None  # high risk
+    assert placement.suggestion(dict(FINDING), PFACTS) is None  # no replacement
+    assert placement.fence("x = '```'") == "````"
+
+
+def blocking_run(gh, facts=PFACTS, **extra):
+    raw = passes(correctness=[dict(FINDING, severity="blocking", line=2, replacement="    return x + 1", **extra)])
+    assert publish(gh, raw, verify(("correctness-1", "confirmed", "blocking", "r")), facts)
+
+
+def test_blocking_finding_goes_inline_with_a_suggestion_in_one_request_changes_review():
+    gh = FakeGh()
+    blocking_run(gh)
+    (rv,) = gh.reviews
+    assert rv["state"] == "CHANGES_REQUESTED" and rv["payload"]["commit_id"] == FACTS["sha"]
+    assert "#issuecomment-1" in rv["payload"]["body"]  # links to the summary
+    (c,) = rv["comments"]
+    assert (c["path"], c["line"], c["side"]) == ("src/x.py", 2, "RIGHT") and "start_line" not in c
+    assert "```suggestion\n    return x + 1\n```" in c["body"] and "<!-- ai-review:finding " in c["body"]
+    body = gh.comments[0]["body"]
+    assert "| 1 | blocking | [src/x.py:2](https://github.com/o/r/pull/5#discussion_r9000) |" in body
+    assert state_of(gh)["open"][0]["thread"] == "https://github.com/o/r/pull/5#discussion_r9000"
+    assert ["api", "-X", "POST", "repos/o/r/issues/5/labels", "-f", "labels[]=ai-review: changes-requested"] in gh.calls
+
+
+def test_multi_line_suggestion_spans_the_lines():
+    gh = FakeGh()
+    blocking_run(gh, end_line=3)
+    (c,) = gh.reviews[0]["comments"]
+    assert (c["start_line"], c["line"], c["start_side"]) == (2, 3, "RIGHT")
+
+
+def test_low_risk_nit_stays_collapsed_in_the_summary_and_sends_no_review():
+    gh = FakeGh()
+    raw = passes(maintainability=[dict(FINDING, severity="nit", title="Typo", line=2)])
+    assert publish(gh, raw, verify(("maintainability-1", "confirmed", "nit", "r")), PFACTS)
+    assert gh.reviews == []
+    body = gh.comments[0]["body"]
+    details = body.split("<details>")[1].split("</details>")[0]
+    assert "| 1 | nit | src/x.py:2 | Typo" in details and "No findings beyond the nits below." in body
+
+
+def test_rerun_with_nothing_new_sends_no_review_and_keeps_the_thread():
+    gh = FakeGh()
+    blocking_run(gh)
+    fid = state_of(gh)["open"][0]["id"]
+    publish(gh, passes(), verify(previous=[(fid, "still-open", "still there", None)]), {**PFACTS, "sha": "b" * 40})
+    assert len(gh.reviews) == 1 and gh.reviews[0]["state"] == "CHANGES_REQUESTED"
+    assert "[src/x.py:2](https://github.com/o/r/pull/5#discussion_r9000)" in gh.comments[0]["body"]
+
+
+def test_fix_after_changes_requested_dismisses_our_review_without_a_new_one():
+    other = {"id": 1, "user": {"login": "esciara"}, "state": "CHANGES_REQUESTED", "comments": []}
+    gh = FakeGh(reviews=[other])
+    blocking_run(gh)
+    fid = state_of(gh)["open"][0]["id"]
+    publish(gh, passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40})
+    assert [r["state"] for r in gh.reviews] == ["CHANGES_REQUESTED", "DISMISSED"]  # a human's review is left alone
+    assert state_of(gh)["verdict"] == "ai-review: merge"
+
+
+def test_refused_dismissal_is_noted_in_the_summary():
+    gh = FakeGh()
+    blocking_run(gh)
+    fid = state_of(gh)["open"][0]["id"]
+    real = gh.__call__
+
+    def refuse_dismissal(args):
+        if any(str(a).endswith("/dismissals") for a in args):
+            raise RuntimeError("HTTP 403")
+        return real(args)
+
+    pr.publish_review(passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40}, {},
+                      "o/r", 5, "", "f" * 40, refuse_dismissal)
+    assert "could not be dismissed" in gh.comments[0]["body"]
+
+
+def test_refused_inline_comments_fall_back_to_the_summary():
+    gh = FakeGh(refuse=["HTTP 422: Line could not be resolved"])
+    blocking_run(gh)
+    (rv,) = gh.reviews
+    assert rv["state"] == "CHANGES_REQUESTED" and rv["comments"] == []
+    body = gh.comments[0]["body"]
+    assert "GitHub refused the inline comments" in body and "| 1 | blocking | src/x.py:2 |" in body
+
+
+def test_own_pull_request_gets_a_comment_review():
+    gh = FakeGh(refuse=["HTTP 422: Can not request changes on your own pull request"])
+    blocking_run(gh)
+    assert gh.reviews[0]["state"] == "COMMENTED" and len(gh.reviews[0]["comments"]) == 1
+
+
+def test_never_approve():
+    with pytest.raises(AssertionError):
+        pr.post_review(FakeGh(), "o/r", 5, {"event": "APPROVE", "comments": []})
+
+
+def test_forged_thread_link_in_state_counts_as_no_prior_state():
+    bad = '{"v":2,"open":[{"id":"a","severity":"nit","path":"p","line":1,"title":"t","detail":"d","thread":"https://evil/x"}]}'
+    own = {"id": 1, "user": {"login": pr.BOT}, "body": pr.MARKER + f"\n<!-- ai-review:state {bad} -->"}
+    assert pr.find_summary(FakeGh([own]), "o/r", 5) == (1, None)

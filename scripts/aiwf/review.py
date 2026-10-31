@@ -24,6 +24,8 @@ CI_GRACE = 90  # with no check run at all, wait this long for CI to register bef
 CONTEXT_CAP = 120_000  # characters of diff + files + callers handed to an agent
 GREEN = {"success", "neutral", "skipped"}
 PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; must match the matrix in review.yml
+HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+MAX_COMMENTABLE = 300  # files whose diff lines are passed on for inline comments; the others get general comments only
 DEF_RE = re.compile(r"\b(?:def|function|func|fn|class)\s+([A-Za-z_][A-Za-z0-9_]{2,})")
 
 
@@ -100,6 +102,23 @@ def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str,
     return "ai-review: merge", ["no blocking findings, CI green, tier " + facts["tier"]]
 
 
+def commentable(diff: str) -> dict[str, list[list[int]]]:
+    """path -> [first, last] head-side line ranges of each hunk: the lines GitHub accepts inline comments on."""
+    out: dict[str, list[list[int]]] = {}
+    path = None
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            path = None
+        elif line.startswith("+++ "):
+            target = line[4:]
+            path = target[2:] if target.startswith("b/") and "\t" not in target else None  # /dev/null or quoted: skip
+        elif path and (m := HUNK_RE.match(line)):
+            start, count = int(m.group(1)), int(m.group(2) if m.group(2) is not None else 1)
+            if count:
+                out.setdefault(path, []).append([start, start + count - 1])
+    return dict(list(out.items())[:MAX_COMMENTABLE])
+
+
 def changed_names(diff: str) -> list[str]:
     """Function and class names defined on changed lines or in hunk headers of `diff`."""
     names: list[str] = []
@@ -154,6 +173,8 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
     facts = {
         "sha": sha,
         "tier": risk_tier(paths, cfg["risk_paths"]),
+        "high_paths": [p for p in paths if risk_tier([p], cfg["risk_paths"]) == "high"][:MAX_COMMENTABLE],  # inline even for nits (WP3)
+        "commentable": commentable(diff),
         "changed_lines": pr["additions"] + pr["deletions"],
         "human_review_lines": cfg["limits"]["human_review_lines"],
         "linked_issues": [i["number"] for i in issues],

@@ -15,7 +15,20 @@
           "line": {"type": ["integer", "null"], "minimum": 1},
           "title": {"type": "string", "minLength": 1, "maxLength": 120},
           "detail": {"type": "string", "minLength": 1, "maxLength": 600},
-          "suggested_fix": {"type": "string", "maxLength": 400}
+          "suggested_fix": {"type": "string", "maxLength": 400},
+          "end_line": {"type": ["integer", "null"], "minimum": 1, "description": "Last line of the problem when it spans several lines, from `line`."},
+          "replacement": {"type": "string", "maxLength": 1000, "description": "Exact code that replaces lines `line` to `end_line` (or `line` alone) of the head version, with indentation; only for a fix of a few lines."},
+          "also": {
+            "type": "array",
+            "maxItems": 10,
+            "description": "Other places with the same problem, beyond `path`/`line`.",
+            "items": {
+              "type": "object",
+              "properties": {"path": {"type": "string", "minLength": 1, "maxLength": 300}, "line": {"type": ["integer", "null"], "minimum": 1}},
+              "required": ["path", "line"],
+              "additionalProperties": false
+            }
+          }
         },
         "required": ["severity", "path", "line", "title", "detail"],
         "additionalProperties": false
