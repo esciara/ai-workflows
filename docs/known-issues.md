@@ -13,6 +13,15 @@ Hand-maintained. Every entry links an ADR and a bead; remove an entry only when 
 - Tracking: bead `aiwf-6k3` (P1).
 - ADR: [ADR-0028](adr/0028-fixed-e2e-caller-on-the-playground.md)
 
+### Bash-capable product agents share a job with `CLAUDE_CODE_OAUTH_TOKEN`
+
+- Date: 2026-10-31
+- What: the reproducer (B2) and the implementer (B5) run project commands (`setup`, `test`, repro scripts) with Bash, in the same job as `anthropics/claude-code-action/base-action`, which holds `CLAUDE_CODE_OAUTH_TOKEN` (the maintainer's Claude subscription). A command they run, shaped by untrusted issue text or repo content, can read that token from the environment or the process tree. The spec says these agents get no secrets (`docs/spec.md:130`, agent table `docs/spec.md:210` and `docs/spec.md:212`).
+- Why it matters: a prompt-injected or malicious repo command could exfiltrate the token, breaking the Rule of Two for the two agents that execute code; `permissions: {}` (ADR-0018) removes GitHub scopes but not this secret.
+- Current mitigation: none yet; no Bash-capable product agent exists yet. Not accepted by the maintainer: an ADR is required before the reproduce WP starts. Candidate options: run project commands in a separate container or job that never receives the token, with the agent driving it through a narrow interface; Claude Code's sandbox hiding the environment from Bash (unverified).
+- Tracking: no bead yet (orchestrator to create one).
+- ADR: none yet (required before the reproduce WP).
+
 ## Accepted risks
 
 ### Unreviewed code on `e2e-target` runs with playground secrets
