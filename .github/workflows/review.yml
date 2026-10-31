@@ -1,7 +1,8 @@
-# Reusable: Workflow A (PR review), steps 1-7 and 9 (WP2a). One review pass for now; the 4 passes and the verify step
-# come with WP2b, the GitHub review with inline comments with WP3, `/review` with WP4.
+# Reusable: Workflow A (PR review), steps 1-7 and 9: 4 review passes in parallel, a verify (refute) pass, the summary
+# comment and the verdict label (WP2). The GitHub review with inline comments comes with WP3, `/review` with WP4.
 # PR text and code are untrusted: they reach scripts through env vars or files, and the agent as inline context
-# (ADR-0034). The agent job holds no GitHub token scope and no secret but the OAuth token (ADR-0012, ADR-0018).
+# (ADR-0034). The agent jobs hold no GitHub token scope and no secret but the OAuth token (ADR-0012, ADR-0018); they
+# pass their answers on as same-run artifacts, which only the publish job reads, after schema validation.
 name: ai-workflows review
 on:
   workflow_call:
@@ -81,23 +82,28 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
           AIWF_CONFIG: ${{ inputs.config }}
-        run: aiwf review-context --repo "$REPO" --pr "$PR" --sha "$SHA" --workdir head --out context.md
+        run: >-
+          aiwf review-context --repo "$REPO" --pr "$PR" --sha "$SHA" --workdir head
+          --out context.md --previous previous.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: review-context
-          path: context.md
+          path: |
+            context.md
+            previous.json
           retention-days: 7
 
-  # Step 5, one pass until WP2b. No tools but StructuredOutput: the code is in the prompt (ADR-0034).
-  # The artifact comes from this run without a token (download-artifact has no token default).
+  # Step 5: the 4 passes in parallel, each in a fresh context. No tools but StructuredOutput: the code is in the
+  # prompt (ADR-0034). The artifact comes from this run without a token (download-artifact has no token default).
   pass:
     needs: context
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions: {}
-    outputs:
-      json: ${{ steps.claude.outputs.structured_output }}
-      usage: ${{ steps.usage.outputs.usage }}
+    strategy:
+      fail-fast: false
+      matrix:
+        pass: [correctness, security, maintainability, tests]  # = review.PASSES
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -105,12 +111,13 @@ jobs:
       - env:
           AIWF_REPO: ${{ job.workflow_repository }}
           AIWF_SHA: ${{ job.workflow_sha }}
+          PASS: ${{ matrix.pass }}
         run: |
           # Prompts and schema come from the commit this workflow file came from (ADR-0019), fetched without credentials.
           git init --quiet .ai-workflows
           git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
           git -C .ai-workflows checkout --quiet FETCH_HEAD
-          { cat .ai-workflows/prompts/review.md; echo; cat context.md; } > prompt.md
+          { cat .ai-workflows/prompts/review.md ".ai-workflows/prompts/review-$PASS.md"; echo; cat context.md; } > prompt.md
           echo "SCHEMA=$(jq -c 'del(."$schema")' .ai-workflows/schema/review.json)" >> "$GITHUB_ENV"
       - id: claude
         uses: anthropics/claude-code-action/base-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
@@ -122,7 +129,74 @@ jobs:
             --tools StructuredOutput
             --json-schema '${{ env.SCHEMA }}'
             ${{ fromJSON(inputs.config).model && format('--model {0}', fromJSON(inputs.config).model) || '' }}
-      # Usage of this run, from the execution log's result message (plan: Usage limits).
+      # The answer and this agent's usage (plan: Usage limits), from the execution log's result message.
+      - if: always()
+        env:
+          PASS: ${{ matrix.pass }}
+          ANSWER: ${{ steps.claude.outputs.structured_output }}
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          mkdir -p out
+          printf '%s' "$ANSWER" > "out/$PASS.json"
+          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ]; then
+            jq -c '([.[] | select(.type == "result")] | last) // {} | {cost_usd: .total_cost_usd,
+              turns: .num_turns, duration_ms: .duration_ms, input_tokens: .usage.input_tokens,
+              output_tokens: .usage.output_tokens, cache_read_tokens: .usage.cache_read_input_tokens,
+              cache_write_tokens: .usage.cache_creation_input_tokens}' "$EXEC_FILE" > "out/$PASS.usage.json"
+          fi
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: review-pass-${{ matrix.pass }}
+          path: out/
+          retention-days: 7
+
+  # Step 6 (and the agent half of step 9): one fresh agent tries to refute each candidate and marks the last run's
+  # findings resolved or still open. It sees candidates by id; the publisher joins its decisions back to them.
+  verify:
+    needs: pass
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: {}
+    outputs:
+      json: ${{ steps.claude.outputs.structured_output }}
+      usage: ${{ steps.usage.outputs.usage }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: review-context
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: review-pass-*
+          merge-multiple: true
+          path: passes
+      - env:
+          AIWF_REPO: ${{ job.workflow_repository }}
+          AIWF_SHA: ${{ job.workflow_sha }}
+        run: |
+          git init --quiet .ai-workflows
+          git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
+          git -C .ai-workflows checkout --quiet FETCH_HEAD
+          # Candidate ids `<pass>-<n>`, as review.candidates() rebuilds them; a pass's answer that is not JSON is
+          # skipped here and fails validation in the publish job.
+          for p in correctness security maintainability tests; do
+            jq -c --arg p "$p" '[.findings // [] | to_entries[] | .value + {id: "\($p)-\(.key + 1)", pass: $p}]' \
+              "passes/$p.json" 2>/dev/null || echo '[]'
+          done | jq -s 'add // []' > candidates.json
+          { cat .ai-workflows/prompts/review-verify.md; echo; cat context.md; echo
+            printf '\n<candidates>\n'; cat candidates.json; printf '</candidates>\n\n<previous_findings>\n'
+            cat previous.json; printf '\n</previous_findings>\n'; } > prompt.md
+          echo "SCHEMA=$(jq -c 'del(."$schema")' .ai-workflows/schema/review-verify.json)" >> "$GITHUB_ENV"
+      - id: claude
+        uses: anthropics/claude-code-action/base-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt_file: prompt.md
+          claude_args: >-
+            --max-turns 3
+            --tools StructuredOutput
+            --json-schema '${{ env.SCHEMA }}'
+            ${{ fromJSON(inputs.config).model && format('--model {0}', fromJSON(inputs.config).model) || '' }}
       - id: usage
         if: always() && steps.claude.outputs.execution_file != ''
         env:
@@ -133,9 +207,10 @@ jobs:
             output_tokens: .usage.output_tokens, cache_read_tokens: .usage.cache_read_input_tokens,
             cache_write_tokens: .usage.cache_creation_input_tokens}' "$EXEC_FILE")" >> "$GITHUB_OUTPUT"
 
-  # Steps 7-9: verdict, the one summary comment (found by its marker), the verdict label.
+  # Steps 6-9, orchestrator side: validate the 5 answers, keep confirmed findings, verdict, the one summary comment
+  # (found by its marker), the verdict label. The passes' answers are read as data, after schema validation.
   publish:
-    needs: [start, context, pass]
+    needs: [start, context, verify]
     if: always() && needs.start.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -161,13 +236,19 @@ jobs:
       - if: steps.venv.outputs.cache-hit != 'true'
         run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
       - run: echo "$HOME/.aiwf-venv/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true  # no answers (e.g. the context job failed): review-publish sets `ai: error`
+        with:
+          pattern: review-pass-*
+          merge-multiple: true
+          path: passes
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           FACTS: ${{ needs.context.outputs.facts }}
-          AGENT_JSON: ${{ needs.pass.outputs.json }}
-          USAGE: ${{ needs.pass.outputs.usage }}
+          VERIFY_JSON: ${{ needs.verify.outputs.json }}
+          USAGE: ${{ needs.verify.outputs.usage }}
           AIWF_SHA: ${{ job.workflow_sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: aiwf review-publish --repo "$REPO" --pr "$PR" --run-url "$RUN_URL"
+        run: aiwf review-publish --repo "$REPO" --pr "$PR" --run-url "$RUN_URL" --passes-dir passes

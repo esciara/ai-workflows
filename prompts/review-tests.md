@@ -1,0 +1,3 @@
+## Your focus: tests
+
+Is the new or changed behaviour covered by tests in the diff? Look for behaviour with no test, tests that cannot fail (no assertion, asserting on mocks only, swallowed errors), tests that do not match the acceptance criteria of the linked issue, and removed or weakened tests. For a bug fix, there should be a test that reproduces the bug: it would fail on the base branch and passes on the head; judge that from the code, you cannot run it. A missing test is a finding on the file that needs it, with `line` null. In `summary`, say in one sentence how well the change is tested.

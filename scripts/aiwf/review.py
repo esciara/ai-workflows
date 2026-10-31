@@ -23,6 +23,7 @@ CI_POLL = 20
 CI_GRACE = 90  # with no check run at all, wait this long for CI to register before calling it "none"
 CONTEXT_CAP = 120_000  # characters of diff + files + callers handed to an agent
 GREEN = {"success", "neutral", "skipped"}
+PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; must match the matrix in review.yml
 DEF_RE = re.compile(r"\b(?:def|function|func|fn|class)\s+([A-Za-z_][A-Za-z0-9_]{2,})")
 
 
@@ -160,11 +161,25 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
     return context, facts
 
 
+def candidates(passes: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """The passes' findings as one list for the verifier, each with id `<pass>-<n>` (n from 1, in the pass's order).
+
+    review.yml builds the same ids with jq for the verifier's prompt; the publisher rebuilds them here to join the
+    verifier's decisions back to the findings, so the verifier can only judge findings, never add one."""
+    return [{**f, "id": f"{name}-{i}", "pass": name}
+            for name in PASSES for i, f in enumerate(passes.get(name, {}).get("findings", []), 1)]
+
+
 def cmd_review_context(args: argparse.Namespace) -> int:
+    from aiwf.publish_review import find_summary  # write side owns the comment format; this only reads it
+
     cfg = json.loads(os.environ["AIWF_CONFIG"])
     context, facts = gather(config.run_gh, args.repo, args.pr, args.sha, Path(args.workdir), cfg)
+    _, prev = find_summary(config.run_gh, args.repo, args.pr)
     facts["ci"] = wait_ci(config.run_gh, args.repo, args.sha, os.environ.get("GITHUB_RUN_ID", ""), cfg.get("required_checks"))
     Path(args.out).write_text(context, encoding="utf-8")
+    # Step 9: the last run's open findings, for the verifier to mark resolved or still open.
+    Path(args.previous).write_text(json.dumps(prev["open"] if prev else [], indent=1), encoding="utf-8")
     print(f"context: {len(context)} chars; facts: {json.dumps(facts)}")
     if os.environ.get("GITHUB_OUTPUT"):
         from aiwf.cli import write_outputs
@@ -179,4 +194,5 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--sha", required=True)
     p.add_argument("--workdir", required=True, help="checkout of the PR head (read as text, never executed)")
     p.add_argument("--out", required=True, help="file for the agents' context")
+    p.add_argument("--previous", required=True, help="file for the last run's open findings (JSON list)")
     p.set_defaults(func=cmd_review_context)
