@@ -55,9 +55,13 @@ unset GITHUB_TOKEN
 
 if [ "$1" = git ]; then
   # Empty helper first resets inherited helpers (e.g. osxkeychain with the maintainer's token).
-  export GIT_CONFIG_COUNT=2
+  # SSH remotes are rewritten to HTTPS (insteadOf, so fetches in the same command use the App too); else the
+  # maintainer's SSH key would push.
+  export GIT_CONFIG_COUNT=4
   export GIT_CONFIG_KEY_0=credential.https://github.com.helper GIT_CONFIG_VALUE_0=
   export GIT_CONFIG_KEY_1=credential.https://github.com.helper GIT_CONFIG_VALUE_1='!gh auth git-credential'
+  export GIT_CONFIG_KEY_2=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_2=git@github.com:
+  export GIT_CONFIG_KEY_3=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_3=ssh://git@github.com/
 fi
 
 status=0
