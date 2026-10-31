@@ -5,6 +5,7 @@
 - Deciders: maintainer
 - Alias: `D15`
 - Amended by: [ADR-0030](0030-generated-docs-keep-single-writer-drop-enforcement.md)
+- Amended by: [ADR-0033](0033-stall-only-risks-get-no-mechanism-claims-retired.md)
 
 ## Context
 
