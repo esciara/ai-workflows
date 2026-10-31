@@ -13,9 +13,10 @@ Key:
   - orange = cross-cutting
 - Boxes:
   - solid dark box = done
-  - very pale box with dotted border = not done yet
+  - pale box with thick solid border = in progress (or in review)
+  - very pale box with dotted border = not started
 
-Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't work in your viewer, use the table below.
+Box status comes from the beads board (`docs/board.jsonl`) and the links from the WP table of `docs/plan.md`, both set by `scripts/dev/render-diagrams` (ADR-0046); `overview.mmd` declares only each WP's lane. Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't work in your viewer, use the table below.
 
 <!-- BEGIN generated:overview (from docs/diagrams/overview.mmd by scripts/dev/render-diagrams; edit the .mmd, not this block) -->
 ```mermaid
@@ -67,6 +68,7 @@ flowchart TD
 ```
 <!-- END generated:overview -->
 
+<!-- BEGIN generated:overview-links (from docs/plan.md by scripts/dev/render-diagrams; edit the plan, not this block) -->
 | WP | Definition |
 | --- | --- |
 | WP0 | [docs/plan.md, line 32](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L32) |
@@ -84,6 +86,7 @@ flowchart TD
 | WP12 | [docs/plan.md, line 44](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44) |
 | WP13 | [docs/plan.md, line 45](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45) |
 | WP14 | [docs/plan.md, line 46](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46) |
+<!-- END generated:overview-links -->
 
 Milestones: **M1** review usable = WP0–4, WP14 · **M2** bugs triaged and analysed = WP5–8, WP11 · **M3** bugs fixed end to end = WP9, 10, 12, 13.
 
