@@ -1,0 +1,11 @@
+flowchart TD
+  C["Context job, read-only token<br/>facts, context, last run's open findings<br/>(state block of the summary comment)"] --> P["4 pass agent jobs (matrix)<br/>correctness, security, maintainability, tests<br/>no GitHub token, JSON only"]
+  P -- 4 artifacts --> VP["Verify (refute) agent job<br/>no GitHub token<br/>each candidate: confirmed / refuted / duplicate"]
+  C -. previous findings .-> VP
+  VP -- JSON --> V{"Orchestrator<br/>all 5 answers match their schemas?"}
+  V -- no --> E["Label 'ai: error'"]
+  V -- yes --> F["Keep confirmed findings<br/>severity: blocking / should-fix / nit"]
+  F --> H["Step 9: last run's findings<br/>marked resolved or still open"]
+  H --> R["Rubric → verdict"]
+  R --> M["Summary comment updated in place<br/>findings, history, usage of the 5 agents"]
+  M --> L["Verdict label"]

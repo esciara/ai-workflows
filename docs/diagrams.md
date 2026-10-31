@@ -1,6 +1,6 @@
 # Diagrams
 
-One overview of all work packages, then one small diagram per WP, added when that WP starts. Each diagram's source is `docs/diagrams/<name>.mmd`; edit the `.mmd`, add a matching `generated:<name>` block here for a new one, then run `scripts/dev/render-diagrams`.
+One overview of all work packages, then one small diagram per WP, added in the WP's PR, required by the definition of done. Each diagram's source is `docs/diagrams/<name>.mmd`. A per-WP diagram is `docs/diagrams/wp<N>.mmd` (`wp<N><x>.mmd` for a split such as WP2a); `scripts/dev/render-diagrams` generates its section below, with the heading and Done when from its row in `docs/plan.md`, in plan order, so no marker is placed by hand (ADR-0048). Another diagram needs a matching `generated:<name>` block here.
 
 ## Overview — work packages and dependencies
 
@@ -117,11 +117,11 @@ flowchart TD
 
 Milestones: see [docs/plan.md](plan.md#milestones-and-test-setup).
 
+<!-- BEGIN generated:per-wp (from docs/diagrams/wp<N>[x].mmd and docs/plan.md by scripts/dev/render-diagrams; edit the .mmd or the plan, not this block) -->
 ## WP1 — Shared runtime
 
-What happens when someone types `/ping` on an issue or PR in a target repo. `/ping` is a health check: it does nothing except confirm the whole chain works, from comment to reply.
+Done when ([docs/plan.md, line 33](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L33)): `/ping` from a maintainer gets a reply; from a non-maintainer is ignored; all labels exist
 
-<!-- BEGIN generated:wp1 (from docs/diagrams/wp1.mmd by scripts/dev/render-diagrams; edit the .mmd, not this block) -->
 ```mermaid
 flowchart TD
   C["Comment '/ping'<br/>on target repo"] --> P{"Command parser<br/>in maintainers list<br/>AND write access?"}
@@ -132,19 +132,65 @@ flowchart TD
   V -- yes --> R["Orchestrator posts reply<br/>via gh api"]
   L["Label bootstrap<br/>creates all labels"] -.-> R
 ```
-<!-- END generated:wp1 -->
 
-Check on the playground:
+## WP2a — A · context, CI wait, one pass, summary + label
 
-- maintainer `/ping` → reply
-- tester App `/ping` → nothing
-- all labels exist
+Done when ([docs/plan.md, line 35](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L35)): Dummy PR gets one comment + one label; a new push updates the same comment (`tests/e2e/test_wp2.py`)
 
-## WP5 — B1 classify
+```mermaid
+flowchart TD
+  O["PR opened or new push<br/>(not a draft)"] --> S["Start job<br/>drop old verdict, label 'ai-review: pending'"]
+  S --> C["Context job, read-only token<br/>diff, touched files, callers, linked issue"]
+  C --> W{"CI wait (20 min budget)<br/>+ risk tier from risk paths"}
+  W --> P["Review pass agent job<br/>no GitHub token, code inline<br/>JSON only"]
+  P -- JSON --> V{"Orchestrator<br/>matches the review schema?"}
+  V -- no --> E["Label 'ai: error'"]
+  V -- yes --> R["Rubric: blocking finding or red CI,<br/>high tier, no linked issue, big diff, CI timeout"]
+  R --> M["Summary comment, found by its hidden marker<br/>created once, updated on each push"]
+  M --> L["Verdict label replaces 'ai-review: pending'<br/>merge / changes-requested / human-review"]
+```
 
-What happens when an issue is opened, or a maintainer types `/retriage` on one: two-pass classification (extract, then classify against candidate issues and the version's fix range).
+## WP2b — A · 4 passes, verify, severity, step 9
 
-<!-- BEGIN generated:wp5 (from docs/diagrams/wp5.mmd by scripts/dev/render-diagrams; edit the .mmd, not this block) -->
+Done when ([docs/plan.md, line 36](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L36)): WP2a's Done when still holds with 4 passes and verify (`tests/e2e/test_wp2.py` still passes)
+
+```mermaid
+flowchart TD
+  C["Context job, read-only token<br/>facts, context, last run's open findings<br/>(state block of the summary comment)"] --> P["4 pass agent jobs (matrix)<br/>correctness, security, maintainability, tests<br/>no GitHub token, JSON only"]
+  P -- 4 artifacts --> VP["Verify (refute) agent job<br/>no GitHub token<br/>each candidate: confirmed / refuted / duplicate"]
+  C -. previous findings .-> VP
+  VP -- JSON --> V{"Orchestrator<br/>all 5 answers match their schemas?"}
+  V -- no --> E["Label 'ai: error'"]
+  V -- yes --> F["Keep confirmed findings<br/>severity: blocking / should-fix / nit"]
+  F --> H["Step 9: last run's findings<br/>marked resolved or still open"]
+  H --> R["Rubric → verdict"]
+  R --> M["Summary comment updated in place<br/>findings, history, usage of the 5 agents"]
+  M --> L["Verdict label"]
+```
+
+## WP3 — A · placement + formal review
+
+Done when ([docs/plan.md, line 37](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L37)): Seeded-bug PR gets an inline comment and Request changes; a nit on a low-risk path stays in the summary
+
+```mermaid
+flowchart TD
+  F["Confirmed findings<br/>(after verify, WP2b)"] --> PL{"Placement rule, per finding<br/>first matching row wins"}
+  PL -- "no line, or spread wide" --> G["General: summary table only"]
+  PL -- "nit, one place, low/medium-risk path" --> N["Collapsed nits section<br/>of the summary"]
+  PL -- "line inside a diff hunk" --> I["Inline comment<br/>+ suggestion block when the fix is a few lines<br/>on a low/medium-risk path"]
+  PL -- "line GitHub cannot comment on" --> G
+  I --> RV{"At most one GitHub review per run<br/>never Approve"}
+  RV -- changes-requested --> RC["Request changes"]
+  RV -- otherwise --> CM["Comment<br/>earlier Request changes dismissed"]
+  RC & CM --> S["Summary comment links<br/>each inline thread"]
+  G & N --> S
+  S --> L["Verdict label"]
+```
+
+## WP5 — B1 · classify
+
+Done when ([docs/plan.md, line 39](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L39)): 3 test issues get `type: bug`, `feature`, `question`; a duplicate gets `triage: duplicate`
+
 ```mermaid
 flowchart TD
   O["Issue opened<br/>or maintainer '/retriage'"] --> G{"Gate<br/>new issue, or accepted<br/>/retriage on an issue?"}
@@ -165,4 +211,4 @@ flowchart TD
   L -- no --> T["type label<br/>bug goes on to B2 (WP6)"]
   H & T --> S["One triage comment<br/>updated in place"]
 ```
-<!-- END generated:wp5 -->
+<!-- END generated:per-wp -->

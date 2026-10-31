@@ -5,7 +5,7 @@
 - Deciders: maintainer
 - Alias: `D36`
 - Supersedes: [ADR-0015](0015-parallel-operating-model.md), [ADR-0027](0027-plan-stop-bead-is-blocked-awaiting-go.md)
-- Amended by: [ADR-0046](0046-status-views-derived-from-beads.md)
+- Amended by: [ADR-0046](0046-status-views-derived-from-beads.md), [ADR-0048](0048-per-wp-diagrams-required-and-generated.md)
 
 ## Context
 
@@ -51,5 +51,6 @@ Why: bd gives a local board shared by all worktrees without a server, and the sc
 - Generated files on `main` lag behind merges until the next sync PR; nothing reminds the orchestrator that one is due beyond its routine. No CI failure comes from a stale generated file.
 - Losing the main checkout's `.beads/` loses anything not yet exported; `bd import docs/board.jsonl` restores the rest.
 - A new WP diagram needs a `generated:wp<N>` block in `docs/diagrams.md`: the track adds the `.mmd`, the orchestrator adds the block in the sync PR.
+  - Since [ADR-0048](0048-per-wp-diagrams-required-and-generated.md): the track adds `docs/diagrams/wp<N>.mmd` (one per split) in its WP PR, as part of the definition of done; `scripts/dev/render-diagrams` generates its section in the single `generated:per-wp` block, so neither the track nor the orchestrator places a per-WP marker.
 - The board lives on one Mac and the orchestrator is the single writer: fine for up to ~3 parallel tracks. Revisit (shared Dolt server, or post-merge regeneration by a bot on `main`) when more tracks run or agents run off this Mac; bead `aiwf-ldn`.
 - Agents keep a narrow path to the maintainer's credentials through `scripts/dev/as-maintainer`; the ruleset, not the hook, is the boundary.

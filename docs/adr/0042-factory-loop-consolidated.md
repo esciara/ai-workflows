@@ -5,7 +5,7 @@
 - Deciders: maintainer
 - Alias: `D42`
 - Supersedes: [ADR-0011](0011-factory-loop-and-independent-verifier.md), [ADR-0014](0014-executable-acceptance-tests.md)
-- Amended by: [ADR-0046](0046-status-views-derived-from-beads.md)
+- Amended by: [ADR-0046](0046-status-views-derived-from-beads.md), [ADR-0048](0048-per-wp-diagrams-required-and-generated.md)
 
 ## Context
 
@@ -24,6 +24,7 @@ Replaces: ADR-0011 (its verifier judging an evidence pack of PR body, run conclu
 
 - Stop-WPs are WP1, WP4, WP9 and WP12. Before writing code they post a short plan and wait for the maintainer's "go"; after the PR they stop and wait for review. Every other WP has no plan stop: when the review and the acceptance test pass, it opens its PR and the loop continues without waiting; the maintainer reviews these PRs in batches and always merges.
 - Each WP: branch `wp<N>-<slug>` → write the acceptance test `tests/e2e/test_wp<N>.py` (plus shared helpers in `tests/e2e/`), which drives the playground and asserts every Done-when condition → `scripts/dev/verify-wp <WP>` reviews it → build → the WP is done when `AIWF_E2E=1 pytest -n 4 tests/e2e/test_wp<N>.py -v` passes (e2e slot: [ADR-0043](0043-e2e-on-the-playground-consolidated.md)) → PR whose description holds the e2e output, the run IDs it prints and the review verdict.
+- The WP's PR also adds its diagram, `docs/diagrams/wp<N>.mmd` (one per split for a split WP), part of the WP's definition of done; the sync PR renders it into `docs/diagrams.md` ([ADR-0048](0048-per-wp-diagrams-required-and-generated.md)).
 - Acceptance tests run only when `AIWF_E2E=1`, so CI stays network-free. Timeouts and API failures fail the test, never pass it. Tests create and clean up their own fixtures and stay scoped to their own items.
 - `scripts/dev/verify-wp` runs a fresh `claude -p --model sonnet` with no tools, given only the spec, the WP's Done-when and the test source, and returns `{verdict, gaps, notes}` validated against `schema/verifier.json`: does the test assert every condition, with none missing, weakened or vacuous?
 - The loop stops and goes to the maintainer when: `verify-wp` fails or errors; the policy tests (`tests/test_workflow_policy.py`) fail; an acceptance test changes after its review; a new decision is needed.
