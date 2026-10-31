@@ -18,7 +18,7 @@ BOT = "github-actions[bot]"
 PING_MARKER = "<!-- ai-workflows:ping -->"
 FIXTURE_LABEL = "test-fixture"
 RUN_TIMEOUT = int(os.environ.get("AIWF_E2E_TIMEOUT", "600"))
-POLL_INTERVAL = 10
+POLL_INTERVAL = int(os.environ.get("AIWF_E2E_POLL", "5"))
 
 T = TypeVar("T")
 

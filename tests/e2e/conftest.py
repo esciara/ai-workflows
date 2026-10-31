@@ -18,16 +18,21 @@ def pytest_collection_modifyitems(config, items):
 FIXTURE_TITLE = "[e2e] WP1 /ping fixture"
 
 
-@pytest.fixture(scope="session")
-def fixture_issue() -> dict:
-    """The reusable test-fixture issue (found by title, created once). Never deleted."""
+@pytest.fixture
+def fixture_issue(request) -> dict:
+    """A reusable test-fixture issue per test (found by title, created once). Never deleted.
+
+    One issue per test because the caller serialises runs per issue (its `concurrency` group): tests sharing an issue
+    would queue behind each other when run in parallel (`-n auto`, pytest-xdist).
+    """
+    title = f"{FIXTURE_TITLE} ({request.node.originalname})"
     found = pg.api(f"repos/{pg.REPO}/issues?labels={pg.FIXTURE_LABEL}&state=open&per_page=100")
     for issue in found:
-        if issue["title"] == FIXTURE_TITLE and "pull_request" not in issue:
+        if issue["title"] == title and "pull_request" not in issue:
             return {"number": issue["number"], "title": issue["title"]}
     issue = pg.api(
         f"repos/{pg.REPO}/issues",
-        f"title={FIXTURE_TITLE}",
+        f"title={title}",
         "body=Reusable fixture for tests/e2e/test_wp1.py in esciara/ai-workflows.",
         f"labels[]={pg.FIXTURE_LABEL}",
         method="POST",
@@ -38,7 +43,7 @@ def fixture_issue() -> dict:
 @pytest.fixture
 def throwaway_pr():
     """A test-fixture PR on its own branch; branch deleted (and PR closed) in teardown."""
-    branch = f"e2e-wp1-{int(time.time())}"
+    branch = f"e2e-wp1-{time.time_ns()}"
     base = pg.api(f"repos/{pg.REPO}")["default_branch"]
     sha = pg.api(f"repos/{pg.REPO}/git/ref/heads/{base}")["object"]["sha"]
     pg.api(f"repos/{pg.REPO}/git/refs", f"ref=refs/heads/{branch}", f"sha={sha}", method="POST")
