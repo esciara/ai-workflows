@@ -88,7 +88,7 @@ flowchart TD
 | WP14 | [docs/plan.md, line 46](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46) |
 <!-- END generated:overview-links -->
 
-Milestones: **M1** review usable = WP0–4, WP14 · **M2** bugs triaged and analysed = WP5–8, WP11 · **M3** bugs fixed end to end = WP9, 10, 12, 13.
+Milestones: see [docs/plan.md](plan.md#milestones-and-test-setup).
 
 ## WP1 — Shared runtime
 

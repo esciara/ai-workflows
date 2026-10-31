@@ -4,7 +4,9 @@ The export (aiwf.board) is the committed record: docs/progress.md can be re-rend
 
 A work-package bead carries `metadata.wp` ("WP2"); optional `metadata.pr`, `metadata.notes`, `metadata.log` (list of
 log lines) and `metadata.metrics` (maintainer_interventions, verifier_fails, rework_prs, coordination_issues, notes).
-"Depends on" comes from the bead's `blocks` dependencies on other WP beads. Other beads are ignored.
+"Depends on" comes from the bead's `blocks` dependencies on other WP beads. A split of a WP (child bead titled "WP2a · ...",
+ADR-0046) gets a row under its WP in the WP table, from its own status and `pr`/`notes` metadata; its log and metrics stay on
+the WP bead. Other beads are ignored.
 """
 
 from __future__ import annotations
@@ -58,20 +60,32 @@ def work_packages(issues: list[dict]) -> list[dict]:
     return sorted(wps, key=lambda i: _wp_num(i["metadata"]["wp"]))
 
 
+def _wp_key(wp: str) -> tuple[int, str]:
+    """Sort key for "WP2" and splits "WP2a"."""
+    letter = wp[-1] if wp[-1:].isalpha() else ""
+    return _wp_num(wp.removesuffix(letter) if letter else wp), letter
+
+
 def wp_table(issues: list[dict]) -> str:
     wps = work_packages(issues)
+    parts = board.splits(issues)
     by_id = {i["id"]: i["metadata"]["wp"] for i in wps}
+    by_id.update({p["id"]: board.split_id(p) for ps in parts.values() for p in ps})
     lines = ["| WP | Package | Depends on | Status | PR | Notes |", "| --- | --- | --- | --- | --- | --- |"]
+    rows = []
     for i in wps:
-        meta = i["metadata"]
+        rows.append((i["metadata"]["wp"], i["title"], i))
+        rows += [(board.split_id(p), p["title"].split(" · ", 1)[1], p) for p in parts.get(i["id"], [])]
+    for wp, title, i in rows:
+        meta = i.get("metadata") or {}
         deps = sorted(
             (by_id[d["depends_on_id"]] for d in i.get("dependencies", []) if d.get("type") == "blocks" and d.get("depends_on_id") in by_id),
-            key=_wp_num,
+            key=_wp_key,
         )
         status = STATUS.get(i["status"])
         if status is None:
             raise BoardError(f"{i['id']}: unknown status {i['status']!r}")
-        lines.append(_row([meta["wp"], i["title"], ", ".join(deps) or "—", status, meta.get("pr", ""), meta.get("notes", "")]))
+        lines.append(_row([wp, title, ", ".join(deps) or "—", status, meta.get("pr", ""), meta.get("notes", "")]))
     return "\n".join(lines)
 
 

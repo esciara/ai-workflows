@@ -121,3 +121,24 @@ def test_main_refuses_to_write_on_secret_or_missing_scanner(tmp_path, monkeypatc
 def test_repo_progress_file_has_all_generated_blocks():
     text = progress.PROGRESS_PATH.read_text()
     assert gendoc.block_names(text) == ["wp-table", "metrics", "log"]
+
+
+def split(sid, parent, title, status="open", deps=(), **meta):
+    deps = [{"type": "parent-child", "depends_on_id": parent}, *({"type": "blocks", "depends_on_id": d} for d in deps)]
+    return {"id": f"{parent}.{sid[-1]}", "title": f"{sid} · {title}", "status": status, "metadata": meta, "dependencies": deps}
+
+
+def test_splits_get_rows_under_their_wp_and_follow_ups_do_not():
+    board = [
+        *BOARD,
+        split("WP3b", "aiwf-wp3", "second", deps=["aiwf-wp3.a"]),
+        split("WP3a", "aiwf-wp3", "first", status="closed", deps=["aiwf-wp0"], pr="[#6](u)"),
+        bead("WP11", "Notifications", deps=["aiwf-wp3.b"]),
+    ]
+    rows = [line.split(" | ")[:4] for line in progress.wp_table(board).splitlines()[2:]]
+    assert [r[0] for r in rows] == ["| WP0", "| WP3", "| WP3a", "| WP3b", "| WP9", "| WP10", "| WP11"]
+    assert rows[2] == ["| WP3a", "first", "WP0", "done"]
+    assert rows[3] == ["| WP3b", "second", "WP3a", "todo"]
+    assert rows[6][2] == "WP3b"
+    assert "[#6](u)" in progress.wp_table(board)
+    assert "| WP3a |" not in progress.metrics_table(board)
