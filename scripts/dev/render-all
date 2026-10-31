@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Usage: scripts/dev/render-all [--no-export]   (orchestrator only, in the sync PR; ADR-0036, ADR-0046)
+# Runs render-progress (board export + docs/progress.md), then render-adr-index, then render-diagrams (reads the export),
+# and stops at the first error. --no-export is passed to render-progress (render from the committed docs/board.jsonl).
+# Exit 0 ok, else the exit code of the renderer that failed.
+set -euo pipefail
+dev="$(cd "$(dirname "$0")" && pwd)"
+progress_args=()
+for arg in "$@"; do
+  case "$arg" in
+    --no-export) progress_args+=("$arg") ;;
+    *) echo "render-all: unknown argument $arg" >&2; exit 2 ;;
+  esac
+done
+for step in render-progress render-adr-index render-diagrams; do
+  if [ "$step" = render-progress ]; then
+    "$dev/$step" ${progress_args[@]+"${progress_args[@]}"} || { rc=$?; echo "render-all: $step failed (exit $rc); later renderers not run" >&2; exit "$rc"; }
+  else
+    "$dev/$step" || { rc=$?; echo "render-all: $step failed (exit $rc); later renderers not run" >&2; exit "$rc"; }
+  fi
+done
