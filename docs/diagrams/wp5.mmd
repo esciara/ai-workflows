@@ -1,0 +1,13 @@
+flowchart TD
+  O["Issue opened<br/>or maintainer '/retriage'"] --> G{"Gate<br/>new issue, or accepted<br/>/retriage on an issue?"}
+  G -- no --> X["Nothing"]
+  G -- yes --> C["Context job, read-only token<br/>issue, open issues, issues closed<br/>as completed, recent commits"]
+  C -- artifact --> A["Classifier agent job<br/>no GitHub token, no file tools<br/>JSON only"]
+  A -- JSON --> V{"Orchestrator<br/>matches the classifier schema?"}
+  V -- no --> E["Label 'ai: error'"]
+  V -- yes --> R{"Duplicate issue or fixing commit<br/>exists and is valid?"}
+  R -- yes --> D["type label + 'triage: duplicate'<br/>comment with the link; never closed"]
+  R -- no --> L{"Confidence low?"}
+  L -- yes --> H["type label + 'triage: needs-human'"]
+  L -- no --> T["type label<br/>bug goes on to B2 (WP6)"]
+  D & H & T --> S["One triage comment<br/>updated in place"]

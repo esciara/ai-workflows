@@ -1,5 +1,7 @@
-# Reusable: Workflow B (issue triage and fixes). Placeholder until WP5 replaces it (ADR-0025): it fixes the interface
-# of the commented `triage` job in templates/caller.yml so the playground's caller-e2e.yml can call it before WP5 lands.
+# Reusable: Workflow B (issue triage and fixes). WP5: B1 classify on `issues.opened` and on a maintainer's `/retriage`.
+# Issue and comment text are untrusted: they reach scripts through env vars or the API, and the classifier as inline
+# context in its prompt. The agent job holds no GitHub token scope, no file tools and no secret but the OAuth token
+# (ADR-0003, ADR-0012, ADR-0018); only the publish job writes, after checking the agent's JSON against its schema.
 name: ai-workflows triage
 on:
   workflow_call:
@@ -18,13 +20,156 @@ on:
       TELEGRAM_CHAT_ID:
         required: false
 
+# Least privilege by default (ADR-0017); each job grants what it needs.
 permissions: {}
 
 jobs:
-  pending:
-    if: false
+  # Which events run B1: a new issue, or `/retriage` from a maintainer (ADR-0005) on an issue (not a PR).
+  gate:
+    if: github.event_name == 'issues' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request)
     runs-on: ubuntu-latest
-    timeout-minutes: 1
-    permissions: {}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      classify: ${{ github.event_name == 'issues' || steps.parse.outputs.command == 'retriage' }}
     steps:
-      - run: echo "Workflow B is built in WP5"
+      - if: github.event_name == 'issue_comment'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - if: github.event_name == 'issue_comment'
+        id: python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      # Cached venv, keyed on the dependency file at job.workflow_sha; aiwf itself is an editable install, so its code
+      # always comes from the checkout above (ADR-0019), never from the cache.
+      - if: github.event_name == 'issue_comment'
+        id: venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.aiwf-venv
+          key: aiwf-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/pyproject.toml') }}
+      - if: github.event_name == 'issue_comment' && steps.venv.outputs.cache-hit != 'true'
+        run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
+      - if: github.event_name == 'issue_comment'
+        id: parse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          AIWF_CONFIG: ${{ inputs.config }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+        run: ~/.aiwf-venv/bin/aiwf parse-command --repo "$REPO"
+
+  # B1 context with a read-only token: the issue, other open issues, issues closed as completed, recent commits.
+  context:
+    needs: gate
+    if: needs.gate.outputs.classify == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - id: python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - id: venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.aiwf-venv
+          key: aiwf-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/pyproject.toml') }}
+      - if: steps.venv.outputs.cache-hit != 'true'
+        run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AIWF_CONFIG: ${{ inputs.config }}
+        run: ~/.aiwf-venv/bin/aiwf triage-context --repo "$REPO" --issue "$ISSUE" --out context.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: triage-context
+          path: context.md
+          retention-days: 7
+
+  # B1 classifier. No tools but StructuredOutput: the issue and the corpus are in the prompt.
+  # The artifact comes from this run without a token (download-artifact has no token default).
+  classify:
+    needs: context
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    outputs:
+      json: ${{ steps.claude.outputs.structured_output }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: triage-context
+      - env:
+          AIWF_REPO: ${{ job.workflow_repository }}
+          AIWF_SHA: ${{ job.workflow_sha }}
+        run: |
+          # Prompt and schema come from the commit this workflow file came from (ADR-0019), fetched without credentials.
+          git init --quiet .ai-workflows
+          git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
+          git -C .ai-workflows checkout --quiet FETCH_HEAD
+          { cat .ai-workflows/prompts/classifier.md; echo; cat context.md; } > prompt.md
+          # Claude's --json-schema rejects the draft 2020-12 `$schema` key; publish validates against the full file.
+          echo "SCHEMA=$(jq -c 'del(."$schema")' .ai-workflows/schema/classifier.json)" >> "$GITHUB_ENV"
+      - id: claude
+        uses: anthropics/claude-code-action/base-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt_file: prompt.md
+          claude_args: >-
+            --max-turns 3
+            --tools StructuredOutput
+            --json-schema '${{ env.SCHEMA }}'
+
+  # Labels and the one triage comment, from the checked JSON; invalid output gives `ai: error` and nothing else.
+  publish:
+    needs: [context, classify]
+    if: always() && needs.context.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read  # check a fixing commit is on the default branch
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - id: python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - id: venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.aiwf-venv
+          key: aiwf-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/pyproject.toml') }}
+      - if: steps.venv.outputs.cache-hit != 'true'
+        run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AGENT_JSON: ${{ needs.classify.outputs.json }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: ~/.aiwf-venv/bin/aiwf publish --kind classifier --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"

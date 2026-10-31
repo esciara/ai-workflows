@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Classifier answer (Workflow B, B1)",
+  "type": "object",
+  "properties": {
+    "type": {"enum": ["bug", "feature", "question"], "description": "Issue class."},
+    "confidence": {"enum": ["high", "medium", "low"], "description": "low: a maintainer takes over (triage: needs-human)."},
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^@<>\\n\\r`]*$",
+      "description": "One line; no mentions, HTML, markers or code."
+    },
+    "duplicate_of": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of an open issue, or of an issue closed as completed, from the context that reports the same problem."
+    },
+    "fixed_by_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$",
+      "description": "SHA (prefix as listed) of a commit from the context that already fixes this problem on the default branch."
+    }
+  },
+  "required": ["type", "confidence", "reason"],
+  "additionalProperties": false
+}
