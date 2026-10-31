@@ -1,10 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Classifier answer (Workflow B, B1)",
+  "title": "Classifier answer (Workflow B, B1 pass 2)",
   "type": "object",
   "properties": {
-    "type": {"enum": ["bug", "feature", "question"], "description": "Issue class."},
-    "confidence": {"enum": ["high", "medium", "low"], "description": "low: a maintainer takes over (triage: needs-human)."},
+    "type": {
+      "enum": [
+        "bug",
+        "feature",
+        "question"
+      ],
+      "description": "Issue class."
+    },
+    "confidence": {
+      "description": "Of the class. low: a maintainer takes over (triage: needs-human).",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
     "reason": {
       "type": "string",
       "minLength": 1,
@@ -13,16 +27,61 @@
       "description": "One line; no mentions, HTML, markers or code."
     },
     "duplicate_of": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Number of an open issue, or of an issue closed as completed, from the context that reports the same problem."
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A candidate issue from the context that reports the same problem."
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        }
+      },
+      "required": [
+        "number",
+        "confidence"
+      ],
+      "additionalProperties": false
     },
-    "fixed_by_commit": {
-      "type": "string",
-      "pattern": "^[0-9a-f]{7,40}$",
-      "description": "SHA (prefix as listed) of a commit from the context that already fixes this problem on the default branch."
+    "possibly_fixed_by": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "commit",
+            "pr"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{7,40}|[1-9][0-9]{0,8})$",
+          "description": "Commit SHA (prefix as listed) or PR number."
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "ref",
+        "confidence"
+      ],
+      "additionalProperties": false
     }
   },
-  "required": ["type", "confidence", "reason"],
+  "required": [
+    "type",
+    "confidence",
+    "reason"
+  ],
   "additionalProperties": false
 }

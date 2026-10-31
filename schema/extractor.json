@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Extractor answer (Workflow B, B1 pass 1)",
+  "type": "object",
+  "properties": {
+    "reported_version": {
+      "type": ["string", "null"],
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._+-]*$",
+      "description": "The version the reporter runs (e.g. 1.4.2 or v1.4.2), or null when the report does not say. 'main' or a branch name is not a version."
+    },
+    "search_phrases": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {"type": "string", "minLength": 2, "maxLength": 120, "pattern": "^[^\\n\\r]*$"},
+      "description": "A few short phrases to search other issues with: exact error messages, exception names, function or option names, the key terms of the request."
+    },
+    "file_paths": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "^[A-Za-z0-9._/-]+$"},
+      "description": "Repository file paths named in the report (e.g. from a traceback), as written."
+    }
+  },
+  "required": ["reported_version", "search_phrases", "file_paths"],
+  "additionalProperties": false
+}
