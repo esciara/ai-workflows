@@ -1,6 +1,6 @@
 import pytest
 
-from aiwf import adrindex, gendoc
+from aiwf import adrindex, gendoc, generated
 
 DOC = """# ADRs
 
@@ -52,4 +52,7 @@ def test_main_check_and_write(tmp_path):
 
 
 def test_repo_adr_index_is_up_to_date():
+    branch = generated.current_branch()
+    if not generated.freshness_checked(branch):
+        pytest.skip(f"{branch}: generated files are checked fresh only on sync-* and main (ADR-0015)")
     assert adrindex.main(["--check"]) == 0
