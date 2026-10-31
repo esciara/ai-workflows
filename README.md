@@ -7,6 +7,8 @@ Reusable GitHub workflows that put Claude to work on a repo:
 
 A target repo adds one short caller workflow and a `.github/ai-workflows.yml` config. Models run on the maintainer's Claude subscription through Claude Code in GitHub Actions.
 
+Known design issues and accepted risks: see [`docs/known-issues.md`](docs/known-issues.md).
+
 ## Start here
 
 1. `SETUP.md` — the manual steps (repos, fork, token, secrets, tester App, branch protection).
