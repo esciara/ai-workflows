@@ -58,7 +58,7 @@ Why: <rationale>
 | [ADR-0012](0012-agents-use-base-action.md) | D12 | Agents use `claude-code-action/base-action` | Accepted |
 | [ADR-0013](0013-publish-job-pull-requests-write.md) | D13 | Publish job gets `pull-requests: write` | Accepted |
 | [ADR-0014](0014-executable-acceptance-tests.md) | D14 | Executable acceptance tests; verifier reviews the test | Accepted |
-| [ADR-0015](0015-parallel-operating-model.md) | D15 | Parallel operating model: beads board, single writer, agent-lifetime claims, merge rules | Proposed |
+| [ADR-0015](0015-parallel-operating-model.md) | D15 | Parallel operating model: beads board, single writer, agent-lifetime claims, merge rules | Accepted |
 | [ADR-0016](0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md) | D16 | Review summary in a sticky comment; GitHub reviews only when needed | Accepted |
 | [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md) | D17 | Top-level `permissions: {}` in caller and reusable workflows | Accepted |
 | [ADR-0018](0018-agent-jobs-get-no-token-permissions.md) | D18 | Agent jobs get `permissions: {}` | Accepted |
