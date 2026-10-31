@@ -1,0 +1,39 @@
+# Reusable: Workflow A, fork PRs (WP4, ADR-0044). The caller runs it on `pull_request_target` (synchronize) for fork
+# PRs only. A fork's own `pull_request` run has a read-only token, so after a `/review` a new fork push would leave the
+# verdict label on code nobody reviewed; this job removes it and says why. API calls only: no checkout, no secret,
+# nothing from the PR is run, and PR fields reach the script through env vars.
+name: ai-workflows review fork push
+on:
+  workflow_call:
+
+# Least privilege by default (ADR-0017); each job grants what it needs.
+permissions: {}
+
+jobs:
+  unreview:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write  # PR labels and the note (the issues API on a PR)
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          current="$(gh api "repos/$REPO/issues/$PR/labels?per_page=100" --jq '.[].name')"
+          removed=""
+          for old in "ai-review: merge" "ai-review: changes-requested" "ai-review: human-review"; do
+            if grep -qxF "$old" <<<"$current"; then
+              gh api -X DELETE "repos/$REPO/issues/$PR/labels/$(jq -rn --arg l "$old" '$l|@uri')" >/dev/null
+              removed="$old"
+            fi
+          done
+          if [ -n "$removed" ]; then
+            gh api -X POST "repos/$REPO/issues/$PR/comments" >/dev/null -f body="New commits (head ${SHA:0:7}) were \
+          pushed after the AI review, so its verdict label \`$removed\` was removed. A maintainer can comment \
+          \`/review\` to review the new head."
+          fi
+          echo "verdict label removed: ${removed:-none}"

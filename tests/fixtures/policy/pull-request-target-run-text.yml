@@ -1,0 +1,11 @@
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  note:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - run: echo "${{ github.event.pull_request.title }}"
