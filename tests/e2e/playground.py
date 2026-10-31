@@ -206,9 +206,11 @@ def fork_pr(title: str, files: list[tuple[str, str]], *, wp: str, slug: str) -> 
         for path, text in files:
             fork_put(path, branch, text, f"test: e2e fork PR seed {path}")
         title = f"{title} ({branch})"
-        pr = api(f"repos/{REPO}/pulls", f"title={title}", f"head={FORK.split('/')[0]}:{branch}", f"base={base}",
-                 "body=Throwaway e2e fork PR from esciara/ai-workflows tests; closed by its teardown.", method="POST",
-                 as_tester=True)
+        # maintainer_can_modify=false: the tester App may not grant fork collaboration (422 `fork_collab`).
+        pr = json.loads(gh(["api", "-X", "POST", f"repos/{REPO}/pulls", "-f", f"title={title}",
+                            "-f", f"head={FORK.split('/')[0]}:{branch}", "-f", f"base={base}", "-f",
+                            "body=Throwaway e2e fork PR from esciara/ai-workflows tests; closed by its teardown.",
+                            "-F", "maintainer_can_modify=false"], as_tester=True))
         api(f"repos/{REPO}/issues/{pr['number']}/labels", *[f"labels[]={lb}" for lb in _labels(True)], method="POST")
         yield {"number": pr["number"], "title": title, "branch": branch}
     finally:
