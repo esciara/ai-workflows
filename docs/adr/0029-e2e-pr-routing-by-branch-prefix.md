@@ -4,7 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D29`
-- Amends: ADR-0028
+- Amends: ADR-0028, [ADR-0026](0026-e2e-isolation-base-branch-per-wp-and-one-e2e-slot.md)
 
 ## Context
 
