@@ -20,7 +20,7 @@ Option 1 was rejected because it grants a scope nobody uses. Option 3 was reject
 
 ## Decision
 
-Proposed: every agent job declares `permissions: {}`. The caller keeps granting `contents: read` to the `commands` job for the jobs that need it (`parse` today). The policy test requires `{}` on agent jobs instead of only "no write". Future agents that need the target repo's code (WP2 diff, WP6 reproducer) get it from a non-agent job as an artifact, or by a token-free fetch on public repos; any exception is a new ADR.
+Every agent job declares `permissions: {}`. The caller keeps granting `contents: read` to the `commands` job for the jobs that need it (`parse` today). The policy test requires `{}` on agent jobs instead of only "no write". Future agents that need the target repo's code (WP2 diff, WP6 reproducer) get it from a non-agent job as an artifact, or by a token-free fetch on public repos; any exception is a new ADR.
 
 Why: nothing in the agent job uses `contents: read`, and with `{}` the implicit token handed to nested setup actions holds no repo access.
 
@@ -28,5 +28,5 @@ Why: nothing in the agent job uses `contents: read`, and with `{}` the implicit 
 
 - One-line change in `commands.yml` and a stricter policy rule.
 - Before acceptance, a playground `/ping` run with `{}` must show base-action still works; if setup-node or setup-bun fails without repo scope, stop and ask.
-- ADR-0012's "not even implicitly" claim should be corrected when this is accepted.
+- ADR-0012's "not even implicitly" claim is corrected there (Correction note under its Consequences).
 - Risk: private target repos will need the artifact route for agent inputs, which costs an extra job in WP2 and WP6.

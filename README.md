@@ -11,10 +11,11 @@ Known design issues and accepted risks: see [`docs/known-issues.md`](docs/known-
 
 ## Start here
 
-1. `SETUP.md` — the manual steps (repos, fork, token, secrets, tester App, branch protection).
-2. `KICKOFF.md` — the prompt for the first Claude Code session.
-3. `docs/spec.md` — what is built. `docs/plan.md` — the order, as 15 work packages. `docs/progress.md` — where things stand.
+- `CLAUDE.md` — standing rules for every session in this repo.
+- `docs/spec.md` — what is built.
+- `docs/plan.md` — the order, as 15 work packages, and how each is checked.
+- `docs/progress.md` — where things stand.
 
 ## Status
 
-Not built yet — see `docs/progress.md`.
+See `docs/progress.md`.

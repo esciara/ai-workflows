@@ -5,6 +5,7 @@
 - Deciders: maintainer
 - Alias: `D26`
 - Amended by: [ADR-0028](0028-fixed-e2e-caller-on-the-playground.md)
+- Amended by: [ADR-0029](0029-e2e-pr-routing-by-branch-prefix.md)
 
 ## Context
 

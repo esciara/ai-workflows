@@ -20,7 +20,7 @@ Option 1 was rejected because the self-approval risk is invisible, option 3 beca
 
 ## Decision
 
-Proposed: approving test PRs from the fork or the tester App, and admin-bypass merges, are allowed only on `esciara/ai-workflows-playground`, never on `esciara/ai-workflows` or any real target repo. Each use is logged in the description of the `esciara/ai-workflows` WP PR that needed it: playground PR number, approval or bypass, and why.
+Approving test PRs from the fork or the tester App, and admin-bypass merges, are allowed only on `esciara/ai-workflows-playground`, never on `esciara/ai-workflows` or any real target repo. Each use is logged in the description of the `esciara/ai-workflows` WP PR that needed it: playground PR number, approval or bypass, and why.
 
 Why: on the playground the approval is a test mechanism, not a review; elsewhere it would silently defeat branch protection.
 

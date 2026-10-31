@@ -1,4 +1,4 @@
-"""The committed board export `docs/board.jsonl` (ADR-0015): a stable, secret-scanned snapshot of the local beads database.
+"""The committed board export `docs/board.jsonl` (ADR-0036): a stable, secret-scanned snapshot of the local beads database.
 
 Only real board changes show up in it: volatile fields (lease, heartbeat, `updated_at`) and the merge-slot bead are
 dropped, and records are sorted by id with sorted keys, so re-exporting an unchanged board gives the same bytes.

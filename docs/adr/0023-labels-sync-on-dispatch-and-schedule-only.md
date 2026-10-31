@@ -21,7 +21,7 @@ Options 1, 2 and 4 all keep a per-event job; option 3 is the only one that takes
 
 ## Decision
 
-Proposed: labels sync runs only on `workflow_dispatch` and `schedule`, as its own reusable workflow or job called by the caller for those events, with `issues: write` only there. The install guide (WP14) tells installers to run the workflow once by hand after install. A publisher that hits a missing label fails visibly, with a message telling the maintainer to run the sync, rather than creating labels itself.
+Labels sync runs only on `workflow_dispatch` and `schedule`, as its own reusable workflow or job called by the caller for those events, with `issues: write` only there. The install guide (WP14) tells installers to run the workflow once by hand after install. A publisher that hits a missing label fails visibly, with a message telling the maintainer to run the sync, rather than creating labels itself.
 
 Why: label maintenance does not need to run per comment, and no write-scoped job should start just because someone commented.
 
