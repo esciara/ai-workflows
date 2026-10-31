@@ -4,7 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D18`
-- Amends: ADR-0003
+- Amends: ADR-0003, [ADR-0012](0012-agents-use-base-action.md)
 
 ## Context
 
