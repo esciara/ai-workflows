@@ -25,7 +25,10 @@ Claude Code 2.1.314 hook behaviour, verified:
 - A subagent error fires `StopFailure` with `agent_id`, `agent_type` and `error`.
 - `SessionEnd` fires on SIGINT/SIGTERM (reason `other`); its default timeout is 1.5 s.
 - Tool hooks of a subagent carry `agent_id` and `agent_type`; the main session's carry neither. `session_id` is shared with the parent, and `cwd` is always the main project directory, even for a subagent working in a worktree. `SubagentStart` carries only `agent_id` and `agent_type`, not the prompt.
-- Untested: an API error mid-run, `kill -9`, `PostToolUseFailure`, and the reaper's skip after sleep.
+- A background `Agent` call (`run_in_background: true`) returns at once: its `PostToolUse` carries the verbatim `tool_input` (description, prompt) and `tool_response.agentId` with `status: async_launched`, the same id as the subagent's `agent_id` in its hooks. `SubagentStart` fires a few ms before that `PostToolUse`; the subagent's first tool hook comes about a second after. A foreground call fires `PostToolUse(Agent)` only when the agent has finished (`status: completed`). In `claude -p`, an `Agent` call without `run_in_background` also launched in the background.
+- `SendMessage` to a finished agent resumes it under the same `agent_id`: `PostToolUse(SendMessage)` carries `tool_input.to` = the agent id and `tool_response.resumedAgentId`; `SubagentStart`, its tool hooks and `SubagentStop` fire again with that id.
+- `kill -9` of the Claude process: no hook fires (verified on a scratch repo: the heartbeat loop then released the bead in ~5 s).
+- Untested: an API error mid-run, `PostToolUseFailure`, and the reaper's skip after sleep.
 
 ## Options considered
 
@@ -67,9 +70,11 @@ Rejected: the Dolt remote and raw JSONL trade the conflict-free board for durabi
   - Orchestrator (one session, main checkout): assigns WPs, allocates ADR numbers, fixes the merge order, and is the only writer of the board (beyond a track moving its own bead to `in_review`) and of the generated files.
   - Track agent (one per WP, a subagent of the orchestrator): works one WP in its own worktree, never claims or reassigns, never touches other tracks' files.
 - **Claims tied to agent lifetime** (`scripts/aiwf/claims.py`, hooks in the committed `.claude/settings.json`):
-  - Assignment: just before spawning a track agent, the orchestrator runs `scripts/dev/board-assign aiwf-wp<N>`, which claims the bead for actor `track-aiwf-wp<N>` and records a pending assignment in `.beads/aiwf-claims.json` (gitignored with `.beads/`). `SubagentStart` binds the oldest pending assignment of that session (matching agent type) to the new `agent_id`. The orchestrator spawns one track agent per assignment, in the same order.
+  - Scope: track agents are background subagents of the orchestrator session. Peer Claude sessions (several terminals) are out of scope: nothing binds their claims.
+  - Assignment and binding, parent side: the orchestrator spawns a track agent with the `Agent` tool, `run_in_background: true`, and a description that starts with the bead id and a colon (`aiwf-wp2: build Workflow A labels`). `PreToolUse(Agent)` denies such a spawn unless `run_in_background` is `true` and the caller is the main session, then claims the bead for actor `track-aiwf-wp<N>` (already held by that actor: allowed) or denies the spawn when the claim fails. `PostToolUse(Agent)` binds the bead to `tool_response.agentId` in `.beads/aiwf-claims.json` (gitignored with `.beads/`). Calls whose description does not start with a bead id are ignored. Hooks for an `agent_id` not yet bound are no-ops; the subagent's first tool call comes about a second after the binding.
+  - Resume: `PostToolUse(SendMessage)` to a known, released agent re-binds it when its bead is still in_progress for its actor, or `in_review`.
   - Guard: a `PreToolUse(Bash)` hook denies, for subagents only, `bd` commands with `--claim`, `--assignee`/`-a` on update/create, `--force`, and `bd reclaim`/`unclaim`/`assign`. Best effort: it matches command text, and agents are not adversarial.
-  - Heartbeat: `SessionStart` launches one background loop per session that runs `bd heartbeat --actor <holder>` every 2 min for the session's in_progress beads (at most once a minute per bead) and exits when the parent Claude process dies. Lease TTL is bd's 5 min.
+  - Heartbeat: `SessionStart` launches one background loop per session that runs `bd heartbeat --actor <holder>` every 2 min for the session's in_progress beads (at most once a minute per bead) Lease TTL is bd's 5 min. The loop checks every 5 s that the parent Claude process is alive; when it has died (crash, `kill -9`, so no `SessionEnd`), the loop releases the session's beads and exits.
   - Release, with up to 3 tries: `SubagentStop`, `PostToolUse(TaskStop)` (`tool_input.task_id`) and `StopFailure` with `agent_id` release that agent's bead; `SessionEnd` releases every bead of the session (timeout raised to 20 s). Release is `bd unclaim --if-assignee <holder>`, skipped when the bead is no longer in_progress (e.g. `in_review`), plus `bd merge-slot release` if the holder has the slot.
   - Backstop: the loop and the hooks run `bd reclaim --older-than 10m` at most every 2 min; a run is skipped when the reaper's previous run is older than 10 min (the machine slept, so heartbeats could not run).
   - Every hook exits 0 on internal error (except the guard's deliberate deny), has a short timeout, and does nothing when `bd` or `.beads/` is missing (cloud sessions, CI).
@@ -98,7 +103,9 @@ Why: bd gives atomic claims and a merge slot across worktrees without a server, 
 ## Consequences
 
 - Known gaps, accepted:
-  - Crash or `kill -9` of the Claude process: no hook fires; the bead is freed only after lease expiry plus the reaper's grace, ~15 min.
+  - Crash or `kill -9` of the Claude process: no hook fires; the heartbeat loop releases the session's beads within ~5 s. If the loop dies too (machine crash, reboot), the bead is freed only after lease expiry plus the reaper's grace, ~15 min.
+  - A spawn whose `PreToolUse(Agent)` claimed the bead but which then fails (another hook or the user refuses the call, the tool errors): the claim has no agent; it lapses with the lease and the reaper (~15 min), or the orchestrator re-spawns under the same bead id.
+  - Peer sessions and foreground track agents are not supported (the guard refuses foreground track spawns).
   - A release hook that fails all tries: the bead stalls until the session ends (`SessionEnd`), or until the lease backstop if the heartbeat loop has stopped too.
   - The `PreToolUse` guard is best effort (command-text match).
   - The untested hook cases above rely on the lease backstop until tested (bead `aiwf-2en`).
