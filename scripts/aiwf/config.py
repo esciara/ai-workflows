@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]  # the ai-workflows checkout (at job.
 SCHEMA_PATH = ROOT / "schema" / "ai-workflows.schema.json"
 DEFAULT_CONFIG_PATH = ".github/ai-workflows.yml"
 E2E_CONFIG_DIR = "tests/e2e/config"  # alternative configs for the playground's e2e caller only (ADR-0028)
+E2E_REPO = "esciara/ai-workflows-playground"  # the only repo where `e2e_config` is honoured; elsewhere it fails
 
 GhRunner = Callable[[list[str]], str]
 

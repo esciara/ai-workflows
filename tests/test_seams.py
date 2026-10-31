@@ -49,8 +49,15 @@ def test_e2e_config_read_from_this_checkout(name, tmp_path):
     cfg = config.load(*config.read_e2e(name))
     assert cfg["maintainers"] == ["esciara"]
     out = tmp_path / "out"
-    assert cli.main(["config", "--repo", "o/r", "--e2e-config", name, "--github-output", str(out)]) == 0  # no gh call
+    assert cli.main(["config", "--repo", config.E2E_REPO, "--e2e-config", name, "--github-output", str(out)]) == 0
     assert '"maintainers":["esciara"]' in out.read_text()
+
+
+@pytest.mark.parametrize("argv", [["--repo", "o/r"], ["--file", "x.yml"]])
+def test_e2e_config_fails_outside_the_playground(argv, tmp_path, capsys):
+    assert cli.main(["config", *argv, "--e2e-config", "playground.yml", "--github-output", str(tmp_path / "o")]) == 1
+    assert "honoured only for esciara/ai-workflows-playground" in capsys.readouterr().err
+    assert not (tmp_path / "o").exists()
 
 
 @pytest.mark.parametrize("name", ["../../../.github/ai-workflows.yml", "/etc/passwd", "sub/x.yml", ".hidden.yml", "x.json", "missing.yml"])

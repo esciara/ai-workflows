@@ -28,6 +28,8 @@ def write_outputs(path: str, outputs: dict[str, str]) -> None:
 
 def cmd_config(args: argparse.Namespace) -> int:
     try:
+        if args.e2e_config and args.repo != config.E2E_REPO:  # fail closed (ADR-0028)
+            raise config.ConfigError("e2e_config", [f"honoured only for {config.E2E_REPO}, not {args.repo or args.file}"])
         if args.file:
             text, source = Path(args.file).read_text(encoding="utf-8"), args.file
         elif args.e2e_config:
