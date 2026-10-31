@@ -1,8 +1,9 @@
-import json
-
 import pytest
 
+from aiwf import board as boardmod
 from aiwf import gendoc, progress
+
+SCAN = boardmod.scan_secrets
 
 
 def bead(wp, title, status="open", deps=(), **meta):
@@ -84,14 +85,44 @@ def test_missing_marker_is_an_error():
         progress.render("# Progress\n", BOARD)
 
 
-def test_main_check_and_write(tmp_path):
-    board, doc = tmp_path / "board.json", tmp_path / "progress.md"
-    board.write_text(json.dumps(BOARD))
+def test_main_check_and_write_from_export(tmp_path):
+    board, doc = tmp_path / "board.jsonl", tmp_path / "progress.md"
+    board.write_text(boardmod.dumps(BOARD))
     doc.write_text(DOC)
-    assert progress.main(["--input", str(board), "--file", str(doc), "--check"]) == 1
+    args = ["--board", str(board), "--file", str(doc)]
+    assert progress.main([*args, "--check"]) == 1
     assert doc.read_text() == DOC
-    assert progress.main(["--input", str(board), "--file", str(doc)]) == 0
-    assert progress.main(["--input", str(board), "--file", str(doc), "--check"]) == 0
+    assert progress.main([*args, "--no-export"]) == 0
+    assert progress.main([*args, "--check"]) == 0
+
+
+def test_main_exports_scans_then_writes(tmp_path, monkeypatch):
+    board, doc = tmp_path / "board.jsonl", tmp_path / "progress.md"
+    doc.write_text(DOC)
+    export = boardmod.dumps(boardmod.normalize(BOARD))
+    monkeypatch.setattr(boardmod, "fresh_export", lambda: export)
+    monkeypatch.setattr(boardmod, "scan_secrets", lambda text: [])
+    assert progress.main(["--board", str(board), "--file", str(doc)]) == 0
+    assert board.read_text() == export
+    assert progress.main(["--board", str(board), "--file", str(doc), "--check"]) == 0
+
+
+def test_main_refuses_to_write_on_secret_or_missing_scanner(tmp_path, monkeypatch, capsys):
+    board, doc = tmp_path / "board.jsonl", tmp_path / "progress.md"
+    doc.write_text(DOC)
+    monkeypatch.setattr(boardmod, "fresh_export", lambda: boardmod.dumps(BOARD))
+    monkeypatch.setattr(boardmod, "scan_secrets", lambda text: ["github-pat"])
+    assert progress.main(["--board", str(board), "--file", str(doc)]) == 2
+    assert "github-pat" in capsys.readouterr().err
+    monkeypatch.setattr(boardmod.shutil, "which", lambda name: None)
+    monkeypatch.setattr(boardmod, "scan_secrets", SCAN)
+    assert progress.main(["--board", str(board), "--file", str(doc)]) == 2
+    assert "gitleaks not installed" in capsys.readouterr().err
+    assert not board.exists() and doc.read_text() == DOC
+
+
+def test_repo_progress_matches_committed_export():
+    assert progress.main(["--check"]) == 0
 
 
 def test_repo_progress_file_has_all_generated_blocks():
