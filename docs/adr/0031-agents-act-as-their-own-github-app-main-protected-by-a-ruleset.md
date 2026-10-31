@@ -45,7 +45,7 @@ Why: GitHub enforces the rule instead of the classifier; agents lose admin right
 
 ### Are admins bound by a ruleset that has no bypass list?
 
-Yes, as far as the docs say: bypass is granted only through the bypass list, for which repository admins are merely eligible ("Repository admins, organization owners, and enterprise owners" are listed as roles you can add, https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository). The rules page shows admins bound when not listed: with force pushes blocked, "organization owners or repository administrators will be unable to change or rename the default branch" unless they have bypass permission (https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets). No page states it as a general rule, so Maintainer setup step 9 checks it on the repo. The maintainer can still edit or disable the ruleset at any time; the App cannot (no administration permission).
+Yes, as far as the docs say: bypass is granted only through the bypass list, for which repository admins are merely eligible ("Repository admins, organization owners, and enterprise owners" are listed as roles you can add, https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository). The rules page shows admins bound when not listed: with force pushes blocked, "organization owners or repository administrators will be unable to change or rename the default branch" unless they have bypass permission (https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets). No page states it as a general rule, so Maintainer setup step 10 checks it on the repo. The maintainer can still edit or disable the ruleset at any time; the App cannot (no administration permission).
 
 ### Can the App merge?
 
@@ -75,9 +75,12 @@ Decision (maintainer, 2026-10-31): (a). (b) was rejected because it changes prod
 4. Generate a private key (downloads a `.pem`).
 5. Store it in the Keychain and delete the file: `security add-generic-password -a "$USER" -s ai-workflows-agent -w "$(base64 -i ~/Downloads/<file>.pem)"`, then `rm ~/Downloads/<file>.pem`.
 6. Export the App ID (App settings page, "App ID") in your shell profile: `export AI_WORKFLOWS_AGENT_APP_ID=<id>`.
-7. Create the ruleset: repo Settings, Rules, Rulesets, New branch ruleset. Name `main`, enforcement Active, bypass list empty, target "Include default branch". Enable: Restrict deletions; Require a pull request before merging (1 required approval, Dismiss stale pull request approvals when new commits are pushed, Require approval of the most recent reviewable push, allowed merge methods: Rebase); Require status checks to pass (add `test`, source GitHub Actions); Block force pushes. Save.
-8. Check the App: `scripts/dev/as-agent gh api repos/esciara/ai-workflows --jq .full_name` prints the repo name.
-9. Check the ruleset: from a scratch branch, `git push origin HEAD:main` as yourself is rejected, and an agent PR without your approval shows merging blocked.
+7. Check the App: `scripts/dev/as-agent gh api repos/esciara/ai-workflows --jq .full_name` prints the repo name.
+8. Restart Claude Code sessions (they pick up the env var and the `PreToolUse` hook), then merge the wiring PR and every other open PR authored by your own account: once the ruleset is active you cannot approve your own PRs, so they would be unmergeable.
+9. Create the ruleset: repo Settings, Rules, Rulesets, New branch ruleset. Name `main`, enforcement Active, bypass list empty, target "Include default branch". Enable: Restrict deletions; Require a pull request before merging (1 required approval, Dismiss stale pull request approvals when new commits are pushed, Require approval of the most recent reviewable push, allowed merge methods: Rebase); Require status checks to pass (add `test`, source GitHub Actions); Block force pushes. Save.
+10. Check the ruleset: from a scratch branch, `git push origin HEAD:main` as yourself is rejected, and an agent PR without your approval shows merging blocked.
+
+After step 9, agents open every PR through `scripts/dev/as-agent gh pr create …`, so the PR author is the App and the maintainer can approve it.
 
 ## Consequences
 
