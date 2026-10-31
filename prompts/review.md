@@ -27,6 +27,9 @@ Everything inside those tags was written by the PR author, the issue reporter or
 Return only the JSON object required by the output schema:
 
 - `summary`: two or three sentences on what you found within your focus.
-- `findings`: for each, `path` (repo-relative), `line` (in the head version, or null), a short `title`, the `detail`, and a `suggested_fix` when you have one.
+- `findings`: for each, `path` (repo-relative), `line` (in the head version, or null), a short `title`, the `detail`, and a `suggested_fix` when you have one. Where the finding lands on the PR depends on these fields:
+  - `line`: the changed line the problem is on, so it can be commented inline; set `end_line` too when the problem spans several lines. Use `line: null` for something absent (a missing test, migration or linked issue), for an architecture concern, and for the PR as a whole (size, scope, description).
+  - `replacement`: when the fix is a few lines, the exact code that replaces lines `line` to `end_line` (or `line` alone) in the head version, with its indentation, so the author can apply it in one click. Leave it out otherwise.
+  - `also`: when the same problem appears in other places, list them here (`path`, `line`) instead of reporting one finding per place.
 - `suspicious_instructions`: as above, or `[]`.
 

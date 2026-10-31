@@ -1,5 +1,6 @@
 """Workflow A, write side (steps 6-9): the verifier's decisions applied to the 4 passes' findings, the verdict, the one
-summary comment found by its marker (with the last run's findings marked resolved or still open), the verdict label.
+summary comment found by its marker (with the last run's findings marked resolved or still open), the run's one GitHub
+review carrying the new inline comments (never Approve; ADR-0016), the verdict label.
 
 Workflow A publishes with `aiwf review-publish` rather than a `publish --kind` publisher, because the comment needs the
 context job's facts (tier, CI, SHA) as well as the agent's JSON. Agent text is untrusted: every string is cleaned
@@ -13,11 +14,13 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from aiwf import config, publish, review
+from aiwf import review_placement as placement
 
 MARKER = "<!-- ai-review:summary v1 -->"
 STATE_V = 2  # v1 (WP2a) kept finding keys only; its state reads as no prior state
@@ -31,11 +34,14 @@ HEADINGS = {
 }
 CI_TEXT = {"green": "green", "red": "red", "none": "no checks", "timeout": "still running (timed out)"}
 PUBLISHERS: dict = {}  # see the module docstring
-FIELDS = ("severity", "path", "line", "title", "detail", "suggested_fix")
+FIELDS = ("severity", "path", "line", "title", "detail", "suggested_fix", "end_line", "replacement", "also")
 RANK = {"blocking": 0, "should-fix": 1, "nit": 2}
 MAX_ROWS = 30  # findings shown in the table; all of them count toward the verdict
 MAX_STATE = 40  # open findings carried in the state block to the next run
 MAX_BODY = 60_000  # GitHub caps a comment at 65,536 characters
+THREAD_RE = re.compile(r"https://[A-Za-z0-9.-]+/[A-Za-z0-9._/-]+/pull/\d+#discussion_r\d+\Z")
+FINDING_RE = re.compile(r"<!-- ai-review:finding ([0-9a-f]{12}\+*) -->")
+CHANGES = "ai-review: changes-requested"
 USAGE_SUM = ("cost_usd", "turns", "duration_ms", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
 
 
@@ -74,11 +80,12 @@ def combine(passes: dict[str, dict[str, Any]], verify: dict[str, Any], prev_open
         history.append({"title": p["title"], "path": p["path"], "status": d["status"], "reason": d["reason"]})
         if d["status"] == "still-open":
             cid = d.get("candidate")
+            thread = {"thread": p["thread"]} if p.get("thread") else {}
             if cid in confirmed and cid not in used:
                 used.add(cid)
-                findings.append({**confirmed[cid], "id": p["id"], "still_open": True})
+                findings.append({**confirmed[cid], "id": p["id"], "still_open": True, **thread})
             else:
-                findings.append({**{k: p[k] for k in FIELDS if k in p}, "id": p["id"], "still_open": True})
+                findings.append({**{k: p[k] for k in FIELDS if k in p}, "id": p["id"], "still_open": True, **thread})
     seen = {f["id"] for f in findings}
     for cid, c in confirmed.items():
         if cid not in used:
@@ -111,9 +118,21 @@ def state_json(state: dict[str, Any]) -> str:
     return text.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
 
 
+def row(i: int, f: dict[str, Any]) -> str:
+    """One summary table row; the place links to the finding's inline thread when it has one."""
+    where = clean(f["path"], 200) + (f":{f['line']}" if f.get("line") else "")
+    if f.get("thread"):
+        where = f"[{where}]({f['thread']})"
+    if f.get("also"):
+        where += f" (+{len(f['also'])} more)"
+    tag = "(still open) " if f["still_open"] else ""
+    return (f"| {i} | {f['severity']} | {where} | {tag}{clean(f['title'], 120)}: {clean(f['detail'])} "
+            f"| {clean(f.get('suggested_fix') or '-', 400)} |")
+
+
 def render(data: dict[str, Any], facts: dict[str, Any], label: str, reasons: list[str], prev: dict[str, Any] | None,
            state: dict[str, Any], run_url: str, rows: int = MAX_ROWS) -> str:
-    """The summary comment; `data` holds summary, findings, history, counts, tests and suspicious_instructions."""
+    """The summary comment; `data` holds summary, findings, history, counts, tests, suspicious_instructions and notes."""
     findings, counts = data["findings"], data["counts"]
     lines = [
         MARKER,
@@ -125,17 +144,21 @@ def render(data: dict[str, Any], facts: dict[str, Any], label: str, reasons: lis
         f"**Verdict:** {'; '.join(reasons)}.",
         "",
     ]
-    if findings:
-        lines += ["| # | Severity | Where | Finding | Suggested fix |", "|---|---|---|---|---|"]
-        for i, f in enumerate(findings[:rows], 1):
-            where = clean(f["path"], 200) + (f":{f['line']}" if f.get("line") else "")
-            tag = "(still open) " if f["still_open"] else ""
-            lines.append(f"| {i} | {f['severity']} | {where} | {tag}{clean(f['title'], 120)}: {clean(f['detail'])} "
-                         f"| {clean(f.get('suggested_fix') or '-', 400)} |")
-        if len(findings) > rows:
-            lines += ["", f"{len(findings) - rows} more finding(s) not shown; they count toward the verdict."]
+    main = [f for f in findings if f.get("place") != placement.COLLAPSED]
+    nits = [f for f in findings if f.get("place") == placement.COLLAPSED]
+    head = ["| # | Severity | Where | Finding | Suggested fix |", "|---|---|---|---|---|"]
+    if main:
+        lines += head + [row(i, f) for i, f in enumerate(main[:rows], 1)]
+        if len(main) > rows:
+            lines += ["", f"{len(main) - rows} more finding(s) not shown; they count toward the verdict."]
     else:
-        lines.append("No findings.")
+        lines.append("No findings." if not nits else "No findings beyond the nits below.")
+    if nits:
+        shown = nits[:rows]
+        lines += ["", f"<details><summary>{len(nits)} nit(s), summary only</summary>", "", *head,
+                  *[row(i, f) for i, f in enumerate(shown, len(main[:rows]) + 1)], "", "</details>"]
+    for note in data.get("notes", []):
+        lines += ["", f"**Note:** {note}"]
     lines += ["", f"**Tests:** {clean(data['tests'], 400)}"]
     checked = (f"**Verification:** {counts['candidates']} candidate finding(s) from {len(review.PASSES)} passes: "
                f"{counts['confirmed']} confirmed, {counts['refuted']} refuted, {counts['duplicate']} duplicate")
@@ -155,7 +178,9 @@ def valid_state(prev: Any) -> bool:
         return False
     return all(isinstance(f, dict) and isinstance(f.get("id"), str) and f.get("severity") in RANK
                and all(isinstance(f.get(k), str) for k in ("path", "title", "detail"))
-               and (f.get("line") is None or isinstance(f.get("line"), int)) for f in prev["open"])
+               and (f.get("line") is None or isinstance(f.get("line"), int))
+               and (f.get("thread") is None or (isinstance(f["thread"], str) and THREAD_RE.match(f["thread"])))
+               for f in prev["open"])
 
 
 def find_summary(gh: publish.GhRunner, repo: str, number: int) -> tuple[int | None, dict[str, Any] | None]:
@@ -194,6 +219,101 @@ def total_usage(usage: dict[str, Any]) -> dict[str, Any]:
     return {**agents, "total": total, "agents": len(agents)}
 
 
+def inline_comment(f: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
+    """The review comment for an inline finding: its text, the other places, a `suggestion` block when it fits."""
+    parts = [f"**{f['severity']}** · {clean(f['title'], 120)}", "", clean(f["detail"])]
+    if f.get("suggested_fix"):
+        parts += ["", f"Suggested fix: {clean(f['suggested_fix'], 400)}"]
+    if f.get("also"):
+        parts += ["", "Same problem also at: " + ", ".join(
+            f"{clean(a['path'], 200)}" + (f":{a['line']}" if a.get("line") else "") for a in f["also"])]
+    out: dict[str, Any] = {"path": f["path"], "line": f["line"], "side": "RIGHT"}
+    sug = placement.suggestion(f, facts)
+    if sug:
+        start, end, code = sug
+        fence = placement.fence(code)
+        parts += ["", f"{fence}suggestion", code, fence]
+        if end > start:
+            out.update(start_line=start, start_side="RIGHT", line=end)
+    parts += ["", f"<!-- ai-review:finding {f['id']} -->"]
+    return {**out, "body": "\n".join(parts)}
+
+
+def bot_changes_requested(gh: publish.GhRunner, repo: str, number: int) -> list[int]:
+    """Ids of our own reviews that still request changes."""
+    pages = json.loads(gh(["api", "--paginate", "--slurp", f"repos/{repo}/pulls/{number}/reviews?per_page=100"]))
+    return [r["id"] for page in pages for r in page if r["user"]["login"] == BOT and r["state"] == "CHANGES_REQUESTED"]
+
+
+def post_review(gh: publish.GhRunner, repo: str, number: int, payload: dict[str, Any]) -> dict[str, Any]:
+    assert payload["event"] in ("REQUEST_CHANGES", "COMMENT")  # never APPROVE (spec, Workflow A step 8)
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+        json.dump(payload, fh)
+    try:
+        return json.loads(gh(["api", "-X", "POST", f"repos/{repo}/pulls/{number}/reviews", "--input", fh.name]) or "{}")
+    finally:
+        os.unlink(fh.name)
+
+
+def send_review(gh: publish.GhRunner, repo: str, number: int, facts: dict[str, Any], label: str, findings: list[dict[str, Any]],
+                summary_url: str) -> list[str]:
+    """At most one GitHub review for this run (ADR-0016): Request changes for `changes-requested`, else Comment, with
+    the new inline comments; none when there is nothing new and the review state would not change. Our earlier
+    Request changes reviews are dismissed once the verdict leaves `changes-requested`. Sets `thread` on findings
+    commented inline; returns notes for the summary."""
+    notes: list[str] = []
+    sha = facts["sha"]
+    new = [f for f in findings if f["place"] == placement.INLINE and not f.get("thread")]
+    blocking = label == CHANGES
+    active = bot_changes_requested(gh, repo, number)
+    link = f"[summary]({summary_url})" if summary_url else "summary comment"
+    if new or (blocking and not active):
+        event = "REQUEST_CHANGES" if blocking else "COMMENT"
+        payload = {"commit_id": sha, "event": event, "body": f"AI review — {HEADINGS[label]}. Details in the {link}.",
+                   "comments": [inline_comment(f, facts) for f in new]}
+        review_obj = None
+        for _ in range(3):
+            try:
+                review_obj = post_review(gh, repo, number, payload)
+                break
+            except RuntimeError as exc:
+                msg = str(exc)
+                print(f"::warning title=Review not accepted::{msg[:300]}")
+                if "own pull request" in msg and payload["event"] == "REQUEST_CHANGES":
+                    payload["event"] = "COMMENT"  # GitHub refuses Request changes on the token's own PR
+                    notes.append("GitHub does not let this workflow request changes on its own pull request; "
+                                 "the review was sent as a comment.")
+                elif payload["comments"]:
+                    payload["comments"] = []
+                    for f in new:
+                        f["place"] = placement.GENERAL
+                    notes.append("GitHub refused the inline comments; their findings are listed here only.")
+                else:
+                    break
+        if review_obj is None:
+            notes.append("The GitHub review could not be submitted; see the run log.")
+        elif payload["comments"]:
+            rid = review_obj["id"]
+            pages = json.loads(gh(["api", "--paginate", "--slurp",
+                                   f"repos/{repo}/pulls/{number}/reviews/{rid}/comments?per_page=100"]))
+            threads = {m.group(1): c["html_url"] for page in pages for c in page
+                       if (m := FINDING_RE.search(c.get("body") or "")) and THREAD_RE.match(c.get("html_url") or "")}
+            for f in new:
+                f["thread"] = threads.get(f["id"])
+    if not blocking:
+        for rid in active:
+            try:
+                gh(["api", "-X", "PUT", f"repos/{repo}/pulls/{number}/reviews/{rid}/dismissals",
+                    "-f", f"message=Superseded: the AI review of {sha[:7]} no longer requests changes; see the "
+                          f"{summary_url or 'summary comment'}.", "-f", "event=DISMISS"])
+            except RuntimeError as exc:
+                print(f"::warning title=Review not dismissed::{str(exc)[:300]}")
+                notes.append("An earlier Request changes review from this workflow could not be dismissed; "
+                             "a maintainer can dismiss it by hand.")
+                break
+    return notes
+
+
 def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str, Any], usage: dict[str, Any],
                    repo: str, number: int, run_url: str, aiwf_sha: str, gh: publish.GhRunner) -> bool:
     """Validate the 4 passes and the verifier, decide, then create or update the summary comment and set the label."""
@@ -221,21 +341,37 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
     data = {"summary": verify["summary"], "findings": findings, "history": history, "counts": counts,
             "tests": passes["tests"]["summary"], "suspicious_instructions": suspicious}
     usage = total_usage(usage)
-    state = {"v": STATE_V, "sha": facts["sha"], "verdict": label, "aiwf_sha": aiwf_sha, "run": run_url,
-             "usage": usage["total"],
-             "open": [{"id": f["id"], "severity": f["severity"], "path": f["path"][:300], "line": f.get("line"),
-                       "title": f["title"][:120], "detail": f["detail"][:300]} for f in findings[:MAX_STATE]]}
-    rows = MAX_ROWS
-    body = render(data, facts, label, reasons, prev, state, run_url, rows)
-    while len(body) > MAX_BODY and rows > 0:
-        rows = max(rows - 5, 0)
+    for f in findings:  # a still-open finding keeps its thread; it is not commented again
+        f["place"] = placement.INLINE if f.get("thread") else placement.place(f, facts)
+
+    def upsert(cid: int | None) -> tuple[int | None, str]:
+        """Create or update the summary comment; returns (id, html_url)."""
+        state = {"v": STATE_V, "sha": facts["sha"], "verdict": label, "aiwf_sha": aiwf_sha, "run": run_url,
+                 "usage": usage["total"],
+                 "open": [{"id": f["id"], "severity": f["severity"], "path": f["path"][:300], "line": f.get("line"),
+                           "title": f["title"][:120], "detail": f["detail"][:300],
+                           **({"thread": f["thread"]} if f.get("thread") else {})} for f in findings[:MAX_STATE]]}
+        rows = MAX_ROWS
         body = render(data, facts, label, reasons, prev, state, run_url, rows)
-    if comment_id is None:
-        publish.comment(gh, repo, number, body)
-    else:
-        gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{comment_id}", "-f", f"body={body}"])
+        while len(body) > MAX_BODY and rows > 0:
+            rows = max(rows - 5, 0)
+            body = render(data, facts, label, reasons, prev, state, run_url, rows)
+        if cid is None:
+            out = gh(["api", "-X", "POST", f"repos/{repo}/issues/{number}/comments", "-f", f"body={body}"])
+        else:
+            out = gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{cid}", "-f", f"body={body}"])
+        got = json.loads(out or "{}")
+        return got.get("id", cid), got.get("html_url", "")
+
+    comment_id, summary_url = upsert(comment_id)
+    notes = send_review(gh, repo, number, facts, label, findings, summary_url)
+    if notes or any(f.get("thread") and not f["still_open"] for f in findings):
+        data["notes"] = notes
+        upsert(comment_id)  # now with links to the new inline threads, and any notes
     set_verdict_label(gh, repo, number, label)
     print(f"{repo}#{number}: {label} ({'; '.join(reasons)}); verification {json.dumps(counts)}")
+    print("placement: " + json.dumps({p: sum(f["place"] == p for f in findings)
+                                      for p in (placement.INLINE, placement.COLLAPSED, placement.GENERAL)}))
     print(f"usage: {json.dumps(usage)}")
     return True
 

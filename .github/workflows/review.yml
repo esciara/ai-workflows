@@ -1,5 +1,5 @@
-# Reusable: Workflow A (PR review), steps 1-7 and 9: 4 review passes in parallel, a verify (refute) pass, the summary
-# comment and the verdict label (WP2). The GitHub review with inline comments comes with WP3, `/review` with WP4.
+# Reusable: Workflow A (PR review): 4 review passes in parallel, a verify (refute) pass, the summary comment and the
+# verdict label (WP2), one GitHub review per run with the inline comments, never Approve (WP3). `/review` comes with WP4.
 # PR text and code are untrusted: they reach scripts through env vars or files, and the agent as inline context
 # (ADR-0034). The agent jobs hold no GitHub token scope and no secret but the OAuth token (ADR-0012, ADR-0018); they
 # pass their answers on as same-run artifacts, which only the publish job reads, after schema validation.
