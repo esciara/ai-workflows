@@ -1,6 +1,6 @@
 # ADR-0021 · Run state lives on the item: labels plus a marker comment
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D21`

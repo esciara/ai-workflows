@@ -90,5 +90,5 @@ When the spec or this plan changes, export the doc again as Markdown and replace
 | --- |
 
 - [ ] **Sandbox for B2 and B5 (WP6).** The Actions runner is a VM per job; whether that is isolation enough, or whether repro code runs in a container with no network, is decided when WP6 starts.
-- [ ] **Where run state lives (WP1).** The hidden marker comment carries per-item state; whether a separate store is needed for the session record is decided in WP1.
+- [x] **Where run state lives (WP1).** The hidden marker comment carries per-item state; whether a separate store is needed for the session record is decided in WP1. Decided in ADR-0021: no separate store; labels plus the marker comment, with bulky material in artifacts.
 - [ ] **Usage limits (WP2).** The real usage per reviewed PR on your subscription is measured in WP2, and the per-run budgets in the config are set from it.

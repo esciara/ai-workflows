@@ -62,6 +62,6 @@ Why: <rationale>
 | [ADR-0018](0018-agent-jobs-get-no-token-permissions.md) | D18 | Agent jobs get `permissions: {}` | Accepted |
 | [ADR-0019](0019-scripts-ref-follows-the-workflow-sha.md) | D19 | Scripts ref follows the workflow SHA; callers pin a tagged SHA | Accepted |
 | [ADR-0020](0020-test-pr-approval-and-bypass-on-the-playground-only.md) | D20 | Test-PR approval and admin bypass on the playground only | Accepted |
-| [ADR-0021](0021-run-state-on-the-item-labels-and-marker-comment.md) | D21 | Run state lives on the item: labels plus a marker comment | Proposed |
+| [ADR-0021](0021-run-state-on-the-item-labels-and-marker-comment.md) | D21 | Run state lives on the item: labels plus a marker comment | Accepted |
 | [ADR-0022](0022-own-reusable-workflow-refs-pinned-to-a-sha-from-wp14.md) | D22 | Own reusable-workflow refs pinned to a SHA from WP14 | Accepted |
 | [ADR-0023](0023-labels-sync-on-dispatch-and-schedule-only.md) | D23 | Labels sync on dispatch and schedule only | Accepted |
