@@ -1,0 +1,14 @@
+flowchart TD
+  FP["Fork PR event<br/>opened / synchronize<br/>read-only token, no secrets"] --> G{"review / gate<br/>reads the event payload"}
+  SP["Same-repo PR event"] --> G
+  CM["Comment '/review' on a PR"] --> G
+  G -- "fork PR event" --> SK["All review jobs skipped<br/>nothing posted"]
+  G -- "comment: not a maintainer<br/>or no write access" --> SK
+  G -- "fork PR and fork_prs: off" --> SK
+  G -- "same-repo non-draft PR<br/>or maintainer /review" --> ST["start: ai-review: pending"]
+  ST --> CX["context: checkout refs/pull/N/head<br/>no credentials, HEAD = gated SHA<br/>read as text, never executed"]
+  CX --> PA["4 passes + verify<br/>no token, StructuredOutput only"]
+  PA --> PU["publish: summary + verdict label<br/>Commit reviewed = gated SHA"]
+  NP["Fork push after a review<br/>pull_request_target, synchronize"] --> RF["review-fork-push<br/>API only: no checkout, no secrets<br/>pull-requests: write"]
+  RF --> RM["Verdict label removed<br/>note: maintainer may /review again"]
+  RM -.-> CM
