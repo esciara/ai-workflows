@@ -7,10 +7,10 @@ Generated from the beads status board (ADR-0015): the orchestrator updates the b
 | --- | --- | --- | --- | --- | --- |
 | WP0 | Repo bootstrap | — | done | [#2](https://github.com/esciara/ai-workflows/pull/2) | Python 3.12; config read from default branch |
 | WP1 | Shared runtime | WP0 | done | [#7](https://github.com/esciara/ai-workflows/pull/7), [#8](https://github.com/esciara/ai-workflows/pull/8), [#9](https://github.com/esciara/ai-workflows/pull/9) | Agents on base-action (ADR-0012); publish gets `pull-requests: write` (ADR-0013) |
-| WP2 | A · core review | WP1 | todo | | |
+| WP2 | A · core review | WP1 | in progress | | |
 | WP3 | A · placement + formal review | WP2 | todo | | |
 | WP4 | A · fork PRs | WP2 | todo | | |
-| WP5 | B1 · classify | WP1 | todo | | |
+| WP5 | B1 · classify | WP1 | in progress | | |
 | WP6 | B2 · reproduce | WP5 | todo | | |
 | WP7 | B2 · reporter silence | WP6 | todo | | |
 | WP8 | B3–B4 · analyse + ask | WP6 | todo | | |
