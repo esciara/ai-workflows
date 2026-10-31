@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "PR review pass answer (Workflow A)",
+  "title": "PR review pass answer (Workflow A, one of four passes)",
   "type": "object",
   "properties": {
-    "summary": {"type": "string", "minLength": 1, "maxLength": 800, "description": "Two or three sentences: what the PR does and whether it meets the linked issue."},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 800, "description": "Two or three sentences on what the pass found within its focus."},
     "findings": {
       "type": "array",
-      "maxItems": 20,
+      "maxItems": 10,
       "items": {
         "type": "object",
         "properties": {
