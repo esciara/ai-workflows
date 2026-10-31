@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -136,20 +137,31 @@ def reusable_issue(title: str, body: str, *, e2e: bool) -> dict[str, Any]:
     return open_issue(title, body, e2e=e2e)
 
 
+def pr_branch(*, e2e: bool, wp: str = "", slug: str = "") -> str:
+    """Unique head branch for a test PR. e2e PRs use `e2e/<wp>-<slug>-<ns>`: the playground routes PRs whose head ref
+    starts with `e2e/` to caller-e2e.yml from the first `opened` event on (labels cannot be set at creation)."""
+    if not e2e:
+        return f"test-pr-{time.time_ns()}"  # never `e2e/`: the normal caller handles it
+    if not re.fullmatch(r"wp\d+", wp) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", slug):
+        raise ValueError(f"e2e PR branch needs wp like 'wp2' and a lowercase slug, got {wp!r}, {slug!r}")
+    return f"e2e/{wp}-{slug}-{time.time_ns()}"
+
+
 @contextlib.contextmanager
-def throwaway_pr(title: str, *, e2e: bool, base: str | None = None) -> Iterator[dict[str, Any]]:
+def throwaway_pr(title: str, *, e2e: bool, wp: str = "", slug: str = "", base: str | None = None) -> Iterator[dict[str, Any]]:
     """A test-fixture PR on its own branch from `base` (default branch if None); branch deleted, PR closed on exit.
 
-    The pulls API cannot set labels at creation, so they are added right after: the `opened` event never carries
-    them (PR-opened tests use a per-WP base branch, ADR-0026); every later event does.
+    e2e PRs come from an `e2e/<wp>-<slug>-…` branch, so every PR event routes to the e2e caller, `opened` included.
+    Labels (`test-fixture`, plus `e2e-target` when e2e) are added right after creation, since the pulls API cannot
+    set them; comment events on the PR carry no head ref and route by that label.
     """
-    branch = f"e2e-{time.time_ns()}"
+    branch = pr_branch(e2e=e2e, wp=wp, slug=slug)
     base = base or api(f"repos/{REPO}")["default_branch"]
     sha = api(f"repos/{REPO}/git/ref/heads/{base}")["object"]["sha"]
     api(f"repos/{REPO}/git/refs", f"ref=refs/heads/{branch}", f"sha={sha}", method="POST")
     pr = None
     try:
-        api(f"repos/{REPO}/contents/e2e/{branch}.md", f"message=test: e2e throwaway {branch}",
+        api(f"repos/{REPO}/contents/e2e/{branch.replace('/', '-')}.md", f"message=test: e2e throwaway {branch}",
             "content=dGhyb3dhd2F5Cg==", f"branch={branch}", method="PUT")  # "throwaway\n"
         title = f"{title} ({branch})"
         pr = api(f"repos/{REPO}/pulls", f"title={title}", f"head={branch}", f"base={base}",

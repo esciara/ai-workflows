@@ -105,3 +105,39 @@ def test_push_target_needs_the_slot_and_uses_a_lease(tmp_path):
         git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "two", cwd=work)
         assert e2eslot.push_target(remote=str(remote), cwd=work, path=lock) == git("rev-parse", "HEAD", cwd=work)
     assert str(lock) not in e2eslot._held
+
+
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent / "e2e"))
+import playground as pg  # noqa: E402
+
+
+def test_e2e_pr_branches_carry_the_routing_prefix():
+    assert pg.pr_branch(e2e=True, wp="wp2", slug="core-review").startswith("e2e/wp2-core-review-")
+    assert not pg.pr_branch(e2e=False).startswith("e2e/")
+    for wp, slug in [("2", "x"), ("wp2", ""), ("wp2", "Bad_Slug"), ("wp2", "a/b")]:
+        with pytest.raises(ValueError):
+            pg.pr_branch(e2e=True, wp=wp, slug=slug)
+
+
+def test_throwaway_e2e_pr_uses_prefix_then_labels_and_cleans_up(monkeypatch):
+    calls = []
+
+    def api(path, *fields, method="GET", as_tester=False):
+        calls.append((method, path, fields))
+        if path.endswith("/labels?per_page=100"):
+            return [{"name": pg.E2E_LABEL}]
+        if path.endswith("/pulls") and method == "POST":
+            return {"number": 5}
+        return {"default_branch": "main", "object": {"sha": "abc"}, "state": "open"}
+
+    monkeypatch.setattr(pg, "api", api)
+    monkeypatch.setattr(pg, "gh", lambda args, as_tester=False: calls.append(("GH", args[2], args[3])))
+    with pg.throwaway_pr("[e2e] t", e2e=True, wp="wp2", slug="demo") as pr:
+        assert pr["branch"].startswith("e2e/wp2-demo-") and pr["number"] == 5
+    ref = next(c for c in calls if c[1].endswith("/git/refs"))
+    assert f"ref=refs/heads/{pr['branch']}" in ref[2]
+    i_pr = next(i for i, c in enumerate(calls) if c[1].endswith("/pulls") and c[0] == "POST")
+    i_lb = next(i for i, c in enumerate(calls) if c[1].endswith("/issues/5/labels"))
+    assert i_pr < i_lb and set(calls[i_lb][2]) == {f"labels[]={pg.FIXTURE_LABEL}", f"labels[]={pg.E2E_LABEL}"}
+    assert ("GH", "DELETE", f"repos/{pg.REPO}/git/refs/heads/{pr['branch']}") in calls
+    assert ("PATCH", f"repos/{pg.REPO}/pulls/5", ("state=closed",)) in calls
