@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import json
 import os
@@ -15,6 +16,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 REPO = os.environ.get("AIWF_E2E_REPO", "esciara/ai-workflows-playground")
+FORK = os.environ.get("AIWF_E2E_FORK", "opinionated-digital-center/ai-workflows-playground")  # outsider fork (WP4)
 WORKFLOW = "AI workflows"  # name of the caller workflow in the target repo
 BOT = "github-actions[bot]"
 PING_MARKER = "<!-- ai-workflows:ping -->"
@@ -26,25 +28,29 @@ POLL_INTERVAL = int(os.environ.get("AIWF_E2E_POLL", "5"))
 T = TypeVar("T")
 
 
-def gh(args: list[str], as_tester: bool = False, as_agent: bool = False, as_maintainer: bool = False) -> str:
+def gh(args: list[str], as_tester: bool = False, as_agent: bool = False, as_maintainer: bool = False,
+       tester_repo: str | None = None) -> str:
     """Run gh: reads with the local gh login; writes as the agent App (ADR-0031), the tester App, or the maintainer
-    through scripts/dev/as-maintainer (comments, reviews, dispatch on the playground only). API failures fail the test."""
+    through scripts/dev/as-maintainer (comments, reviews, dispatch on the playground only). API failures fail the test.
+    `tester_repo` picks the tester App installation (default: the playground's; FORK for writes to the fork)."""
     wrapper = "as-tester" if as_tester else "as-maintainer" if as_maintainer else "as-agent" if as_agent else None
     cmd = [str(ROOT / "scripts" / "dev" / wrapper), *args] if wrapper else ["gh", *args]
     if wrapper == "as-agent":
         cmd.insert(1, "gh")
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    env = {**os.environ, "AI_WORKFLOWS_TESTER_REPO": tester_repo} if as_tester and tester_repo else None
+    proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if proc.returncode != 0:
         pytest.fail(f"GitHub call failed (not a pass): {' '.join(args[:3])}: {proc.stderr.strip()[:300]}", pytrace=False)
     return proc.stdout
 
 
-def api(path: str, *fields: str, method: str = "GET", as_tester: bool = False, as_maintainer: bool = False) -> Any:
+def api(path: str, *fields: str, method: str = "GET", as_tester: bool = False, as_maintainer: bool = False,
+        tester_repo: str | None = None) -> Any:
     """GETs read with the local gh login; other methods run as the tester, the maintainer, or else the agent App."""
     args = ["api", "-X", method, path]
     for f in fields:
         args += ["-f", f]
-    out = gh(args, as_tester=as_tester, as_maintainer=as_maintainer, as_agent=method != "GET")
+    out = gh(args, as_tester=as_tester, as_maintainer=as_maintainer, as_agent=method != "GET", tester_repo=tester_repo)
     return json.loads(out) if out.strip() else None
 
 
@@ -178,3 +184,44 @@ def throwaway_pr(title: str, *, e2e: bool, wp: str = "", slug: str = "", base: s
         api(f"repos/{REPO}/git/refs/heads/{branch}", method="DELETE")
         if pr and api(f"repos/{REPO}/pulls/{pr['number']}")["state"] == "open":
             api(f"repos/{REPO}/pulls/{pr['number']}", "state=closed", method="PATCH")
+
+
+@contextlib.contextmanager
+def fork_pr(title: str, files: list[tuple[str, str]], *, wp: str, slug: str) -> Iterator[dict[str, Any]]:
+    """A test-fixture PR from FORK into REPO, opened by the tester App (an outsider, never a maintainer); fork branch
+    deleted and PR closed on exit. `files` are (path, text) pairs, one commit each, pushed before the PR is opened.
+
+    The branch starts from the fork's default branch and is not named `e2e/`: fork PRs never route by prefix, so the
+    `opened` event goes to the normal caller; `e2e-target` is labelled right after creation (as the agent App), and
+    later events on the PR route to caller-e2e.yml. The fork needs the tester App installed with contents write.
+    """
+    base = api(f"repos/{REPO}")["default_branch"]
+    fork_base = api(f"repos/{FORK}")["default_branch"]
+    branch = f"{wp}-{slug}-{time.time_ns()}"
+    sha = api(f"repos/{FORK}/git/ref/heads/{fork_base}")["object"]["sha"]
+    api(f"repos/{FORK}/git/refs", f"ref=refs/heads/{branch}", f"sha={sha}", method="POST", as_tester=True,
+        tester_repo=FORK)
+    pr = None
+    try:
+        for path, text in files:
+            fork_put(path, branch, text, f"test: e2e fork PR seed {path}")
+        title = f"{title} ({branch})"
+        pr = api(f"repos/{REPO}/pulls", f"title={title}", f"head={FORK.split('/')[0]}:{branch}", f"base={base}",
+                 "body=Throwaway e2e fork PR from esciara/ai-workflows tests; closed by its teardown.", method="POST",
+                 as_tester=True)
+        api(f"repos/{REPO}/issues/{pr['number']}/labels", *[f"labels[]={lb}" for lb in _labels(True)], method="POST")
+        yield {"number": pr["number"], "title": title, "branch": branch}
+    finally:
+        api(f"repos/{FORK}/git/refs/heads/{branch}", method="DELETE", as_tester=True, tester_repo=FORK)
+        if pr and api(f"repos/{REPO}/pulls/{pr['number']}")["state"] == "open":
+            api(f"repos/{REPO}/pulls/{pr['number']}", "state=closed", method="PATCH")
+
+
+def fork_put(path: str, branch: str, text: str, message: str) -> str:
+    """Commit `text` to `path` on the fork's `branch` as the tester App (create or update); returns the commit SHA."""
+    fields = [f"message={message}", f"branch={branch}", f"content={base64.b64encode(text.encode()).decode()}"]
+    found = subprocess.run(["gh", "api", f"repos/{FORK}/contents/{path}?ref={branch}", "--jq", ".sha"],
+                           capture_output=True, text=True)  # 404: a new file
+    if found.returncode == 0 and found.stdout.strip():
+        fields.append(f"sha={found.stdout.strip()}")
+    return api(f"repos/{FORK}/contents/{path}", *fields, method="PUT", as_tester=True, tester_repo=FORK)["commit"]["sha"]

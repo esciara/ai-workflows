@@ -56,7 +56,7 @@ jobs:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-  # Workflow A (WP2a: core review; /review on PR comments arrives in WP4).
+  # Workflow A: PR events review same-repo PRs; `/review` from a maintainer reviews any PR, fork PRs included (WP4).
   review:
     needs: config
     if: needs.config.outputs.review == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
