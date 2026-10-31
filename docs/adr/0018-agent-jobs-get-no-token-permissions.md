@@ -1,6 +1,6 @@
 # ADR-0018 · Agent jobs get `permissions: {}`
 
-- Status: Accepted
+- Status: Superseded by ADR-0039
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D18`

@@ -9,7 +9,7 @@ Exported Oct 30, 2026 from the online doc: https://claude.ai/artifact/RC4m7kMMMN
 
 - **Where the code lives.** A central repo, `ai-workflows`, holds the reusable workflows, the agent prompts, the orchestrator scripts and the config schema. Each target repo carries only a short caller workflow and `.github/ai-workflows.yml`.
 - **Who builds it.** A Claude Code session on your machine, opened in `ai-workflows`, with the spec and this plan in `docs/`. The session works one work package at a time.
-- **The loop per work package.** Branch → build → run its check on the test repo → open a PR on `ai-workflows` with the check's evidence → you review and merge → next package. Superseded in practice by ADR-0011 and ADR-0014: the check is a reviewed acceptance test, and outside the stop-WPs the session continues without waiting while you review and merge PRs in batches.
+- **The loop per work package.** Branch → build → run its check on the test repo → open a PR on `ai-workflows` with the check's evidence → you review and merge → next package. Superseded in practice by ADR-0042: the check is a reviewed acceptance test, and outside the stop-WPs the session continues without waiting while you review and merge PRs in batches.
 - **Source of truth.** The spec says *what*; this plan says *in which order* and *how we know it works*. A conflict between the two is a question for you, not a guess.
 - **What you do by hand.** Creating repos, adding secrets, branch protection and chat webhooks. Tokens never pass through the agent.
 

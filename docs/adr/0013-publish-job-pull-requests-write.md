@@ -1,6 +1,6 @@
 # ADR-0013 · Publish job gets `pull-requests: write`
 
-- Status: Accepted
+- Status: Superseded by ADR-0038
 - Date: 2026-10-30
 - Alias: `D13`
 

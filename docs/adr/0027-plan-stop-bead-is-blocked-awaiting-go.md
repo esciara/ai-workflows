@@ -1,6 +1,6 @@
 # ADR-0027 · Plan stop: bead is `blocked` with label `awaiting-go`
 
-- Status: Accepted
+- Status: Superseded by ADR-0036
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D27`

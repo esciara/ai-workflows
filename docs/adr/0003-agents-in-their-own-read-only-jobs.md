@@ -1,6 +1,6 @@
 # ADR-0003 · Agents in their own read-only jobs
 
-- Status: Accepted
+- Status: Superseded by ADR-0039
 - Date: 2026-10-30
 - Alias: `D3`
 - Amended by: [ADR-0018](0018-agent-jobs-get-no-token-permissions.md)

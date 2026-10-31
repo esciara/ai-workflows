@@ -1,6 +1,6 @@
 # ADR-0001 · Permissions granted per job by the caller
 
-- Status: Accepted
+- Status: Superseded by ADR-0038
 - Date: 2026-10-30
 - Alias: `D1`
 - Amended by: [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md)

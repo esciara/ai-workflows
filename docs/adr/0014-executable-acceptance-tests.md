@@ -1,6 +1,6 @@
 # ADR-0014 · Executable acceptance tests; verifier reviews the test
 
-- Status: Accepted
+- Status: Superseded by ADR-0042
 - Date: 2026-10-30
 - Alias: `D14`
 - Amends: [ADR-0011](0011-factory-loop-and-independent-verifier.md) (what `scripts/dev/verify-wp` judges)

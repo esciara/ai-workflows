@@ -1,6 +1,6 @@
 # ADR-0017 · Top-level `permissions: {}` in caller and reusable workflows
 
-- Status: Accepted
+- Status: Superseded by ADR-0038
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D17`

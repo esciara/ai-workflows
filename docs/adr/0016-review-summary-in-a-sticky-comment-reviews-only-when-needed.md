@@ -1,6 +1,6 @@
 # ADR-0016 · Review summary in a sticky comment; GitHub reviews only when needed
 
-- Status: Accepted
+- Status: Superseded by ADR-0041
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D16`

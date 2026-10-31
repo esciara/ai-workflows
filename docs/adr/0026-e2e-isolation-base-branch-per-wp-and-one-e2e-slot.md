@@ -1,6 +1,6 @@
 # ADR-0026 · e2e isolation: base branch per WP and one e2e slot
 
-- Status: Accepted
+- Status: Superseded by ADR-0043
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D26`
