@@ -34,7 +34,7 @@ Replaces: ADR-0015 (its agent-lifetime claims, heartbeat, lease, reaper, spawn g
 - **Branch updates.** Rebase with `git rebase --update-refs origin/main` and push with `--force-with-lease`; never a plain `--force`, never a merge commit. Check that the PR is still open before pushing to it. A rebase pushed after the maintainer's approval needs a fresh approval.
 - **Shared paths.** A track changes these only after the orchestrator's go, and the orchestrator serialises such changes (one open PR per shared path):
   - `.github/workflows/*`, `templates/`, `.claude/settings.json`
-  - `scripts/aiwf/cli.py`, `publish.py`, `commands.py`, `config.py`, `labels.py`, `policy.py`, and the board tooling `gendoc.py`, `board.py`, `progress.py`, `adrindex.py`, `diagrams.py`; `scripts/dev/*`
+  - `scripts/aiwf/cli.py`, `publish.py`, `commands.py`, `config.py`, `labels.py`, `policy.py`, and the board tooling `gendoc.py`, `board.py`, `progress.py`, `adrindex.py`, `diagrams.py`; the dev guard `devguard.py` and the e2e slot `e2eslot.py`; `scripts/dev/*`
   - `schema/ai-workflows.schema.json`, `schema/labels.yml`
   - `tests/test_workflow_policy.py`, `tests/e2e/conftest.py`, `tests/e2e/playground.py`
   - `pyproject.toml`, `uv.lock`
