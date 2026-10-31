@@ -1,5 +1,7 @@
 """Single writer for generated files (ADR-0015): only sync-* branches change them. Designed to run in CI later too."""
 
+import subprocess
+
 import pytest
 
 from aiwf import generated
@@ -39,5 +41,30 @@ def test_stale_reports_out_of_date_generated_files(tmp_path):
     assert msgs == ["docs/board.jsonl differs from the local beads board", "docs/progress.md is out of date with its sources", "docs/adr/README.md is out of date with its sources"]
 
 
+@pytest.mark.parametrize("branch, checked", [("sync-2026-11-01", True), ("main", True), ("wp2-foo", False), ("HEAD", False)])
+def test_freshness_is_checked_only_on_sync_and_main(branch, checked):
+    assert generated.freshness_checked(branch) is checked
+
+
+@pytest.mark.parametrize(
+    "env, expected",
+    [
+        ({"GITHUB_HEAD_REF": "wp2-foo", "GITHUB_REF_NAME": "19/merge"}, "wp2-foo"),
+        ({"GITHUB_HEAD_REF": "", "GITHUB_REF_NAME": "main"}, "main"),
+        ({}, "local-branch"),
+    ],
+)
+def test_current_branch_prefers_actions_env_then_git(monkeypatch, env, expected):
+    for k in ("GITHUB_HEAD_REF", "GITHUB_REF_NAME"):
+        monkeypatch.delenv(k, raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(generated, "_git", lambda root, *a: subprocess.CompletedProcess(a, 0, "local-branch\n", ""))
+    assert generated.current_branch() == expected
+
+
 def test_repo_generated_files_are_up_to_date():
+    branch = generated.current_branch()
+    if not generated.freshness_checked(branch):
+        pytest.skip(f"{branch}: generated files are checked fresh only on sync-* and main (ADR-0015)")
     assert generated.stale() == []

@@ -3,7 +3,7 @@
 `docs/progress.md`, `docs/board.jsonl`, the ADR index and `docs/diagrams.md` are written only by the orchestrator, in a
 serial sync PR on a `sync-*` branch after each merge batch. Track PRs change only sources (ADR files, `.mmd` files).
 `check-branch` fails when another branch changes a generated file; `stale` reports generated files out of date with
-their sources. Both run locally today and are meant to run in CI later.
+their sources and is checked only on sync-* branches and main. Both run locally and in CI.
 """
 
 from __future__ import annotations
@@ -17,11 +17,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 GENERATED = ("docs/progress.md", "docs/board.jsonl", "docs/adr/README.md", "docs/diagrams.md")
 SYNC_PREFIX = "sync-"
+MAIN = "main"
 MARKER = "<!-- BEGIN generated:"
 
 
 def is_sync_branch(branch: str) -> bool:
     return branch.startswith(SYNC_PREFIX)
+
+
+def freshness_checked(branch: str) -> bool:
+    """Generated files must be fresh only on sync-* branches and main; other branches may not regenerate them (ADR-0015)."""
+    return is_sync_branch(branch) or branch == MAIN
 
 
 def in_force(path: str, base_text: str | None) -> bool:
@@ -41,8 +47,10 @@ def _git(root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, timeout=30)
 
 
-def current_branch(root: Path) -> str:
-    return os.environ.get("GITHUB_HEAD_REF") or _git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+def current_branch(root: Path = ROOT) -> str:
+    """PR head branch in Actions (GITHUB_HEAD_REF), else the pushed ref (GITHUB_REF_NAME), else the local checkout."""
+    env = os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME")
+    return env or _git(root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
 
 
 def check_branch(root: Path = ROOT, base: str = "origin/main", branch: str | None = None) -> list[str] | None:
