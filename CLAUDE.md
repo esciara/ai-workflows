@@ -8,7 +8,7 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 ## Source of truth
 
 - `docs/spec.md` says **what** to build. `docs/plan.md` says **in which order** and **how we know it works**.
-- The status board is beads (`bd`, ADR-0015); `docs/progress.md` is rendered from it by `scripts/dev/render-progress`. Read `bd list --all` or `docs/progress.md` at the start of every session. Only the orchestrator edits the board and the rendered file; never hand-edit the generated blocks.
+- The status board is beads (`bd`, ADR-0015), exported to `docs/board.jsonl`; `docs/progress.md` is rendered from the export by `scripts/dev/render-progress`. Read `bd list --all` or `docs/progress.md` at the start of every session. Only the orchestrator edits the board and the generated files; never hand-edit generated blocks.
 - If the spec, the plan and the code disagree, stop and ask the maintainer. Never resolve a conflict by guessing.
 - The spec's feature IDs (REV-01, TRI-08, …) link to a reference architecture; ignore those links, the spec is self-contained.
 
@@ -20,15 +20,15 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 - Stop-WPs: WP1, WP4, WP9 and WP12. Before writing code, post a short plan (files, approach, how you'll run the check) and wait for "go" unless the maintainer has said to proceed without asking; after the PR, stop and wait for review.
 - Other WPs: no plan stop. When the review passes and the acceptance test passes, put both in the PR description and continue to the next WP without waiting. The maintainer reviews these PRs in batches and always does the merges.
 - Always stop and ask when a new decision is needed, when `scripts/dev/verify-wp` fails or errors, or when the policy tests (`tests/test_workflow_policy.py`) fail.
-- At the end of every WP, the orchestrator sets the WP bead's `metrics` metadata and re-renders `docs/progress.md`.
+- At the end of every WP, the orchestrator sets the WP bead's `metrics` metadata; the next sync PR re-renders `docs/progress.md`.
 - Keep PRs small. If a WP grows past roughly 600 changed lines, propose splitting it.
-- When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer as a new ADR in `docs/adr/` (number allocated by the orchestrator, copy the template in `docs/adr/README.md`, add it to the index). The new ADR starts as `Proposed`, lists the options considered, and becomes `Accepted` when the maintainer approves it.
+- When a decision is not covered by the spec, list options with a recommendation and ask. Record the answer as a new ADR in `docs/adr/` (number allocated by the orchestrator, copy the template in `docs/adr/README.md`; the index is generated in the sync PR, don't edit it). The new ADR starts as `Proposed`, lists the options considered, and becomes `Accepted` when the maintainer approves it.
 
 ## Roles (parallel tracks, ADR-0015)
 
-- **Orchestrator** (one session, main checkout): assigns WPs to tracks, allocates ADR numbers, owns the merge order and the status board (beads + `docs/progress.md`), and holds `aiwf-merge-slot` while rebasing and merging. ADR numbers are allocated by the orchestrator; a track never picks the next free number itself.
-- **Track agent** (one per WP): works one WP in its own worktree (`git worktree add ../ai-workflows-<slug> -b wp<N>-<slug> origin/main`), claims its bead (`bd update aiwf-wp<N> --claim`), may move only its own bead's status (`in_progress` → `in_review`), and never touches other tracks' files. Shared paths (listed in ADR-0015) are changed only with the orchestrator's go. Everything else on the board, and `docs/progress.md`, belong to the orchestrator.
-- Diagrams: edit `docs/diagrams/<name>.mmd`, then run `scripts/dev/render-diagrams`; never hand-edit the generated blocks in `docs/diagrams.md`.
+- **Orchestrator** (one session, main checkout): assigns WPs to tracks (push model), allocates ADR numbers, owns the merge order and the board, and holds `aiwf-merge-slot` while rebasing and merging. To start a track: `scripts/dev/board-assign aiwf-wp<N>` immediately before spawning its agent, one agent per assignment, in order (the hooks in `.claude/settings.json` then heartbeat the bead while the agent lives and release it when it ends). After each merge batch, opens a serial sync PR on a `sync-*` branch that runs `scripts/dev/render-progress`, `scripts/dev/render-adr-index` and `scripts/dev/render-diagrams`; it is the only writer of `docs/progress.md`, `docs/board.jsonl`, the ADR index and `docs/diagrams.md`. Heeds the SessionStart stale-sync warning.
+- **Track agent** (one per WP, spawned by the orchestrator): works one WP in its own worktree (`git worktree add ../ai-workflows-<slug> -b wp<N>-<slug> origin/main`). Never claims, assigns, unclaims or reclaims beads, and never uses `bd --force` (the orchestrator assigned the bead already; a hook blocks these). May move only its own bead to `in_review`. Changes only sources: its module, tests, prompts, schemas, its ADR file (number from the orchestrator), `docs/diagrams/wp<N>.mmd`; never the generated files (`tests/test_single_writer.py` fails if it does). Never touches other tracks' files; shared paths (ADR-0015) only with the orchestrator's go.
+- Diagrams: edit `docs/diagrams/<name>.mmd`; the orchestrator's sync PR regenerates `docs/diagrams.md`.
 
 ## Layout (target, created in WP0)
 

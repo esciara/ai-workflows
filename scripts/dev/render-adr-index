@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Usage: scripts/dev/render-adr-index [--check]   (regenerates the ADR index in docs/adr/README.md from docs/adr/NNNN-*.md); orchestrator only, in the sync PR (ADR-0015)
+# Exit 0 ok, 1 out of date (--check), 2 error (missing marker or malformed ADR).
+set -euo pipefail
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+py="$root/.venv/bin/python"
+[ -x "$py" ] || py=python3
+PYTHONPATH="$root/scripts${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -c 'import sys; from aiwf.adrindex import main; sys.exit(main(sys.argv[1:]))' "$@"
