@@ -1,0 +1,9 @@
+flowchart TD
+  D["workflow_dispatch on the caller<br/>(test event)"] --> J["notify.yml job send<br/>permissions: {}"]
+  E["WP11b: one of the 5 events<br/>(text + link)"] -.-> J
+  J --> S["aiwf notify --channels<br/>secrets via env only"]
+  S --> SL["Slack incoming webhook<br/>expects 200 ok"]
+  S --> TG["Telegram sendMessage<br/>expects ok + message_id"]
+  SL --> R["AIWF_NOTIFY_RESULT line per message<br/>no secret, no request URL"]
+  TG --> R
+  R --> M["Maintainer clicks link back to GitHub"]

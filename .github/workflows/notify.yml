@@ -1,0 +1,67 @@
+# Reusable: chat notification (WP11a, ADR-0024). Sends one message per channel (Slack incoming webhook, Telegram Bot
+# API) with a link back to GitHub. With no `text`/`url`, it sends the test event: a test message linking to this run,
+# which a caller runs on workflow_dispatch to check its setup. WP11b wires the 5 spec events to it.
+# The job holds no GitHub token scope; the secrets reach only the send step, through env vars (GitHub masks them in
+# logs), and aiwf notify never prints them, the request URLs or the chat ID.
+name: ai-workflows notify
+on:
+  workflow_call:
+    inputs:
+      channels:
+        description: slack, telegram, "slack,telegram" or none (usually the config's `notify`)
+        type: string
+        required: true
+      text:
+        description: One-line message; default is the test event's message
+        type: string
+        default: ''
+      url:
+        description: https link back to GitHub; default is this run
+        type: string
+        default: ''
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: false
+      TELEGRAM_BOT_TOKEN:
+        required: false
+      TELEGRAM_CHAT_ID:
+        required: false
+
+# Least privilege by default (ADR-0017); each job grants what it needs.
+permissions: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - id: python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      # Cached venv, keyed on the dependency file at job.workflow_sha; aiwf itself is an editable install, so its code
+      # always comes from the checkout above (ADR-0019), never from the cache.
+      - id: venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.aiwf-venv
+          key: aiwf-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/pyproject.toml') }}
+      - if: steps.venv.outputs.cache-hit != 'true'
+        run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
+      - run: echo "$HOME/.aiwf-venv/bin" >> "$GITHUB_PATH"
+      - env:
+          CHANNELS: ${{ inputs.channels }}
+          NOTIFY_TEXT: ${{ inputs.text || format('[{0}] ai-workflows test notification - chat alerts work.', github.repository) }}
+          NOTIFY_URL: ${{ inputs.url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+          AIWF_SHA: ${{ job.workflow_sha }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: aiwf notify --channels "$CHANNELS"
