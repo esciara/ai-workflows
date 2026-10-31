@@ -8,6 +8,8 @@ Generated from the beads status board (ADR-0036): the orchestrator updates the b
 | WP0 | Repo bootstrap | — | done | [#2](https://github.com/esciara/ai-workflows/pull/2) | Python 3.12; config read from default branch |
 | WP1 | Shared runtime | WP0 | done | [#7](https://github.com/esciara/ai-workflows/pull/7), [#8](https://github.com/esciara/ai-workflows/pull/8), [#9](https://github.com/esciara/ai-workflows/pull/9) | Agents on base-action (ADR-0012); publish gets `pull-requests: write` (ADR-0013) |
 | WP2 | A · core review | WP1 | done | [#33](https://github.com/esciara/ai-workflows/pull/33), [#37](https://github.com/esciara/ai-workflows/pull/37) | Split WP2a/WP2b; code inline, no file tools, 20-min CI wait ([ADR-0034](adr/0034-workflow-a-agent-inputs-and-ci-gate.md)) |
+| WP2a | context, CI wait, one pass, summary + label | WP1 | done | [#33](https://github.com/esciara/ai-workflows/pull/33) | Agent gets PR code inline, no file tools; 20-min CI wait then human-review ([ADR-0034](adr/0034-workflow-a-agent-inputs-and-ci-gate.md)) |
+| WP2b | 4 passes, verify, severity, step 9 | WP2a | done | [#37](https://github.com/esciara/ai-workflows/pull/37) | 4 parallel passes + verify (refute) pass; re-review marks resolved/still open |
 | WP3 | A · placement + formal review | WP2 | done | [#41](https://github.com/esciara/ai-workflows/pull/41) | Spec reading 'same pattern ≤5 places → inline' (spec.md:97); +650/-39, not split |
 | WP4 | A · fork PRs | WP2 | in progress | | |
 | WP5 | B1 · classify | WP1 | done | [#35](https://github.com/esciara/ai-workflows/pull/35) | Two-pass classifier, candidate search across all issues + version fix range; possible fix = comment link only, B2 confirms ([ADR-0035](adr/0035-workflow-b-classifier-inputs-dedup-and-already-fixed.md)); spec line 128 amended |
@@ -17,6 +19,8 @@ Generated from the beads status board (ADR-0036): the orchestrator updates the b
 | WP9 | B5 · fix loop | WP8 | todo | | |
 | WP10 | B6 · PR into A | WP3, WP9 | todo | | |
 | WP11 | Notifications | WP1 | todo | | |
+| WP11a | Notification senders | WP1 | in progress | | |
+| WP11b | Notification events | WP9, WP11a, WP12 | todo | | |
 | WP12 | Guardrails | WP1 | in progress | | |
 | WP13 | Contributor mode | WP3, WP8 | todo | | |
 | WP14 | Onboarding kit | WP3 | todo | | |

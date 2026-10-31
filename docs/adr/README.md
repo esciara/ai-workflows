@@ -86,4 +86,6 @@ Why: <rationale>
 | [ADR-0041](0041-review-output-consolidated.md) | D41 | Review output: sticky summary comment; GitHub review only when needed (consolidated) | Accepted |
 | [ADR-0042](0042-factory-loop-consolidated.md) | D42 | Factory loop: stop-WPs, test-first acceptance, `verify-wp` reviews the test (consolidated) | Accepted |
 | [ADR-0043](0043-e2e-on-the-playground-consolidated.md) | D43 | e2e on the playground: one e2e caller, routing, single slot, e2e config (consolidated) | Accepted |
+| [ADR-0046](0046-status-views-derived-from-beads.md) | D46 | Status views derived from beads; split WPs get their own plan rows | Accepted |
+| [ADR-0047](0047-docs-consistency-tests-source-vs-source.md) | D47 | Docs consistency tests: source against source only | Accepted |
 <!-- END generated:adr-index -->
