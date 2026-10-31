@@ -1,6 +1,6 @@
 # ADR-0015 · Parallel operating model: beads board, single writer, agent-lifetime claims, merge rules
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D15`
