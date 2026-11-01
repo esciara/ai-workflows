@@ -52,6 +52,9 @@ BUG_LINE = "        self.discount = round_money(self.subtotal() * to_decimal(per
 CRASH_BUG = ("Steps:\n\n```python\nfrom minicart.cart import Cart\ncart = Cart()\ncart.add('A', '15.00')\n"
              "cart.remove('A')\nprint(cart.total())\n```\n\nExpected: 0.00. Actual: `KeyError: 'A'` raised by "
              "`Cart.total`. minicart from main.")
+# Test 3's issue runs in parallel with test 1's: a different report, so the classifier sees no duplicate pair.
+BUDGET_BUG = ("`money.round_money(Decimal('2.675'))` returns 2.67; half-up rounding should give 2.68. minicart from "
+              "main.")
 
 
 @pytest.fixture
@@ -187,7 +190,7 @@ def test_budget_hit_on_triage_escalates_with_ai_budget(e2e_target, tag, opened):
     pg.ensure_label(E2E_BUDGET, "d93f0b", "e2e only: near-zero agent budget (honoured with the playground e2e config only)")
     pg.ensure_label()
     want = [pg.FIXTURE_LABEL, pg.E2E_LABEL, E2E_BUDGET]
-    issue = pg.api(f"repos/{pg.REPO}/issues", f"title=[e2e] WP12b budget hit {tag}", f"body={CRASH_BUG}",
+    issue = pg.api(f"repos/{pg.REPO}/issues", f"title=[e2e] WP12b budget hit {tag}", f"body={BUDGET_BUG}",
                    *[f"labels[]={lb}" for lb in want], method="POST")
     opened.append(issue["number"])
     assert set(want) <= {lb["name"] for lb in issue["labels"]}, issue["labels"]
