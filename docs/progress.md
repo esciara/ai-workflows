@@ -13,17 +13,17 @@ Generated from the beads status board (ADR-0036): the orchestrator updates the b
 | WP3 | A · placement + formal review | WP2 | done | [#41](https://github.com/esciara/ai-workflows/pull/41) | Spec reading 'same pattern ≤5 places → inline' (spec.md:97); +650/-39, not split |
 | WP4 | A · fork PRs | WP2 | done | [#51](https://github.com/esciara/ai-workflows/pull/51), [#52](https://github.com/esciara/ai-workflows/pull/52) | Split gate (#51) / stale-verdict job (#52); ADR-0044 |
 | WP5 | B1 · classify | WP1 | done | [#35](https://github.com/esciara/ai-workflows/pull/35) | Two-pass classifier, candidate search across all issues + version fix range; possible fix = comment link only, B2 confirms ([ADR-0035](adr/0035-workflow-b-classifier-inputs-dedup-and-already-fixed.md)); spec line 128 amended |
-| WP6 | B2 · reproduce | WP5 | todo | | |
+| WP6 | B2 · reproduce | WP5 | in progress | | |
 | WP7 | B2 · reporter silence | WP6 | todo | | |
 | WP8 | B3–B4 · analyse + ask | WP6 | todo | | |
 | WP9 | B5 · fix loop | WP8 | todo | | |
 | WP10 | B6 · PR into A | WP3, WP9 | todo | | |
-| WP11 | Notifications | WP1 | todo | | |
-| WP11a | Notification senders | WP1 | in progress | | |
+| WP11 | Notifications | WP1 | todo | [#56](https://github.com/esciara/ai-workflows/pull/56) | Split WP11a/WP11b; ADR-0024 |
+| WP11a | Notification senders | WP1 | done | [#56](https://github.com/esciara/ai-workflows/pull/56) | |
 | WP11b | Notification events | WP9, WP11a, WP12, WP12b | todo | | |
-| WP12 | Guardrails | WP1 | todo | | |
+| WP12 | Guardrails | WP1 | done | [#53](https://github.com/esciara/ai-workflows/pull/53), [#58](https://github.com/esciara/ai-workflows/pull/58), [#59](https://github.com/esciara/ai-workflows/pull/59) | Split WP12a/WP12b; ADR-0045 (Q1 changed to gate-only); ADR-0049 born here |
 | WP12a | ai: off + ai: error | WP1 | done | [#53](https://github.com/esciara/ai-workflows/pull/53) | ADR-0045; split 12a/12b; 805 lines kept as one PR (orchestrator) |
-| WP12b | Injection reporting + budgets | WP12a | in progress | | |
+| WP12b | Injection reporting + budgets | WP12a | done | | |
 | WP13 | Contributor mode | WP3, WP8 | todo | | |
 | WP14 | Onboarding kit | WP3 | todo | | |
 <!-- END generated:wp-table -->
@@ -41,6 +41,7 @@ Baseline for a later comparison of build loops. One row per finished WP, from th
 | WP3 | 1 merge | 0 | 0 | 0 | Rebased once on docs-only main before merge; ~$0.34 e2e |
 | WP4 | Q1/Q2 decisions, App install, 2 merges | 0 | 0 | 1 (diagram mechanism ADR-0048 sequencing) | Blocked on tester App install on fork org (made public); fork PR 422 fork_collab fixed with maintainer_can_modify=false; ~$0.09 |
 | WP5 | 3 decisions (shared paths, ADR-0035 design, spec amendment) + 1 merge | 0 | 0 (1 design rework before PR) | 2 (worktreeConfig unset, scratchpad file clash) | +1578/-23 kept as one PR (~480 tests). First build (recent-window dedup) rejected by maintainer → reworked to two-pass design. Spec deviation (possible fix not labelled duplicate) approved, spec amended in PR. Agent unset shared extensions.worktreeConfig (restored); PR body clobbered via shared scratchpad pr.md (restored) |
+| WP12 | plan + Q1-Q4, 2 step-backs, 3 test approvals, ~8 merges | 1 (test 2 weak assertion) | 1 (#58) + playground #54, #68 | 2 (stacked playground PR; merge before e2e) | Cancel mechanism built then reverted after maintainer step-back; e2e races from labeled runs; #58 merged before its e2e ran (1 wrong new test) |
 <!-- END generated:metrics -->
 
 ## Milestones
@@ -58,5 +59,8 @@ See [Milestones and test setup in docs/plan.md](plan.md#milestones-and-test-setu
 - 2026-10-31 · WP3 · [#41](https://github.com/esciara/ai-workflows/pull/41) · inline vs general placement, suggestion blocks, one GitHub review, never Approve; runs 41230000010, 41230210904, 41229995981, 41230159289
 - 2026-10-31 · WP5 · [#35](https://github.com/esciara/ai-workflows/pull/35) · bug/feature/question type labels + duplicate with link: playground runs 41227998480, 41227999598, 41227998828, 41227998505, 41228195217; ~$0.019/issue (2 passes)
 - 2026-11-01 · WP4 · [#51](https://github.com/esciara/ai-workflows/pull/51), [#52](https://github.com/esciara/ai-workflows/pull/52) · fork PRs: gate, /review reads fork head as text, stale-verdict job; runs 41238978153, 41239008107, 41239044806
-- 2026-11-01 · WP12a · [#53](https://github.com/esciara/ai-workflows/pull/53) · ai: off gate + cancel in-flight (off.yml), ai: error + sticky comment on crash; runs 41334476739, 41334598304, 41334470208, 41334481822
+- 2026-11-01 · WP11a · [#56](https://github.com/esciara/ai-workflows/pull/56) · Slack + Telegram senders, notify.yml; dispatch test sends one message per channel with run link; run 41345226720
+- 2026-11-01 · WP12a revert · [#58](https://github.com/esciara/ai-workflows/pull/58) · cancel-on-ai:off removed (labeled trigger on every label event; over-engineering)
+- 2026-11-01 · WP12a · [#53](https://github.com/esciara/ai-workflows/pull/53) · ai: off gate + pre-write re-check, ai: error + sticky comment on crash; runs 41334470208, 41334481822
+- 2026-11-01 · WP12b · [#59](https://github.com/esciara/ai-workflows/pull/59) · injection reported not obeyed (issue+PR), USD budgets, budget hit = escalate + ai: budget; runs 41355561267, 41355570462, 41355561706
 <!-- END generated:log -->
