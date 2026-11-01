@@ -224,7 +224,7 @@ def test_every_agent_step_has_a_time_and_turn_limit():
         assert isinstance(turns, int) and turns > 0, where
         minutes = step.get("timeout-minutes")
         assert isinstance(minutes, int) and 0 < minutes < job["timeout-minutes"], where  # a step timeout fails
-    assert seen >= 4  # extract, classify, review pass, verify
+    assert seen >= 5  # extract, classify, review pass, verify, reproduce
     assert yaml.safe_load(AGENT_ACTION_YML.read_text())["inputs"]["max-turns"]["required"] is True
     assert "--max-turns $MAX_TURNS" in _args_run()
 
@@ -242,7 +242,9 @@ def test_shared_agent_action_reads_no_github_token_and_no_secret():
     assert not policy.TOKEN_RE.search(text) and not policy.SECRET_RE.search(text)
     steps = yaml.safe_load(text)["runs"]["steps"]
     agent = [s for s in steps if str(s.get("uses", "")).startswith(policy.AGENT_ACTION + "/base-action@")]
-    assert len(agent) == 1 and set(agent[0]["with"]) == {"claude_code_oauth_token", "prompt_file", "claude_args"}
+    want = {"claude_code_oauth_token", "prompt_file", "claude_args", "settings"}
+    assert len(agent) == 1 and set(agent[0]["with"]) == want
+    assert agent[0]["with"]["settings"] == "${{ inputs.sandbox-settings }}"  # nothing else reaches the user settings
 
 
 @pytest.mark.parametrize("path", sorted((ROOT / "schema").glob("*.json")), ids=lambda p: p.name)
@@ -270,6 +272,59 @@ def test_shared_agent_action_builds_the_claude_args(tmp_path):
         subprocess.run(["bash", "-c", run], env=env, check=True)
         want = """claude_args=--max-turns 3 --tools StructuredOutput --json-schema '{"type":"object","description":"a $b"}'"""
         assert out.read_text().splitlines()[-1] == want + tail
+
+
+def _sandbox(tmp_path, **sandbox) -> str:
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"sandbox": sandbox}))
+    return str(path)
+
+
+SAFE = {"enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False}
+
+
+def test_shared_agent_action_gives_bash_only_with_a_safe_sandbox(tmp_path):
+    (tmp_path / "s.json").write_text("{}")
+    out = tmp_path / "out"
+    run = _args_run()
+    base = {**os.environ, "SCHEMA_FILE": str(tmp_path / "s.json"), "MAX_TURNS": "3", "MODEL": "", "GITHUB_OUTPUT": str(out)}
+    env = {**base, "SANDBOX_SETTINGS": _sandbox(tmp_path, **SAFE)}
+    subprocess.run(["bash", "-c", run], env=env, check=True)
+    want = "claude_args=--max-turns 3 --tools Bash,StructuredOutput --allowedTools Bash --setting-sources user --json-schema '{}'"
+    assert out.read_text().splitlines()[-1] == want
+    out.unlink()
+    for unsafe in ({**SAFE, "enabled": False}, {**SAFE, "failIfUnavailable": False},
+                   {**SAFE, "allowUnsandboxedCommands": True}, {"enabled": True}):
+        env = {**base, "SANDBOX_SETTINGS": _sandbox(tmp_path, **unsafe)}
+        assert subprocess.run(["bash", "-c", run], env=env, capture_output=True).returncode != 0, unsafe
+        assert not out.exists()
+
+
+# --- command-running agents (ADR-0037): sandbox, env scrub, settings lockdown, token check ----------------------------
+
+
+def test_command_running_agents_are_sandboxed_and_scrubbed():
+    seen = 0
+    for path in REAL:
+        doc = policy.load_workflow(path.read_text())
+        for name, job in (doc or {}).get("jobs", {}).items():
+            steps = job.get("steps", [])
+            agents = [s for s in steps if str(s.get("uses", "")) == AGENT_USES]
+            if not any((s.get("with") or {}).get("sandbox-settings") for s in agents):
+                continue
+            seen += 1
+            where = f"{path.relative_to(ROOT)}:{name}"
+            [agent] = agents
+            assert job.get("env", {}).get("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB") == "1", where
+            run = "\n".join(str(s.get("run", "")) for s in steps)
+            assert "bubblewrap socat" in run and "apparmor_restrict_unprivileged_userns=0" in run, where
+            assert "failIfUnavailable: true" in run and "allowUnsandboxedCommands: false" in run, where
+            setup = next(i for i, s in enumerate(steps) if "bubblewrap" in str(s.get("run", "")))
+            assert setup < steps.index(agent) and "if" not in steps[setup], f"{where}: sandbox setup runs first, always"
+            check = next(s for s in steps if s.get("name") == "Token check")
+            assert steps.index(check) > steps.index(agent), where
+            assert "token-check.outcome == 'success'" in job["outputs"]["json"], f"{where}: answer only after the check"
+    assert seen >= 1  # the reproducer (B2); the implementer (B5) joins in WP9
 
 
 # --- verdict check (ADR-0053, states ADR-0055): check-run plus a `verdict` commit status of the same name -----------

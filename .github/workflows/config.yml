@@ -1,7 +1,7 @@
 # Reusable: load and validate the caller repo's .github/ai-workflows.yml.
 # The config is read from the repo's default branch via the API, never from a PR head.
 # On issue_comment it also parses the comment, once per run (ADR-0005): `command` is the accepted command from a fixed
-# list (review, retriage, fix, no-fix) or ''. The comment is read from $GITHUB_EVENT_PATH as data.
+# list (review, retriage, reproduce, fix, no-fix) or ''. The comment is read from $GITHUB_EVENT_PATH as data.
 name: ai-workflows config
 on:
   workflow_call:

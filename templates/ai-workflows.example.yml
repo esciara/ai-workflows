@@ -4,15 +4,16 @@
 enabled: true                   # repo kill switch: false stops every run
 maintainers: [<OWNER>]          # B4 questions, assignments, pings, allowed command authors
 default_branch: main
-setup: npm ci                   # how an agent installs the project in its sandbox; not used yet, WP6
-test: npm test                  # B2 repro and B5 exit condition; not used yet, WP6
+setup: npm ci                   # how an agent installs the project in its sandbox
+test: npm test                  # B2 repro and B5 exit condition
+allowed_domains: [registry.npmjs.org]   # sandbox egress for setup/test (B2, B5); default [] = no network
 risk_paths:                     # unmatched paths are low risk
   high: ["src/auth/**", "migrations/**", ".github/**", "infra/**"]
   medium: []
 limits:
   human_review_lines: 400
   fix_rounds: 3                 # not used yet, WP9
-  info_requests: 2              # not used yet, WP6
+  info_requests: 2              # B2 questions to the reporter before triage: needs-human
   triage_per_author_per_day: 3  # B1 runs per outside author (not in maintainers) per 24 hours; 0 = never (ADR-0058)
   triage_per_day: 20            # B1 runs for all outside authors per 24 hours; 0 = never (ADR-0058)
 reporter_silence_days: {ping: 4, stale: 14, close: 21}   # must be increasing; not used yet, WP7
