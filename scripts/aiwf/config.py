@@ -166,10 +166,15 @@ def summary(cfg: dict[str, Any], source: str) -> str:
     return "\n".join(lines)
 
 
-def github_outputs(cfg: dict[str, Any]) -> dict[str, str]:
+def github_outputs(cfg: dict[str, Any], item_off: bool = False, e2e: bool = False) -> dict[str, str]:
+    """`item_off`: the event's issue or PR has `ai: off`, so nothing runs for it (ADR-0045). `e2e`: the playground's
+    e2e config is in use; only then do the workflows honour the e2e crash label (ADR-0045). A repo's own config cannot
+    set the key: the schema allows no unknown keys."""
+    enabled = cfg["enabled"] and not item_off
     return {
-        "config": json.dumps(cfg, separators=(",", ":"), sort_keys=True),
-        "enabled": json.dumps(cfg["enabled"]),
-        "review": json.dumps(cfg["enabled"] and cfg["workflows"]["review"]),
-        "triage": json.dumps(cfg["enabled"] and cfg["workflows"]["triage"]),
+        "config": json.dumps({**cfg, "e2e": True} if e2e else cfg, separators=(",", ":"), sort_keys=True),
+        "enabled": json.dumps(enabled),
+        "review": json.dumps(enabled and cfg["workflows"]["review"]),
+        "triage": json.dumps(enabled and cfg["workflows"]["triage"]),
+        "item_off": json.dumps(item_off),
     }

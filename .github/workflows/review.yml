@@ -93,6 +93,9 @@ jobs:
     outputs:
       facts: ${{ steps.ctx.outputs.facts }}
     steps:
+      # e2e only (ADR-0045): with the playground's e2e config, the label `e2e-crash` forces a crash here.
+      - if: fromJSON(inputs.config).e2e && (contains(github.event.issue.labels.*.name, 'e2e-crash') || contains(github.event.pull_request.labels.*.name, 'e2e-crash'))
+        run: echo "::error::forced crash (label e2e-crash, e2e config only)" && exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
@@ -300,3 +303,39 @@ jobs:
           AIWF_SHA: ${{ job.workflow_sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: aiwf review-publish --repo "$REPO" --pr "$PR" --run-url "$RUN_URL" --passes-dir passes
+
+  # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
+  # job was cancelled (`ai: off`) and when nothing failed. The reason names the failed jobs only.
+  failed:
+    needs: [gate, start, context, pass, verify, publish]
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write  # labelling and commenting on a PR (403 with issues: write alone)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - id: python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - id: venv
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.aiwf-venv
+          key: aiwf-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/pyproject.toml') }}
+      - if: steps.venv.outputs.cache-hit != 'true'
+        run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ITEM: ${{ needs.gate.outputs.pr || github.event.pull_request.number || github.event.issue.number }}
+          AIWF_NEEDS: ${{ toJSON(needs) }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: ~/.aiwf-venv/bin/aiwf report-error --repo "$REPO" --issue "$ITEM" --run-url "$RUN_URL"

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from aiwf import config, publish, review
+from aiwf import config, guard, publish, review
 from aiwf import review_placement as placement
 
 MARKER = "<!-- ai-review:summary v1 -->"
@@ -384,6 +384,10 @@ def read_json(path: Path) -> Any:
 
 
 def cmd_review_publish(args: argparse.Namespace) -> int:
+    if guard.item_off(config.run_gh, args.repo, args.pr):  # set after the config gate (ADR-0045)
+        print(f"::notice title=ai: off::#{args.pr} has '{guard.OFF_LABEL}': nothing published")
+        guard.remove_label(config.run_gh, args.repo, args.pr, PENDING)
+        return 0
     facts = json.loads(os.environ.get("FACTS") or "null")
     if not isinstance(facts, dict):
         print("::error title=No review context::the context job produced no facts")
