@@ -1,7 +1,7 @@
 """WP11a acceptance test. Done when: a `workflow_dispatch` test event sends one message with a working link, on both
 channels (Slack and Telegram).
 
-Runs against the playground (AIWF_E2E=1, AIWF_E2E_SLOT=1): the maintainer dispatches the playground's caller-e2e.yml,
+Runs against the playground (AIWF_E2E=1, AIWF_E2E_SLOT=1): the maintainer dispatches the playground's notify-e2e.yml,
 whose `notify-test` job calls notify.yml at the ref under test (`e2e-target`, ADR-0028) with both channels. The notify
 step prints one `AIWF_NOTIFY_RESULT {json}` line per message sent, holding what the provider answered (Slack: HTTP
 status and body; Telegram: `ok` and `message_id`, plus the links Telegram parsed out of the message it stored). The
@@ -21,14 +21,14 @@ import pytest
 
 import playground as pg
 
-E2E_WORKFLOW = "AI workflows (e2e)"  # name of the playground's caller-e2e.yml
+E2E_WORKFLOW = "AI workflows notify (e2e)"  # name of the playground's notify-e2e.yml (dispatch-only)
 NOTIFY_JOB = "notify-test / send"
 RESULT_PREFIX = "AIWF_NOTIFY_RESULT "
 CHANNELS = {"slack", "telegram"}
 
 
 def dispatch_e2e() -> int:
-    """Dispatch caller-e2e.yml on the playground's default branch as the maintainer; returns the run ID."""
+    """Dispatch notify-e2e.yml on the playground's default branch as the maintainer; returns the run ID."""
     wf = next(w for w in pg.api(f"repos/{pg.REPO}/actions/workflows")["workflows"] if w["name"] == E2E_WORKFLOW)
     out = pg.gh(["api", "-X", "POST", f"repos/{pg.REPO}/actions/workflows/{wf['id']}/dispatches",
                  "-f", "ref=main", "-F", "return_run_details=true"], as_maintainer=True)  # the App has no actions write
