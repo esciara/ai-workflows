@@ -1,6 +1,6 @@
 # ADR-0042 · Factory loop: stop-WPs, test-first acceptance, `verify-wp` reviews the test (consolidated)
 
-- Status: Accepted
+- Status: Superseded by ADR-0049
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D42`
