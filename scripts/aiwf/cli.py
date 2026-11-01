@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 import aiwf
-from aiwf import commands, config, labels, publish
+from aiwf import commands, config, guard, labels, publish
 
 
 def write_outputs(path: str, outputs: dict[str, str]) -> None:
@@ -24,6 +24,17 @@ def write_outputs(path: str, outputs: dict[str, str]) -> None:
             if "\n" in value:
                 raise ValueError(f"output {key} must be single-line")
             fh.write(f"{key}={value}\n")
+
+
+def read_event() -> dict:
+    """The triggering event's payload ($GITHUB_EVENT_PATH), or {} outside Actions."""
+    path = os.environ.get("GITHUB_EVENT_PATH")
+    try:
+        with open(path, encoding="utf-8") as fh:  # type: ignore[arg-type]
+            payload = json.load(fh)
+    except (TypeError, OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def cmd_config(args: argparse.Namespace) -> int:
@@ -47,9 +58,12 @@ def cmd_config(args: argparse.Namespace) -> int:
         print(f"::error title=Cannot read config::{exc}", file=sys.stderr)
         return 1
     print(config.summary(cfg, source))
+    item_off = guard.OFF_LABEL in guard.event_labels(read_event())
+    if item_off:
+        print(f"::notice title=ai: off::the item has '{guard.OFF_LABEL}': every workflow skips it (ADR-0045)")
     out = args.github_output or os.environ.get("GITHUB_OUTPUT")
     if out:
-        write_outputs(out, config.github_outputs(cfg))
+        write_outputs(out, config.github_outputs(cfg, item_off=item_off, e2e=bool(args.e2e_config)))
     return 0
 
 
@@ -79,6 +93,9 @@ def cmd_labels_sync(args: argparse.Namespace) -> int:
 
 
 def cmd_publish(args: argparse.Namespace) -> int:
+    if guard.item_off(config.run_gh, args.repo, args.issue):  # set after the config gate: write nothing (ADR-0045)
+        print(f"::notice title=ai: off::#{args.issue} has '{guard.OFF_LABEL}': nothing published")
+        return 0
     ok = publish.publish(args.kind, os.environ.get("AGENT_JSON", ""), args.repo, args.issue, args.run_url, config.run_gh)
     return 0 if ok else 1
 

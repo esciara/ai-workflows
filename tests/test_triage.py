@@ -477,3 +477,9 @@ def test_cli_registers_triage_commands():
         names |= set(sub.choices)
     assert {"triage-issue", "triage-candidates", "publish"} <= names
     assert "classifier" in publish.publishers()
+
+
+def test_publish_clears_a_stale_ai_error():
+    gh = FakeGh(labels=["ai: error"])
+    run(gh)
+    assert any(c[3].endswith("/labels/ai%3A%20error") for c in gh.writes("DELETE"))
