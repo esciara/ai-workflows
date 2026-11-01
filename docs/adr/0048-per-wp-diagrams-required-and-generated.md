@@ -1,6 +1,6 @@
 # ADR-0048 · Per-WP diagrams: required by the definition of done, sections generated
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D48`

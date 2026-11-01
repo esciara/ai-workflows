@@ -80,13 +80,16 @@ Why: <rationale>
 | [ADR-0034](0034-workflow-a-agent-inputs-and-ci-gate.md) | D34 | Workflow A agent inputs and CI gate | Accepted |
 | [ADR-0035](0035-workflow-b-classifier-inputs-dedup-and-already-fixed.md) | D35 | Workflow B classifier inputs, dedup and already-fixed check | Accepted |
 | [ADR-0036](0036-parallel-operating-model-consolidated.md) | D36 | Parallel operating model (consolidated) | Accepted |
+| [ADR-0037](0037-command-running-agents-sandbox-scrub-and-trusted-gate.md) | D37 | Command-running agents: Claude Code sandbox, env scrub and a trusted-author gate | Accepted |
 | [ADR-0038](0038-github-token-permissions-consolidated.md) | D38 | GitHub token permissions: top-level `{}`, caller grants per job, called jobs narrow (consolidated) | Accepted |
 | [ADR-0039](0039-agent-jobs-consolidated.md) | D39 | Agent jobs: own job, `base-action`, no token scope, OAuth secret only (consolidated) | Accepted |
 | [ADR-0040](0040-code-ref-and-pinning-consolidated.md) | D40 | Code ref follows the workflow SHA; own reusable refs pinned to a tagged SHA from WP14 (consolidated) | Accepted |
 | [ADR-0041](0041-review-output-consolidated.md) | D41 | Review output: sticky summary comment; GitHub review only when needed (consolidated) | Accepted |
 | [ADR-0042](0042-factory-loop-consolidated.md) | D42 | Factory loop: stop-WPs, test-first acceptance, `verify-wp` reviews the test (consolidated) | Accepted |
 | [ADR-0043](0043-e2e-on-the-playground-consolidated.md) | D43 | e2e on the playground: one e2e caller, routing, single slot, e2e config (consolidated) | Accepted |
+| [ADR-0044](0044-fork-prs-review-gate-and-stale-verdict.md) | D44 | Fork PRs: a review gate, and a pull_request_target job that clears a stale verdict | Proposed |
+| [ADR-0045](0045-guardrails-ai-off-error-reporting-budgets-e2e-crash.md) | D45 | Guardrails: `ai: off` gate and cancel, `ai: error` reporting, e2e crash label, budgets | Proposed |
 | [ADR-0046](0046-status-views-derived-from-beads.md) | D46 | Status views derived from beads; split WPs get their own plan rows | Accepted |
 | [ADR-0047](0047-docs-consistency-tests-source-vs-source.md) | D47 | Docs consistency tests: source against source only | Accepted |
-| [ADR-0048](0048-per-wp-diagrams-required-and-generated.md) | D48 | Per-WP diagrams: required by the definition of done, sections generated | Proposed |
+| [ADR-0048](0048-per-wp-diagrams-required-and-generated.md) | D48 | Per-WP diagrams: required by the definition of done, sections generated | Accepted |
 <!-- END generated:adr-index -->
