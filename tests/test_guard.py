@@ -125,7 +125,7 @@ LIMITS = {"agent_budget_usd": 1, "run_budget_usd": 5, "agent_minutes": 10}
 @pytest.mark.parametrize("usage,want", [
     ({}, ""),
     ({"extract": None, "classify": {"cost_usd": 0.4, "subtype": "success", "timed_out": False}}, ""),
-    ({"extract": {"cost_usd": 0.01, "subtype": "error_max_budget_usd"}}, "agent `extract` hit its cost budget ($1)"),
+    ({"extract": {"cost_usd": 0.01, "subtype": "error_max_budget_usd"}}, "agent `extract` hit its cost budget"),
     ({"classify": {"timed_out": True}}, "agent `classify` hit its time budget (10 min)"),
     ({"a": {"cost_usd": 3.0}, "b": {"cost_usd": 2.5}, "c": {"cost_usd": "9"}}, "over the run budget ($5)"),
     ({"a": {"cost_usd": 3.0}, "b": {"cost_usd": 2.0}}, ""),  # exactly at the run budget

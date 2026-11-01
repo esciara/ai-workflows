@@ -99,7 +99,7 @@ def budget_hit(usage: dict[str, Any], limits: dict[str, Any]) -> str:
     agents = {k: v for k, v in usage.items() if isinstance(v, dict)}
     for name in sorted(agents):
         if agents[name].get("subtype") == BUDGET_SUBTYPE:
-            return f"agent `{name}` hit its cost budget (${limits.get('agent_budget_usd')})"
+            return f"agent `{name}` hit its cost budget"  # the cap may differ from the config (e2e)
         if agents[name].get("timed_out") is True:
             return f"agent `{name}` hit its time budget ({limits.get('agent_minutes')} min)"
     total = sum(v["cost_usd"] for v in agents.values() if isinstance(v.get("cost_usd"), (int, float)))
