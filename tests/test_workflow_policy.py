@@ -170,3 +170,39 @@ def test_every_agent_step_has_a_cost_and_time_budget():
                 assert "AGENT_BUDGET" in job.get("env", {}), where
                 assert step.get("timeout-minutes") == "${{ fromJSON(inputs.config).limits.agent_minutes }}", where
     assert seen >= 5  # ping, extract, classify, review pass, verify
+
+
+# --- command-running agents (ADR-0037): sandbox, env scrub, settings lockdown, token check ----------------------------
+
+
+def _tools(claude_args: str) -> str:
+    args = claude_args.split()
+    return args[args.index("--tools") + 1] if "--tools" in args else ""
+
+
+def test_command_running_agents_are_sandboxed_and_scrubbed():
+    seen = 0
+    for path in REAL:
+        doc = policy.load_workflow(path.read_text())
+        for name, job in (doc or {}).get("jobs", {}).items():
+            steps = job.get("steps", [])
+            agents = [s for s in steps if "anthropics/claude-code-action" in str(s.get("uses", ""))]
+            tools = [_tools(s["with"].get("claude_args", "")) for s in agents]
+            if not any("Bash" in t.split(",") for t in tools):
+                continue
+            seen += 1
+            where = f"{path.relative_to(ROOT)}:{name}"
+            assert tools == ["Bash,StructuredOutput"], f"{where}: tools must be exactly Bash,StructuredOutput"
+            [agent] = agents
+            assert "--setting-sources user" in agent["with"]["claude_args"], where
+            assert job.get("env", {}).get("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB") == "1", where
+            run = "\n".join(str(s.get("run", "")) for s in steps)
+            assert "bubblewrap socat" in run and "apparmor_restrict_unprivileged_userns=0" in run, where
+            assert "failIfUnavailable: true" in run and "allowUnsandboxedCommands: false" in run, where
+            assert agent["with"].get("settings"), f"{where}: sandbox settings passed to base-action"
+            setup = next(i for i, s in enumerate(steps) if "bubblewrap" in str(s.get("run", "")))
+            assert setup < steps.index(agent) and "if" not in steps[setup], f"{where}: sandbox setup runs first, always"
+            check = next(s for s in steps if s.get("name") == "Token check")
+            assert steps.index(check) > steps.index(agent), where
+            assert "token-check.outcome == 'success'" in job["outputs"]["json"], f"{where}: answer only after the check"
+    assert seen >= 1  # the reproducer (B2); the implementer (B5) joins in WP9

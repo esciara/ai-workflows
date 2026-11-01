@@ -1,0 +1,17 @@
+flowchart TD
+  B1["B1 publish: a bug, not a duplicate,<br/>not low confidence"] --> T{"Author trusted?<br/>in maintainers and write or admin"}
+  T -- no --> W["'triage: needs-human'<br/>note: waits for '/reproduce'"]
+  T -- yes --> CX
+  M["Maintainer '/reproduce'"] --> CX
+  R["Reporter's reply while<br/>'triage: needs-info'"] --> CX
+  CX["Repro-context job, read-only token<br/>issue, relevant comments, commands,<br/>default-branch code"] -- artifact --> AG["Reproducer agent job, no GitHub token<br/>Bash + StructuredOutput only, env scrubbed,<br/>sandbox: writes in work/, egress allowlist"]
+  AG --> TC{"Token check<br/>token in answer or transcript?"}
+  TC -- yes --> E["Job fails: 'ai: error'"]
+  TC -- no, JSON --> V{"Orchestrator<br/>matches the reproducer schema?"}
+  V -- no --> E
+  V -- yes --> P{"Reproduced?"}
+  P -- yes --> OK["'triage: reproduced'<br/>one comment: test, output, commands"]
+  P -- no --> C{"Requests since last stop<br/>under info_requests?"}
+  C -- yes --> NI["'triage: needs-info'<br/>comment to @author, 2 to 4 questions"]
+  C -- no --> NH["'triage: needs-human'<br/>stop note"]
+  NI -.-> R

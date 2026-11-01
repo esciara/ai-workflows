@@ -11,6 +11,7 @@ COMMANDS: dict[str, str | None] = {
     "ping": None,
     "review": None,
     "retriage": None,
+    "reproduce": None,
     "fix": "optional",
     "no-fix": "required",
 }

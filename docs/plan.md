@@ -37,7 +37,7 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 | WP3 | A · placement + formal review | WP2 | Inline vs general rule, `suggestion` blocks, one GitHub review, never Approve | Seeded-bug PR gets an inline comment and Request changes; a nit on a low-risk path stays in the summary |
 | WP4 | A · fork PRs | WP2 | `fork_prs: on-command` handling | Fork PR is not reviewed until a maintainer comments `/review` |
 | WP5 | B1 · classify | WP1 | Classifier agent, dedup, already-fixed check | 3 test issues get `type: bug`, `feature`, `question`; a duplicate gets `triage: duplicate` |
-| WP6 | B2 · reproduce | WP5 | Sandboxed reproducer, repro test stored, needs-info comment, reply restarts B2 | Clear bug → `triage: reproduced` + test; vague bug → `triage: needs-info`; the reporter's reply reruns it |
+| WP6 | B2 · reproduce | WP5 | Sandboxed reproducer, repro test stored, needs-info comment, reply restarts B2 | Clear bug → `triage: reproduced` + test; vague bug → `triage: needs-info`; after `/reproduce`, the reporter's reply reruns it |
 | WP7 | B2 · reporter silence | WP6 | Day-4 ping job, `actions/stale` workflow, `keep-open` | With days shortened in config, ping, stale and close happen in order; a reply resets them |
 | WP8 | B3–B4 · analyse + ask | WP6 | Root-cause report, `/fix`, `/fix <guidance>`, `/no-fix` | Reproduced bug gets an analysis comment; each command does what the spec says |
 | WP9 | B5 · fix loop | WP8 | Implementer + adversarial reviewer, 3-round cap, `ai-fix/*` branch, escalation | Seeded bug fixed in ≤ 3 rounds; a forced failure gives a draft PR, `fix: needs-maintainer`, assignment and review request |

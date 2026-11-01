@@ -17,6 +17,13 @@
     "default_branch": {"type": "string", "minLength": 1, "default": "main"},
     "setup": {"type": "string", "minLength": 1, "description": "How an agent installs the project in its sandbox."},
     "test": {"type": "string", "minLength": 1, "description": "B2 repro and B5 exit condition."},
+    "allowed_domains": {
+      "type": "array",
+      "uniqueItems": true,
+      "default": [],
+      "items": {"type": "string", "pattern": "^(\\*\\.)?[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+$"},
+      "description": "Egress allowlist for agents that run project commands (B2, B5): the package registries `setup` and `test` need, e.g. pypi.org, files.pythonhosted.org, registry.npmjs.org (ADR-0037). Empty: no network."
+    },
     "risk_paths": {
       "type": "object",
       "additionalProperties": false,

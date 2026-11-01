@@ -134,6 +134,8 @@ The two highlighted steps are the only places the flow waits on a person; every 
 3. **Reproduced:** store the test and its output on the session record, label `triage: reproduced`, go to B3.
 4. **Not reproduced:** comment to the reporter (`@author`) with what was tried, the environment used, what happened, and two to four specific questions; label `triage: needs-info`. A reply from the reporter restarts B2. After 2 unsuccessful requests (answers that still give no repro), label `triage: needs-human` and stop.
 
+**Who starts B2 (ADR-0037).** B2 runs code, so it starts on its own only when the issue's author is trusted (in `maintainers`, with write or admin permission). On anyone else's bug, B1 stops with `triage: needs-human` and a note until a maintainer comments `/reproduce`, which starts or restarts B2; after that, a reply from the reporter restarts B2 as above.
+
 **Reporter silence.** Counted from the agent's last `triage: needs-info` comment. Any reply from the reporter stops the clock, removes `triage: no-response` and `stale`, and restarts B2. A maintainer can exempt an issue with `keep-open`.
 
 | Day | What happens | Done by |
@@ -228,7 +230,7 @@ jobs:
 | `ai: off` | A maintainer | Kill switch on that issue or PR ([CTL-08](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) |
 | `ai: budget` | A, B | A run hit its budget and stopped; a person takes over (with `ai-review: human-review` or `triage: needs-human`) |
 
-**Commands** — accepted only from users with write or admin permission: `/review` (A), `/retriage`, `/fix [guidance]`, `/no-fix <reason>` (B).
+**Commands** — accepted only from users with write or admin permission: `/review` (A), `/retriage`, `/reproduce`, `/fix [guidance]`, `/no-fix <reason>` (B).
 
 **Runtime.** Every AI step runs Claude Code inside GitHub Actions through [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action), authenticated with the maintainer's Claude subscription, not an API key: run `claude setup-token` once on your machine and store the token as the repo secret `CLAUDE_CODE_OAUTH_TOKEN`. Each role above is a separate Claude Code run with its own allowed-tools list. Runs draw on the subscription's usage limits, shared with your own use, so the per-run budgets in Guardrails matter.
 

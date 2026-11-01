@@ -281,10 +281,19 @@ def test_fix_refs():
 
 # --- publish --------------------------------------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def trusted_config(monkeypatch):
+    """B1 tests run as a trusted author's issue (the B2 gate has its own tests below)."""
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"maintainers": ["esciara"]}))
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+
+
 class FakeGh:
-    def __init__(self, issues=None, commits=None, compare="ahead", labels=(), comments=(), pulls=None):
+    def __init__(self, issues=None, commits=None, compare="ahead", labels=(), comments=(), pulls=None,
+                 author="esciara", permission="write"):
         self.pulls = pulls or {}
-        self.issues = {1: issue(1), **(issues or {})}
+        self.issues = {1: {**issue(1), "user": {"login": author}}, **(issues or {})}
+        self.permission = permission
         self.issues[1]["labels"] = [{"name": n} for n in labels]
         self.commits = commits or {}
         self.compare = compare
@@ -295,6 +304,8 @@ class FakeGh:
         self.calls.append(args)
         if args[:2] == ["api", f"repos/{REPO}"]:
             return json.dumps({"default_branch": "main"})
+        if "/collaborators/" in args[1]:
+            return self.permission
         if len(args) == 2 and args[1].startswith(f"repos/{REPO}/issues/"):
             n = int(args[1].rsplit("/", 1)[1])
             if n not in self.issues:

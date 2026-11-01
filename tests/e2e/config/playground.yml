@@ -3,8 +3,9 @@
 # A WP changes it on its own branch (e.g. `triage: true` for WP5); no playground PR. Normal runs never read it.
 maintainers: [esciara]
 default_branch: main
-setup: pip install -e '.[test]'
-test: pytest
+setup: python3 -m venv .venv && .venv/bin/pip install -e '.[test]'
+test: .venv/bin/pytest
+allowed_domains: [pypi.org, files.pythonhosted.org]  # B2's sandbox egress (ADR-0037)
 risk_paths:
   high: [".github/**"]
 workflows:
