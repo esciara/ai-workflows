@@ -283,10 +283,19 @@ def test_fix_refs():
 
 # --- publish --------------------------------------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def trusted_config(monkeypatch):
+    """B1 tests run as a trusted author's issue (the B2 gate has its own tests below)."""
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"maintainers": ["esciara"]}))
+    monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+
+
 class FakeGh:
-    def __init__(self, issues=None, commits=None, compare="ahead", labels=(), comments=(), pulls=None):
+    def __init__(self, issues=None, commits=None, compare="ahead", labels=(), comments=(), pulls=None,
+                 author="esciara", permission="write"):
         self.pulls = pulls or {}
-        self.issues = {1: issue(1), **(issues or {})}
+        self.issues = {1: {**issue(1), "user": {"login": author}}, **(issues or {})}
+        self.permission = permission
         self.issues[1]["labels"] = [{"name": n} for n in labels]
         self.commits = commits or {}
         self.compare = compare
@@ -297,6 +306,8 @@ class FakeGh:
         self.calls.append(args)
         if args[:2] == ["api", f"repos/{REPO}"]:
             return json.dumps({"default_branch": "main"})
+        if "/collaborators/" in args[1]:
+            return self.permission
         if len(args) == 2 and args[1].startswith(f"repos/{REPO}/issues/"):
             n = int(args[1].rsplit("/", 1)[1])
             if n not in self.issues:
@@ -519,7 +530,9 @@ def alert_outputs(monkeypatch, tmp_path, gh, **data):
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
     run(gh, **data)
-    return dict(line.split("=", 1) for line in out.read_text().splitlines())
+    got = dict(line.split("=", 1) for line in out.read_text().splitlines())
+    got.pop("reproduce", None)  # B2's hand-on (WP6), tested in test_reproduce.py
+    return got
 
 
 @pytest.mark.parametrize("kind", ["bug", "feature", "question"])
@@ -563,7 +576,8 @@ def test_triage_workflow_sends_the_alert_for_new_issues_only():
         assert cond in job["if"], cond
     assert "always()" not in job["if"]
     assert jobs["publish"]["outputs"] == {"alert_text": "${{ steps.publish.outputs.alert_text }}",
-                                          "alert_url": "${{ steps.publish.outputs.alert_url }}"}
+                                          "alert_url": "${{ steps.publish.outputs.alert_url }}",
+                                          "reproduce": "${{ steps.publish.outputs.reproduce }}"}
     send = job["steps"][-1]
     assert send["run"].endswith("aiwf notify --channels \"$CHANNELS\"") and "GH_TOKEN" not in send["env"]
     assert send["env"]["NOTIFY_TEXT"] == "${{ needs.publish.outputs.alert_text }}"

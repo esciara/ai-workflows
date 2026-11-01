@@ -14,6 +14,7 @@ from typing import Callable
 COMMANDS: dict[str, str | None] = {
     "review": None,
     "retriage": None,
+    "reproduce": None,
     "fix": "optional",
     "no-fix": "required",
 }

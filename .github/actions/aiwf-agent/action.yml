@@ -7,8 +7,12 @@
 # The schema reaches --json-schema single-quoted inside claude_args, which base-action splits with shell-quote: a `'`
 # in the schema or the model would end the quote, so both are refused here (and schemas are checked by the policy
 # tests); inside single quotes `$` and spaces stay literal.
+# Command-running agents (ADR-0037: reproducer, later the implementer) pass `sandbox-settings`: the agent then also gets
+# Bash, auto-allowed, and `--setting-sources user` (the target repo's .claude settings and hooks are ignored). The file
+# must turn the sandbox on with no unsandboxed fallback, or this action fails before the agent starts. The caller sets
+# up bubblewrap, the env scrub and the token check.
 name: aiwf agent
-description: Run one ai-workflows agent with structured output, a turn limit and no tools
+description: Run one ai-workflows agent with structured output, a turn limit and no tools (sandboxed Bash on request)
 inputs:
   oauth-token:
     description: CLAUDE_CODE_OAUTH_TOKEN (the only secret an agent job holds)
@@ -24,6 +28,10 @@ inputs:
     required: true
   model:
     description: Model override from the config's `model` key; empty for the default
+    required: false
+    default: ''
+  sandbox-settings:
+    description: Path of the ADR-0037 sandbox settings (merged into the user settings); when set, the agent gets sandboxed Bash
     required: false
     default: ''
   usage-name:
@@ -46,12 +54,19 @@ runs:
         SCHEMA_FILE: ${{ inputs.schema }}
         MAX_TURNS: ${{ inputs.max-turns }}
         MODEL: ${{ inputs.model }}
+        SANDBOX_SETTINGS: ${{ inputs.sandbox-settings }}
       run: |
         schema="$(jq -c 'del(."$schema")' "$SCHEMA_FILE")"
         case "$schema" in *"'"*) echo "::error::$SCHEMA_FILE contains a ' (breaks --json-schema quoting)"; exit 1;; esac
         case "$MODEL" in *"'"*|*$'\n'*|*$'\r'*) echo "::error::config model contains a quote or a line break"; exit 1;; esac
         [[ "$MAX_TURNS" =~ ^[1-9][0-9]*$ ]] || { echo "::error::max-turns must be a positive integer"; exit 1; }
-        args="--max-turns $MAX_TURNS --tools StructuredOutput --json-schema '$schema'"
+        tools="--tools StructuredOutput"
+        if [ -n "$SANDBOX_SETTINGS" ]; then
+          jq -e '.sandbox | .enabled == true and .failIfUnavailable == true and .allowUnsandboxedCommands == false' \
+            "$SANDBOX_SETTINGS" > /dev/null || { echo "::error::sandbox-settings must enable the sandbox with no fallback"; exit 1; }
+          tools="--tools Bash,StructuredOutput --allowedTools Bash --setting-sources user"
+        fi
+        args="--max-turns $MAX_TURNS $tools --json-schema '$schema'"
         if [ -n "$MODEL" ]; then args="$args --model '$MODEL'"; fi
         echo "claude_args=$args" >> "$GITHUB_OUTPUT"
     - id: claude
@@ -60,6 +75,7 @@ runs:
         claude_code_oauth_token: ${{ inputs.oauth-token }}
         prompt_file: ${{ inputs.prompt-file }}
         claude_args: ${{ steps.args.outputs.claude_args }}
+        settings: ${{ inputs.sandbox-settings }}
     # Only the numbers of the last `result` message; the agent's text never leaves the job this way.
     - if: always() && inputs.usage-name != ''
       shell: bash

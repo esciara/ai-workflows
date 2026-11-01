@@ -16,7 +16,7 @@ import re
 from typing import Any
 from urllib.parse import quote
 
-from aiwf import publish
+from aiwf import commands, publish
 from aiwf.ghapi import get_or_none, remove_label, upsert_marker_comment
 
 MARKER = "<!-- ai-workflows:triage -->"
@@ -25,6 +25,8 @@ DUPLICATE = "triage: duplicate"
 NEEDS_HUMAN = "triage: needs-human"
 RANGE_ENV = "AIWF_FIX_RANGE_CONFIDENCE"  # `low` when the fix candidates were not from the reported version
 B1_LABELS = (*TYPE_LABELS.values(), DUPLICATE, NEEDS_HUMAN)  # cleared on /retriage before the new result
+WAITS_FOR_REPRODUCE = (f"Bug from a reporter outside `maintainers`: reproducing it runs code, so it waits for a maintainer to "
+                       f"comment `/reproduce` (ADR-0037). Labelled `{NEEDS_HUMAN}`.")
 
 
 def check_duplicate(gh: publish.GhRunner, repo: str, issue: int, number: int | None) -> dict[str, Any] | None:
@@ -77,7 +79,7 @@ def is_duplicate(data: dict[str, Any], dup: dict[str, Any] | None) -> bool:
 
 
 def body(data: dict[str, Any], dup: dict[str, Any] | None, fix: dict[str, Any] | None, fix_conf: str,
-         run_url: str, suspicious: list[str] | None = None) -> str:
+         run_url: str, suspicious: list[str] | None = None, waits: bool = False) -> str:
     lines = [MARKER, f"**AI triage:** {data['type']} ({data['confidence']} confidence). {data['reason']}"]
     if is_duplicate(data, dup):
         lines += ["", f"Duplicate of #{dup['number']} ({data['duplicate_of']['confidence']} confidence). Labelled "
@@ -89,6 +91,8 @@ def body(data: dict[str, Any], dup: dict[str, Any] | None, fix: dict[str, Any] |
                   "confirmed: reproducing the bug checks it. Not closed."]
     if data["confidence"] == "low":
         lines += ["", f"Low confidence: labelled `{NEEDS_HUMAN}`; a person takes over."]
+    if waits:
+        lines += ["", WAITS_FOR_REPRODUCE]
     if suspicious:
         lines += ["", publish.injection_line(suspicious)]
     if run_url:
@@ -109,11 +113,11 @@ def suspicious_instructions(data: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(s for s in found if s.strip()))[:10]
 
 
-def labels_for(data: dict[str, Any], duplicate: bool) -> list[str]:
+def labels_for(data: dict[str, Any], duplicate: bool, waits: bool = False) -> list[str]:
     out = [TYPE_LABELS[data["type"]]]
     if duplicate:
         out.append(DUPLICATE)
-    if data["confidence"] == "low":
+    if data["confidence"] == "low" or waits:
         out.append(NEEDS_HUMAN)
     return out
 
@@ -136,8 +140,31 @@ def write_alert(text: str, url: str) -> None:
             fh.write(f"alert_text={text}\nalert_url={url}\n")
 
 
+def goes_to_b2(data: dict[str, Any], duplicate: bool) -> bool:
+    """A bug B1 hands to B2: not a duplicate, not low confidence (those stop with a person)."""
+    return data["type"] == "bug" and not duplicate and data["confidence"] != "low"
+
+
+def author_trusted(gh: publish.GhRunner, repo: str, issue: dict[str, Any]) -> bool:
+    """ADR-0037 gate: the issue author passes the command-author check (ADR-0005)."""
+    login = (issue.get("user") or {}).get("login") or ""
+    maintainers = json.loads(os.environ.get("AIWF_CONFIG") or "{}").get("maintainers", [])
+    if not login or login.lower() not in {m.lower() for m in maintainers}:
+        return False
+    return commands.authorize(login, maintainers, commands.repo_permission(repo, login, gh))
+
+
+def start_reproduce() -> None:
+    """Job output `reproduce=true`: the triage workflow's B2 jobs run next in this run."""
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as fh:
+            fh.write("reproduce=true\n")
+
+
 def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
-    current = {lb["name"] for lb in (get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}).get("labels", [])}
+    item = get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}
+    current = {lb["name"] for lb in item.get("labels", [])}
     branch = (get_or_none(gh, f"repos/{repo}") or {}).get("default_branch", "main")
     dup_ref = (data.get("duplicate_of") or {}).get("number")
     dup = check_duplicate(gh, repo, issue, dup_ref)
@@ -147,18 +174,23 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
         if value and not ok:
             print(f"::warning title=Classifier reference dropped::{name}={json.dumps(value)} is not a valid reference")
     fix_conf = fix_confidence(data, os.environ.get(RANGE_ENV, "")) if fix else ""
-    want = labels_for(data, is_duplicate(data, dup))
+    to_b2 = goes_to_b2(data, is_duplicate(data, dup))
+    trusted = to_b2 and author_trusted(gh, repo, item)
+    waits = to_b2 and not trusted
+    want = labels_for(data, is_duplicate(data, dup), waits)
     if publish.ERROR_LABEL in current:  # left by an earlier run (ADR-0045)
         remove_label(gh, repo, issue, publish.ERROR_LABEL)
     for label in B1_LABELS:
         if label in current and label not in want:
             remove_label(gh, repo, issue, label)
     publish.add_labels(gh, repo, issue, *want)
-    upsert_marker_comment(gh, repo, issue, MARKER, body(data, dup, fix, fix_conf, run_url, suspicious_instructions(data)))
+    upsert_marker_comment(gh, repo, issue, MARKER, body(data, dup, fix, fix_conf, run_url, suspicious_instructions(data), waits))
     print(f"triaged {repo}#{issue}: {', '.join(want)}")
     dup_number = dup["number"] if dup and DUPLICATE in want else None
     server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
     write_alert(*alert(repo, issue, data["type"], dup_number, NEEDS_HUMAN in want, server))
+    if trusted:
+        start_reproduce()
 
 
 CAPPED_TEXT = "Automatic triage limit reached for today; a maintainer can run `/retriage`."
