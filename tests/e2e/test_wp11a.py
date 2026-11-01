@@ -40,7 +40,7 @@ def job_log(run_id: int, name: str) -> str:
                 if j["name"] == name), None)
     if job is None:
         pytest.fail(f"run {run_id} has no job {name!r} (not a pass)", pytrace=False)
-    return pg.gh(["api", f"repos/{pg.REPO}/actions/jobs/{job['id']}/logs"])
+    return pg.gh(["api", "--allow-escape-sequences", f"repos/{pg.REPO}/actions/jobs/{job['id']}/logs"])
 
 
 def results(log: str) -> list[dict[str, Any]]:
