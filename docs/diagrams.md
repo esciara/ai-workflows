@@ -81,7 +81,7 @@ flowchart TD
   class WP1 baseDone
   class WP2 aDone
   class WP3 aDone
-  class WP4 aWip
+  class WP4 aDone
   class WP5 bDone
   class WP6 b
   class WP7 b
@@ -187,6 +187,27 @@ flowchart TD
   S --> L["Verdict label"]
 ```
 
+## WP4 — A · fork PRs
+
+Done when ([docs/plan.md, line 38](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L38)): Fork PR is not reviewed until a maintainer comments `/review`
+
+```mermaid
+flowchart TD
+  FP["Fork PR event<br/>opened / synchronize<br/>read-only token, no secrets"] --> G{"review / gate<br/>reads the event payload"}
+  SP["Same-repo PR event"] --> G
+  CM["Comment '/review' on a PR"] --> G
+  G -- "fork PR event" --> SK["All review jobs skipped<br/>nothing posted"]
+  G -- "comment: not a maintainer<br/>or no write access" --> SK
+  G -- "fork PR and fork_prs: off" --> SK
+  G -- "same-repo non-draft PR<br/>or maintainer /review" --> ST["start: ai-review: pending"]
+  ST --> CX["context: checkout refs/pull/N/head<br/>no credentials, HEAD = gated SHA<br/>read as text, never executed"]
+  CX --> PA["4 passes + verify<br/>no token, StructuredOutput only"]
+  PA --> PU["publish: summary + verdict label<br/>Commit reviewed = gated SHA"]
+  NP["Fork push after a review<br/>pull_request_target, synchronize"] --> RF["review-fork-push<br/>API only: no checkout, no secrets<br/>pull-requests: write"]
+  RF --> RM["Verdict label removed<br/>note: maintainer may /review again"]
+  RM -.-> CM
+```
+
 ## WP5 — B1 · classify
 
 Done when ([docs/plan.md, line 39](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L39)): 3 test issues get `type: bug`, `feature`, `question`; a duplicate gets `triage: duplicate`
@@ -210,5 +231,23 @@ flowchart TD
   L -- yes --> H["type label + 'triage: needs-human'"]
   L -- no --> T["type label<br/>bug goes on to B2 (WP6)"]
   H & T --> S["One triage comment<br/>updated in place"]
+```
+
+## WP12a — Guardrails: `ai: off`, `ai: error`
+
+Done when ([docs/plan.md, line 49](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L49)): `ai: off` stops a run; a forced crash gives `ai: error` + comment
+
+```mermaid
+flowchart TD
+  L["Label 'ai: off' added<br/>to issue or PR"] --> OFF["Caller 'off' job<br/>actions: write only"]
+  OFF --> CX["Cancel this workflow's<br/>in-flight runs for the item"]
+  E["Any other event<br/>PR, issue, comment"] --> G{"Config gate<br/>item has 'ai: off'?"}
+  G -- yes --> S["Every workflow job skipped"]
+  G -- no --> J["Review / triage / command jobs"]
+  J --> W{"Before each write<br/>live labels have 'ai: off'?"}
+  W -- yes --> N["Write nothing<br/>only remove 'ai-review: pending'"]
+  W -- no --> P["Orchestrator publishes<br/>via gh api"]
+  J -- "a job fails<br/>e2e: label 'e2e-crash'" --> F["'failed' job"]
+  F --> R["Label 'ai: error'<br/>+ one sticky error comment with run link<br/>no retry"]
 ```
 <!-- END generated:per-wp -->
