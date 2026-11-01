@@ -1,6 +1,6 @@
 # ADR-0044 · Fork PRs: a review gate, and a pull_request_target job that clears a stale verdict
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D44`

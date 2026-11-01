@@ -85,11 +85,12 @@ Why: <rationale>
 | [ADR-0039](0039-agent-jobs-consolidated.md) | D39 | Agent jobs: own job, `base-action`, no token scope, OAuth secret only (consolidated) | Accepted |
 | [ADR-0040](0040-code-ref-and-pinning-consolidated.md) | D40 | Code ref follows the workflow SHA; own reusable refs pinned to a tagged SHA from WP14 (consolidated) | Accepted |
 | [ADR-0041](0041-review-output-consolidated.md) | D41 | Review output: sticky summary comment; GitHub review only when needed (consolidated) | Accepted |
-| [ADR-0042](0042-factory-loop-consolidated.md) | D42 | Factory loop: stop-WPs, test-first acceptance, `verify-wp` reviews the test (consolidated) | Accepted |
+| [ADR-0042](0042-factory-loop-consolidated.md) | D42 | Factory loop: stop-WPs, test-first acceptance, `verify-wp` reviews the test (consolidated) | Superseded by ADR-0049 |
 | [ADR-0043](0043-e2e-on-the-playground-consolidated.md) | D43 | e2e on the playground: one e2e caller, routing, single slot, e2e config (consolidated) | Accepted |
-| [ADR-0044](0044-fork-prs-review-gate-and-stale-verdict.md) | D44 | Fork PRs: a review gate, and a pull_request_target job that clears a stale verdict | Proposed |
-| [ADR-0045](0045-guardrails-ai-off-error-reporting-budgets-e2e-crash.md) | D45 | Guardrails: `ai: off` gate and cancel, `ai: error` reporting, e2e crash label, budgets | Proposed |
+| [ADR-0044](0044-fork-prs-review-gate-and-stale-verdict.md) | D44 | Fork PRs: a review gate, and a pull_request_target job that clears a stale verdict | Accepted |
+| [ADR-0045](0045-guardrails-ai-off-error-reporting-budgets-e2e-crash.md) | D45 | Guardrails: `ai: off` gate and re-check, `ai: error` reporting, e2e crash label, budgets, injection reporting | Accepted |
 | [ADR-0046](0046-status-views-derived-from-beads.md) | D46 | Status views derived from beads; split WPs get their own plan rows | Accepted |
 | [ADR-0047](0047-docs-consistency-tests-source-vs-source.md) | D47 | Docs consistency tests: source against source only | Accepted |
 | [ADR-0048](0048-per-wp-diagrams-required-and-generated.md) | D48 | Per-WP diagrams: required by the definition of done, sections generated | Accepted |
+| [ADR-0049](0049-post-review-test-changes-that-keep-assertions-are-the-orchestrators-call.md) | D49 | Factory loop: post-review acceptance-test changes that keep the assertions are the orchestrator's call (consolidated) | Accepted |
 <!-- END generated:adr-index -->

@@ -83,13 +83,13 @@ flowchart TD
   class WP3 aDone
   class WP4 aDone
   class WP5 bDone
-  class WP6 b
+  class WP6 bWip
   class WP7 b
   class WP8 b
   class WP9 b
   class WP10 b
   class WP11 xWip
-  class WP12 xWip
+  class WP12 xDone
   class WP13 x
   class WP14 x
 ```
@@ -239,15 +239,33 @@ Done when ([docs/plan.md, line 49](https://github.com/esciara/ai-workflows/blob/
 
 ```mermaid
 flowchart TD
-  L["Label 'ai: off' added<br/>to issue or PR"] --> OFF["Caller 'off' job<br/>actions: write only"]
-  OFF --> CX["Cancel this workflow's<br/>in-flight runs for the item"]
-  E["Any other event<br/>PR, issue, comment"] --> G{"Config gate<br/>item has 'ai: off'?"}
+  E["Any event<br/>PR, issue, comment"] --> G{"Config gate<br/>item has 'ai: off'?"}
   G -- yes --> S["Every workflow job skipped"]
-  G -- no --> J["Review / triage / command jobs"]
+  G -- no --> J["Review / triage / command jobs<br/>agents hold no token"]
   J --> W{"Before each write<br/>live labels have 'ai: off'?"}
   W -- yes --> N["Write nothing<br/>only remove 'ai-review: pending'"]
   W -- no --> P["Orchestrator publishes<br/>via gh api"]
   J -- "a job fails<br/>e2e: label 'e2e-crash'" --> F["'failed' job"]
   F --> R["Label 'ai: error'<br/>+ one sticky error comment with run link<br/>no retry"]
+```
+
+## WP12b — Guardrails: injection, budgets
+
+Done when ([docs/plan.md, line 50](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50)): An injected instruction is reported, not obeyed
+
+```mermaid
+flowchart TD
+  T["Issue or PR event<br/>text is untrusted data"] --> A["Agents: extract, classify<br/>or 4 review passes + verify<br/>no tools, no secrets"]
+  A -- "each agent" --> B["--max-budget-usd agent_budget_usd<br/>step timeout agent_minutes"]
+  A --> U["Usage record per agent<br/>cost, subtype, timed out"]
+  A --> J["JSON with suspicious_instructions<br/>schema-checked"]
+  U --> V{"Before verify<br/>passes cost > run_budget_usd?"}
+  V -- yes --> SK["Verify skipped"]
+  U --> C{"Publish: budget check<br/>agent stopped or run total over?"}
+  SK --> C
+  C -- yes --> E["Labels 'ai: budget' + 'ai-review: human-review'<br/>or 'triage: needs-human'<br/>one sticky budget note with run link<br/>no 'ai: error', no retry"]
+  C -- no --> P["Normal publish"]
+  J --> P
+  P --> I["Comment line 'Possible prompt injection (ignored)'<br/>quotes cleaned; never followed"]
 ```
 <!-- END generated:per-wp -->
