@@ -3,8 +3,8 @@
 Runs against the playground (AIWF_E2E=1) with the e2e slot (AIWF_E2E_SLOT=1): every item routes to caller-e2e.yml
 (an `e2e/` PR branch, or the `e2e-target` label), which runs the workflows at the commit under test (ADR-0043).
 
-1. `ai: off` added while a review runs cancels that run (the caller's `off` job, ADR-0045): the run ends `cancelled`,
-   with no summary comment and no verdict label. A later push to the PR starts no review: the config gate skips it.
+1. A draft PR with `ai: off` marked ready for review starts no review: config runs, the config gate skips every
+   review job; no summary comment, no verdict label. (No cancel of runs in flight: ADR-0045, decision 3.)
 2. An issue opened with `ai: off` gets no triage, and a maintainer's `/ping` on it gets no reply (config gate).
 3. A forced crash (label `e2e-crash`, honoured only with the playground's e2e config, ADR-0045), on an issue (triage)
    and on a PR (review, started by a maintainer's `/review`): the run fails, the item gets `ai: error` and exactly one
@@ -156,32 +156,18 @@ def assert_crash_reported(number: int, run: dict, crashed: str, failed: str) -> 
     assert len(bot_comments(number, ERROR_MARKER)) == 1
 
 
-def test_ai_off_cancels_a_running_review_and_gates_the_next_push(e2e_target):
+def test_ai_off_pr_marked_ready_gets_no_review(e2e_target):
     pg.ensure_label(OFF, "000000", "Kill switch: no AI run on this issue or PR")
-    t0 = now()
-    with pg.throwaway_pr("[e2e] WP12a ai: off on a running review", e2e=True, wp="wp12", slug="off") as pr:
+    with draft_pr("[e2e] WP12a ai: off on a PR", [OFF]) as pr:
         number, title = pr["number"], pr["title"]
-
-        # 1. A review is running (`start` set the pending label); `ai: off` cancels it.
-        review = with_job("pull_request", title, t0, "review / start")
-        assert pg.jobs(review["id"])["review / start"] == "success"
-        t_off = now()
-        add_label(number, OFF)
-        off = with_job("pull_request", title, t_off, "off / cancel")
-        print(f"review run {review['id']} {review['html_url']}; off run {off['id']} {off['html_url']}")
-        assert pg.jobs(off["id"])["off / cancel"] == "success"
-        review = pg.completed(review["id"])
-        assert review["conclusion"] == "cancelled", pg.jobs(review["id"])
-        assert not bot_comments(number, REVIEW_MARKER), "a summary was posted after ai: off"
-        assert not labels(number) & VERDICTS, sorted(labels(number))
-
-        # 2. A push to the PR with `ai: off` set: config runs, every review job skips.
-        t_push = now()
-        put_file(pr["branch"], f"e2e/{pr['branch'].replace('/', '-')}-2.md")
-        sync = pg.completed(with_job("pull_request", title, t_push, "config / load")["id"])
-        jobs = pg.jobs(sync["id"])
-        print(f"push run {sync['id']} {sync['html_url']} -> {sync['conclusion']}, jobs {jobs}")
-        assert sync["conclusion"] == "success" and jobs["config / load"] == "success", jobs
+        node = pg.api(f"repos/{pg.REPO}/pulls/{number}")["node_id"]
+        t_ready = now()
+        pg.gh(["api", "graphql", "-f", f'query=mutation {{ markPullRequestReadyForReview(input: {{pullRequestId: "{node}"}}) '
+               "{ pullRequest { isDraft } } }"], as_agent=True)
+        ready = pg.completed(with_job("pull_request", title, t_ready, "config / load")["id"])
+        jobs = pg.jobs(ready["id"])
+        print(f"ready run {ready['id']} {ready['html_url']} -> {ready['conclusion']}, jobs {jobs}")
+        assert ready["conclusion"] == "success" and jobs["config / load"] == "success", jobs
         assert all(c == "skipped" for j, c in jobs.items() if j.startswith("review")), jobs
         assert not bot_comments(number, REVIEW_MARKER)
         assert not labels(number) & VERDICTS

@@ -142,27 +142,12 @@ def test_caller_runs_only_the_fork_push_job_on_pull_request_target():
         assert "pull_request_target" not in cond and "github.event_name ==" in cond, (name, cond)
 
 
-# --- ai: off (ADR-0045): the only job that may cancel runs ------------------------------------------------------------
-
-ACTIONS_WRITE = {(".github/workflows/off.yml", "cancel"), ("templates/caller.yml", "off")}
+# --- ai: off (ADR-0045): a gate and a pre-write re-check, no cancel; no job may cancel runs ---------------------------
 
 
-def test_actions_write_only_on_the_off_job():
-    found = set()
+def test_no_job_has_actions_write():
     for path in REAL:
         doc = policy.load_workflow(path.read_text())
         for name, job in (doc or {}).get("jobs", {}).items():
-            if isinstance(job.get("permissions"), dict) and job["permissions"].get("actions") == "write":
-                found.add((str(path.relative_to(ROOT)), name))
-    assert found == ACTIONS_WRITE
-
-
-def test_off_job_runs_only_on_the_ai_off_label_without_secrets():
-    for path, name in ACTIONS_WRITE:
-        job = _doc(path)["jobs"][name]
-        assert job["permissions"] == {"contents": "read", "actions": "write"}, path
-        assert "github.event.action == 'labeled'" in job["if"] and "github.event.label.name == 'ai: off'" in job["if"]
-        assert "secrets" not in job and "with" not in job, path
-    caller = _doc("templates/caller.yml")
-    assert caller["jobs"]["off"]["uses"].startswith("esciara/ai-workflows/.github/workflows/off.yml@")
-    assert caller["jobs"]["config"]["if"] == "github.event.action != 'labeled'", "labeled events run `off` only"
+            perms = job.get("permissions")
+            assert not (isinstance(perms, dict) and perms.get("actions") == "write"), f"{path.name}:{name}"

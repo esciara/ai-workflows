@@ -5,14 +5,14 @@
 name: AI workflows
 on:
   pull_request:
-    types: [opened, reopened, synchronize, ready_for_review, labeled]  # labeled: only the `off` job (ADR-0045)
+    types: [opened, reopened, synchronize, ready_for_review]
   # Fork PRs only, API calls only (ADR-0044): a fork push removes a stale verdict label. Never checks out the PR.
   pull_request_target:
     types: [synchronize]
   issue_comment:
     types: [created]
   issues:
-    types: [opened, labeled]
+    types: [opened]
   schedule:
     - cron: '17 5 * * *'          # daily jobs: labels sync, reporter silence (WP7)
   workflow_dispatch:
@@ -22,31 +22,20 @@ on:
         type: string
         default: ''
 
-# A `labeled` run gets a group of its own: it must never queue behind, or replace, the item's pending run (ADR-0045).
 concurrency:
-  group: ai-workflows-${{ github.event.action == 'labeled' && format('labeled-{0}', github.run_id) || format('{0}{1}', github.event_name == 'pull_request_target' && 'fork-push-' || '', github.event.pull_request.number || github.event.issue.number || github.run_id) }}
+  group: ai-workflows-${{ github.event_name == 'pull_request_target' && 'fork-push-' || '' }}${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: false
 
 # Least privilege by default (ADR-0017); every job below grants what its called workflow needs.
 permissions: {}
 
 jobs:
-  # Every job but `off` needs config; `labeled` events run `off` only. The config gate also skips items with `ai: off`.
   config:
-    if: github.event.action != 'labeled'
     uses: esciara/ai-workflows/.github/workflows/config.yml@main
     permissions:
       contents: read
     with:
       config_ref: ${{ inputs.config_ref || '' }}
-
-  # Kill switch (ADR-0045): `ai: off` added to an issue or PR cancels this workflow's in-flight runs for it.
-  "off":  # quoted: YAML 1.1 parsers (PyYAML) read a bare `off` as false
-    if: "(github.event_name == 'issues' || github.event_name == 'pull_request') && github.event.action == 'labeled' && github.event.label.name == 'ai: off'"
-    uses: esciara/ai-workflows/.github/workflows/off.yml@main
-    permissions:
-      contents: read
-      actions: write
 
   # Label set (ADR-0023): only on a manual run or the daily schedule. Run the workflow once by hand after install.
   labels:
