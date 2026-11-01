@@ -1,0 +1,13 @@
+flowchart TD
+  T["Issue or PR event<br/>text is untrusted data"] --> A["Agents: extract, classify<br/>or 4 review passes + verify<br/>no tools, no secrets"]
+  A -- "each agent" --> B["--max-budget-usd agent_budget_usd<br/>step timeout agent_minutes"]
+  A --> U["Usage record per agent<br/>cost, subtype, timed out"]
+  A --> J["JSON with suspicious_instructions<br/>schema-checked"]
+  U --> V{"Before verify<br/>passes cost > run_budget_usd?"}
+  V -- yes --> SK["Verify skipped"]
+  U --> C{"Publish: budget check<br/>agent stopped or run total over?"}
+  SK --> C
+  C -- yes --> E["Labels 'ai: budget' + 'ai-review: human-review'<br/>or 'triage: needs-human'<br/>one sticky budget note with run link<br/>no 'ai: error', no retry"]
+  C -- no --> P["Normal publish"]
+  J --> P
+  P --> I["Comment line 'Possible prompt injection (ignored)'<br/>quotes cleaned; never followed"]

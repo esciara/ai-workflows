@@ -226,6 +226,7 @@ jobs:
 | `ai-fix` | B6 | PR written by Workflow B |
 | `ai-review: pending` / `merge` / `changes-requested` / `human-review` | A | Review running / verdict |
 | `ai: off` | A maintainer | Kill switch on that issue or PR ([CTL-08](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) |
+| `ai: budget` | A, B | A run hit its budget and stopped; a person takes over (with `ai-review: human-review` or `triage: needs-human`) |
 
 **Commands** — accepted only from users with write or admin permission: `/review` (A), `/retriage`, `/fix [guidance]`, `/no-fix <reason>` (B).
 

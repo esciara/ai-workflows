@@ -23,5 +23,6 @@ labels:
   # Guardrails and reporter silence
   - {name: "ai: off", color: "000000", description: "Kill switch: no AI run on this issue or PR"}
   - {name: "ai: error", color: "b60205", description: "An AI run failed; see the run link"}
+  - {name: "ai: budget", color: "fbca04", description: "An AI run hit its cost or time budget; a person takes over"}
   - {name: "stale", color: "ffffff", description: "No reply from the reporter for 14 days; closes in 7 (actions/stale)"}
   - {name: "keep-open", color: "c2e0c6", description: "Exempt from the stale job"}

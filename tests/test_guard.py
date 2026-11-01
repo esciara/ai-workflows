@@ -1,3 +1,4 @@
+import argparse
 import json
 
 import pytest
@@ -114,3 +115,60 @@ def test_review_publish_only_removes_pending_when_off(monkeypatch, tmp_path):
     args = type("A", (), {"repo": "o/r", "pr": 5, "run_url": "", "passes_dir": str(tmp_path)})
     assert pr.cmd_review_publish(args) == 0
     assert gh.writes() == [["api", "-X", "DELETE", "repos/o/r/issues/5/labels/ai-review%3A%20pending"]]
+
+
+# --- budgets (WP12b, ADR-0045) ---------------------------------------------------------------------------------------
+
+LIMITS = {"agent_budget_usd": 1, "run_budget_usd": 5, "agent_minutes": 10}
+
+
+@pytest.mark.parametrize("usage,want", [
+    ({}, ""),
+    ({"extract": None, "classify": {"cost_usd": 0.4, "subtype": "success", "timed_out": False}}, ""),
+    ({"extract": {"cost_usd": 0.01, "subtype": "error_max_budget_usd"}}, "agent `extract` hit its cost budget ($1)"),
+    ({"classify": {"timed_out": True}}, "agent `classify` hit its time budget (10 min)"),
+    ({"a": {"cost_usd": 3.0}, "b": {"cost_usd": 2.5}, "c": {"cost_usd": "9"}}, "over the run budget ($5)"),
+    ({"a": {"cost_usd": 3.0}, "b": {"cost_usd": 2.0}}, ""),  # exactly at the run budget
+])
+def test_budget_hit(usage, want):
+    got = guard.budget_hit(usage, LIMITS)
+    assert (want in got and got) if want else got == ""
+
+
+def test_report_budget_labels_escalates_and_posts_one_sticky_note():
+    own = {"id": 6, "user": {"login": BOT}, "body": guard.BUDGET_MARKER + " old"}
+    gh = FakeGh(comments=[own])
+    assert guard.report_budget(gh, "o/r", 3, "https://run/9", "agent `x` hit its cost budget", "triage: needs-human")
+    assert ["api", "-X", "POST", "repos/o/r/issues/3/labels", "-f", "labels[]=ai: budget",
+            "-f", "labels[]=triage: needs-human"] in gh.writes()
+    [patch] = [c for c in gh.writes() if c[2] == "PATCH"]
+    assert patch[3] == "repos/o/r/issues/comments/6" and "https://run/9" in patch[-1]
+    assert patch[-1].removeprefix("body=").startswith(guard.BUDGET_MARKER)
+    assert not any(c[3].endswith("/comments") for c in gh.writes() if c[2] == "POST")
+
+
+def test_report_budget_does_nothing_but_pending_removal_when_off():
+    gh = FakeGh(labels=["ai: off"])
+    assert not guard.report_budget(gh, "o/r", 3, "https://run/9", "r", "triage: needs-human")
+    assert [c[2] for c in gh.writes()] == ["DELETE"]
+
+
+def test_publish_escalates_a_budget_hit_instead_of_publishing(monkeypatch, tmp_path):
+    gh = FakeGh()
+    monkeypatch.setattr(config, "run_gh", gh)
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"limits": LIMITS}))
+    monkeypatch.setenv("AIWF_USAGE", json.dumps({"extract": {"subtype": "error_max_budget_usd"}, "classify": None}))
+    monkeypatch.setenv("AGENT_JSON", "")
+    args = argparse.Namespace(kind="classifier", repo="o/r", issue=3, run_url="https://run/9")
+    assert cli.cmd_publish(args) == 0
+    assert "budget=true" in out.read_text()
+    labels = [a for c in gh.writes() if c[3].endswith("/labels") for a in c if a.startswith("labels[]=")]
+    assert labels == ["labels[]=ai: budget", "labels[]=triage: needs-human"]  # no ai: error
+
+
+def test_publish_without_budget_hit_publishes(monkeypatch):
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"limits": LIMITS}))
+    monkeypatch.setenv("AIWF_USAGE", json.dumps({"extract": {"cost_usd": 0.1, "subtype": "success"}}))
+    assert not guard.check_budget(FakeGh(), "o/r", 3, "https://run/9", "triage: needs-human")
