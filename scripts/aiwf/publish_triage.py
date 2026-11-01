@@ -82,7 +82,7 @@ def is_duplicate(data: dict[str, Any], dup: dict[str, Any] | None) -> bool:
 
 
 def body(data: dict[str, Any], dup: dict[str, Any] | None, fix: dict[str, Any] | None, fix_conf: str,
-         run_url: str) -> str:
+         run_url: str, suspicious: list[str] | None = None) -> str:
     lines = [MARKER, f"**AI triage:** {data['type']} ({data['confidence']} confidence). {data['reason']}"]
     if is_duplicate(data, dup):
         lines += ["", f"Duplicate of #{dup['number']} ({data['duplicate_of']['confidence']} confidence). Labelled "
@@ -94,6 +94,8 @@ def body(data: dict[str, Any], dup: dict[str, Any] | None, fix: dict[str, Any] |
                   "confirmed: reproducing the bug checks it. Not closed."]
     if data["confidence"] == "low":
         lines += ["", f"Low confidence: labelled `{NEEDS_HUMAN}`; a person takes over."]
+    if suspicious:
+        lines += ["", publish.injection_line(suspicious)]
     if run_url:
         lines += ["", f"[Run]({run_url})"]
     return "\n".join(lines)
@@ -125,6 +127,19 @@ def remove_label(gh: publish.GhRunner, repo: str, issue: int, label: str) -> Non
         pass  # not set
 
 
+def suspicious_instructions(data: dict[str, Any]) -> list[str]:
+    """The classifier's and the extractor's quotes of instructions found in the issue (env EXTRACT_JSON, read
+    leniently: the extract job's output was schema-checked by Claude; a missing or odd value adds nothing)."""
+    try:
+        extract = json.loads(os.environ.get("EXTRACT_JSON") or "{}")
+    except json.JSONDecodeError:
+        extract = {}
+    found = [*(data.get("suspicious_instructions") or [])]
+    if isinstance(extract, dict) and isinstance(extract.get("suspicious_instructions"), list):
+        found += [s for s in extract["suspicious_instructions"] if isinstance(s, str)]
+    return list(dict.fromkeys(s for s in found if s.strip()))[:10]
+
+
 def labels_for(data: dict[str, Any], duplicate: bool) -> list[str]:
     out = [TYPE_LABELS[data["type"]]]
     if duplicate:
@@ -146,13 +161,14 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
             print(f"::warning title=Classifier reference dropped::{name}={json.dumps(value)} is not a valid reference")
     fix_conf = fix_confidence(data, os.environ.get(RANGE_ENV, "")) if fix else ""
     want = labels_for(data, is_duplicate(data, dup))
-    if publish.ERROR_LABEL in current:  # a stale error from an earlier run (ADR-0045)
-        remove_label(gh, repo, issue, publish.ERROR_LABEL)
+    for stale in (publish.ERROR_LABEL, publish.BUDGET_LABEL):  # left by an earlier run (ADR-0045)
+        if stale in current:
+            remove_label(gh, repo, issue, stale)
     for label in B1_LABELS:
         if label in current and label not in want:
             remove_label(gh, repo, issue, label)
     publish.add_labels(gh, repo, issue, *want)
-    upsert_comment(gh, repo, issue, body(data, dup, fix, fix_conf, run_url))
+    upsert_comment(gh, repo, issue, body(data, dup, fix, fix_conf, run_url, suspicious_instructions(data)))
     print(f"triaged {repo}#{issue}: {', '.join(want)}")
 
 

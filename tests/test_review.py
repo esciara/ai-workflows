@@ -139,6 +139,8 @@ class FakeGh:
             cid = int(url.rsplit("/", 1)[1])
             next(c for c in self.comments if c["id"] == cid)["body"] = args[-1][5:]
             return json.dumps({"id": cid, "html_url": "https://github.com/o/r/pull/5#issuecomment-1"})
+        if url.endswith("/comments?per_page=100") and "--jq" in args:  # one comment per line (guard.py)
+            return "\n".join(json.dumps(c) for c in self.comments)
         if url.endswith("/comments?per_page=100"):
             return json.dumps([self.comments])
         return "{}"
@@ -307,6 +309,34 @@ def test_cmd_reads_answers_and_usage_from_the_passes_dir(tmp_path, monkeypatch):
     args = type("A", (), {"repo": "o/r", "pr": 5, "run_url": "", "passes_dir": str(tmp_path)})
     assert pr.cmd_review_publish(args) == 0
     assert state_of(gh)["usage"]["cost_usd"] == 2.5
+
+
+@pytest.mark.parametrize("pass_usage,verify_usage", [
+    ('{"cost_usd": 0.3, "subtype": "error_max_budget_usd"}', "null"),  # a pass stopped by --max-budget-usd
+    ('{"cost_usd": 0.2, "timed_out": true}', "null"),  # a pass stopped by its step timeout
+    ('{"cost_usd": 1.0}', '{"cost_usd": 1.5}'),  # run total 5.5 over run_budget_usd 5
+])
+def test_budget_hit_escalates_to_human_review_with_ai_budget(tmp_path, monkeypatch, pass_usage, verify_usage):
+    """ADR-0045: no summary, no review; `ai-review: human-review` + `ai: budget` and one budget note, exit 0."""
+    for name in review.PASSES:
+        (tmp_path / f"{name}.json").write_text(answer())
+        (tmp_path / f"{name}.usage.json").write_text(pass_usage if name == "security" else '{"cost_usd": 1.0}')
+    gh = FakeGh()
+    monkeypatch.setattr(pr.config, "run_gh", gh)
+    monkeypatch.setenv("FACTS", json.dumps(FACTS))
+    monkeypatch.setenv("VERIFY_JSON", verify())
+    monkeypatch.setenv("USAGE", verify_usage)
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"limits": {"agent_budget_usd": 1, "run_budget_usd": 5,
+                                                             "agent_minutes": 10}}))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
+    args = type("A", (), {"repo": "o/r", "pr": 5, "run_url": "https://run/7", "passes_dir": str(tmp_path)})
+    assert pr.cmd_review_publish(args) == 0
+    assert "budget=true" in (tmp_path / "out").read_text()
+    added = [a for c in gh.calls if "POST" in c and c[3].endswith("/labels") for a in c if a.startswith("labels[]=")]
+    assert "labels[]=ai: budget" in added and "labels[]=ai-review: human-review" in added
+    assert "labels[]=ai: error" not in added and "labels[]=ai-review: merge" not in added
+    [note] = [c["body"] for c in gh.comments]
+    assert note.startswith("<!-- ai-workflows:budget -->") and "https://run/7" in note
 
 
 # WP3: placement, suggestion blocks, one GitHub review per run, never Approve.

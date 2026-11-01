@@ -96,6 +96,8 @@ def cmd_publish(args: argparse.Namespace) -> int:
     if guard.item_off(config.run_gh, args.repo, args.issue):  # set after the config gate: write nothing (ADR-0045)
         print(f"::notice title=ai: off::#{args.issue} has '{guard.OFF_LABEL}': nothing published")
         return 0
+    if guard.check_budget(config.run_gh, args.repo, args.issue, args.run_url, "triage: needs-human"):
+        return 0  # an agent hit its budget: escalated, nothing else published (ADR-0045)
     ok = publish.publish(args.kind, os.environ.get("AGENT_JSON", ""), args.repo, args.issue, args.run_url, config.run_gh)
     return 0 if ok else 1
 

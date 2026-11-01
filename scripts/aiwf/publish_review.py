@@ -27,6 +27,7 @@ STATE_V = 2  # v1 (WP2a) kept finding keys only; its state reads as no prior sta
 STATE_RE = re.compile(r"<!-- ai-review:state (\{.*?\}) -->\s*\Z", re.S)
 BOT = "github-actions[bot]"  # the GITHUB_TOKEN identity; only its marker comments are trusted (ADR-0021)
 PENDING = "ai-review: pending"
+HUMAN = "ai-review: human-review"
 HEADINGS = {
     "ai-review: merge": "✅ Merge",
     "ai-review: changes-requested": "❌ Changes requested",
@@ -45,10 +46,7 @@ CHANGES = "ai-review: changes-requested"
 USAGE_SUM = ("cost_usd", "turns", "duration_ms", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
 
 
-def clean(text: str, limit: int = 600) -> str:
-    """One table-safe line: no mentions, HTML, markers or pipes."""
-    text = " ".join(str(text).split())[:limit]
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")
+clean = publish.clean  # one table-safe line (shared with triage)
 
 
 def key(f: dict[str, Any]) -> str:
@@ -164,8 +162,7 @@ def render(data: dict[str, Any], facts: dict[str, Any], label: str, reasons: lis
                f"{counts['confirmed']} confirmed, {counts['refuted']} refuted, {counts['duplicate']} duplicate")
     lines += ["", checked + (f", {counts['unchecked']} not checked (dropped)." if counts["unchecked"] else ".")]
     if data.get("suspicious_instructions"):
-        lines += ["", "**Possible prompt injection (ignored):** "
-                  + "; ".join(clean(s, 200) for s in data["suspicious_instructions"])]
+        lines += ["", publish.injection_line(data["suspicious_instructions"])]
     lines += ["", *since_last(prev, data["history"], counts)]
     if run_url:
         lines += ["", f"[Run]({run_url})"]
@@ -405,6 +402,9 @@ def cmd_review_publish(args: argparse.Namespace) -> int:
         usage["verify"] = json.loads(os.environ.get("USAGE") or "null")
     except json.JSONDecodeError:
         pass
+    if guard.check_budget(config.run_gh, args.repo, args.pr, args.run_url, HUMAN, usage):
+        set_verdict_label(config.run_gh, args.repo, args.pr, HUMAN)  # clears pending and stale verdicts (ADR-0045)
+        return 0
     ok = publish_review(passes_raw, os.environ.get("VERIFY_JSON", ""), facts, usage, args.repo, args.pr,
                         args.run_url, os.environ.get("AIWF_SHA", ""), config.run_gh)
     return 0 if ok else 1

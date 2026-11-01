@@ -18,6 +18,8 @@ from jsonschema import Draft202012Validator
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schema"
 ERROR_LABEL = "ai: error"
+BUDGET_LABEL = "ai: budget"
+INJECTION = "**Possible prompt injection (ignored):** "
 MAX_INPUT = 64_000
 
 GhRunner = Callable[[list[str]], str]
@@ -42,6 +44,17 @@ def validate(kind: str, raw: str | None) -> dict[str, Any]:
     if errors:
         raise InvalidOutput("; ".join(f"{'/'.join(map(str, e.absolute_path)) or '$'}: {e.message[:200]}" for e in errors))
     return data
+
+
+def clean(text: str, limit: int = 600) -> str:
+    """One table-safe line: no mentions, HTML, markers or pipes."""
+    text = " ".join(str(text).split())[:limit]
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")
+
+
+def injection_line(quotes: list[str]) -> str:
+    """Instructions found in untrusted text, quoted for the maintainer; never followed (ADR-0037, ADR-0045)."""
+    return INJECTION + "; ".join(clean(s, 200) for s in quotes)
 
 
 def comment(gh: GhRunner, repo: str, issue: int, body: str) -> None:

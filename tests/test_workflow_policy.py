@@ -151,3 +151,22 @@ def test_no_job_has_actions_write():
         for name, job in (doc or {}).get("jobs", {}).items():
             perms = job.get("permissions")
             assert not (isinstance(perms, dict) and perms.get("actions") == "write"), f"{path.name}:{name}"
+
+
+# --- budgets (ADR-0045): every agent step has a cost cap and a wall-clock cap -----------------------------------------
+
+
+def test_every_agent_step_has_a_cost_and_time_budget():
+    seen = 0
+    for path in REAL:
+        doc = policy.load_workflow(path.read_text())
+        for name, job in (doc or {}).get("jobs", {}).items():
+            for step in job.get("steps", []):
+                if "anthropics/claude-code-action" not in str(step.get("uses", "")):
+                    continue
+                seen += 1
+                where = f"{path.relative_to(ROOT)}:{name}"
+                assert "--max-budget-usd ${{ env.AGENT_BUDGET }}" in step["with"]["claude_args"], where
+                assert "AGENT_BUDGET" in job.get("env", {}), where
+                assert step.get("timeout-minutes") == "${{ fromJSON(inputs.config).limits.agent_minutes }}", where
+    assert seen >= 5  # ping, extract, classify, review pass, verify
