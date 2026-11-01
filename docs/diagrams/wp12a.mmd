@@ -1,9 +1,7 @@
 flowchart TD
-  L["Label 'ai: off' added<br/>to issue or PR"] --> OFF["Caller 'off' job<br/>actions: write only"]
-  OFF --> CX["Cancel this workflow's<br/>in-flight runs for the item"]
-  E["Any other event<br/>PR, issue, comment"] --> G{"Config gate<br/>item has 'ai: off'?"}
+  E["Any event<br/>PR, issue, comment"] --> G{"Config gate<br/>item has 'ai: off'?"}
   G -- yes --> S["Every workflow job skipped"]
-  G -- no --> J["Review / triage / command jobs"]
+  G -- no --> J["Review / triage / command jobs<br/>agents hold no token"]
   J --> W{"Before each write<br/>live labels have 'ai: off'?"}
   W -- yes --> N["Write nothing<br/>only remove 'ai-review: pending'"]
   W -- no --> P["Orchestrator publishes<br/>via gh api"]

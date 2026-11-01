@@ -9,12 +9,11 @@ BOT = guard.BOT
 
 
 class FakeGh:
-    """Item labels, issue comments and workflow runs; records every call."""
+    """Item labels and issue comments; records every call."""
 
-    def __init__(self, labels=(), comments=(), runs=()):
+    def __init__(self, labels=(), comments=()):
         self.labels = list(labels)
         self.comments = list(comments)
-        self.runs = list(runs)
         self.calls = []
 
     def __call__(self, args):
@@ -25,10 +24,6 @@ class FakeGh:
             return json.dumps([{"name": n} for n in self.labels])
         if method == "GET" and url.endswith("/comments?per_page=100"):
             return "\n".join(json.dumps(c) for c in self.comments)
-        if method == "GET" and url == "repos/o/r/actions/runs/1":
-            return json.dumps({"id": 1, "workflow_id": 77})
-        if method == "GET" and url.startswith("repos/o/r/actions/workflows/77/runs"):
-            return json.dumps({"workflow_runs": self.runs})
         return "{}"
 
     def writes(self):
@@ -83,27 +78,6 @@ def test_cmd_report_error_reason(monkeypatch):
     assert cli.main(["report-error", "--repo", "o/r", "--issue", "3", "--run-url", "https://run/1"]) == 0
     body = next(c for c in gh.writes() if c[3].endswith("/comments"))[-1]
     assert "(failed job: context)" in body
-
-
-def run(rid, event, status="in_progress", prs=(), title="T"):
-    return {"id": rid, "event": event, "status": status, "display_title": title,
-            "pull_requests": [{"number": n} for n in prs]}
-
-
-def test_cancel_runs_cancels_only_the_items_in_flight_runs():
-    runs = [run(1, "pull_request", prs=[3]),  # this run
-            run(2, "pull_request", prs=[3]), run(3, "pull_request", prs=[4]),
-            run(4, "pull_request", status="completed", prs=[3]),
-            run(5, "issue_comment"), run(6, "issue_comment", title="Other"), run(7, "schedule"),
-            run(8, "pull_request", status="queued", prs=[3])]
-    gh = FakeGh(runs=runs)
-    assert guard.cancel_runs(gh, "o/r", 1, 3, "T") == [2, 5, 8]
-    assert all(c[3].endswith("/cancel") for c in gh.writes())
-
-
-def test_cancel_runs_without_title_matches_pr_runs_only():
-    gh = FakeGh(runs=[run(5, "issues", title=""), run(6, "pull_request", prs=[3])])
-    assert guard.cancel_runs(gh, "o/r", 1, 3, "") == [6]
 
 
 @pytest.mark.parametrize("item_off,e2e", [(False, False), (True, False), (False, True)])

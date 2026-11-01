@@ -3,7 +3,6 @@
 - `item_off`: the live re-check before a write; a label added after the config gate still stops every write.
 - `report_error`: label `ai: error` plus one sticky error comment with the run link and a reason built from job names
   only (never agent text). Nothing re-runs: the maintainer reads the log, removes the label and re-runs if wanted.
-- `cancel_runs`: the caller's `off` job cancels this workflow's in-flight runs for the item.
 """
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ ERROR_LABEL = "ai: error"
 PENDING = "ai-review: pending"
 ERROR_MARKER = "<!-- ai-workflows:error -->"
 BOT = "github-actions[bot]"  # only the GITHUB_TOKEN identity's marker comment is ours (ADR-0021)
-ITEM_EVENTS = ("issues", "issue_comment")  # runs matched by display title; pull_request runs by PR number
 
 GhRunner = Callable[[list[str]], str]
 
@@ -89,30 +87,6 @@ def report_error(gh: GhRunner, repo: str, number: int, run_url: str, reason: str
     return True
 
 
-def is_item_run(run: dict[str, Any], number: int, title: str) -> bool:
-    if run.get("event") == "pull_request":
-        return number in [p.get("number") for p in run.get("pull_requests") or []]
-    return run.get("event") in ITEM_EVENTS and bool(title) and run.get("display_title") == title
-
-
-def cancel_runs(gh: GhRunner, repo: str, run_id: int, number: int, title: str) -> list[int]:
-    """Cancel the in-flight runs of this run's workflow for item `number`; returns their ids."""
-    own = json.loads(gh(["api", f"repos/{repo}/actions/runs/{run_id}"]))
-    got = json.loads(gh(["api", f"repos/{repo}/actions/workflows/{own['workflow_id']}/runs?per_page=100"]))
-    cancelled = []
-    for run in got.get("workflow_runs") or []:
-        if run["id"] == run_id or run.get("status") == "completed" or not is_item_run(run, number, title):
-            continue
-        try:
-            gh(["api", "-X", "POST", f"repos/{repo}/actions/runs/{run['id']}/cancel"])
-        except RuntimeError as exc:  # finished meanwhile (409)
-            print(f"::warning::run {run['id']} not cancelled: {exc}")
-            continue
-        cancelled.append(run["id"])
-    print(f"{repo}#{number}: '{OFF_LABEL}' cancelled runs {cancelled or 'none'}")
-    return cancelled
-
-
 def cmd_report_error(args: argparse.Namespace) -> int:
     from aiwf import config
 
@@ -126,22 +100,9 @@ def cmd_report_error(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_cancel_runs(args: argparse.Namespace) -> int:
-    from aiwf import config
-
-    cancel_runs(config.run_gh, args.repo, args.run_id, args.item, os.environ.get("ITEM_TITLE", ""))
-    return 0
-
-
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("report-error", help="label `ai: error` and post the error comment (env AIWF_NEEDS)")
     p.add_argument("--repo", required=True)
     p.add_argument("--issue", required=True, type=int)
     p.add_argument("--run-url", required=True)
     p.set_defaults(func=cmd_report_error)
-    p = sub.add_parser("cancel-runs", help="`ai: off`: cancel this workflow's in-flight runs for an item "
-                                           "(env ITEM_TITLE)")
-    p.add_argument("--repo", required=True)
-    p.add_argument("--run-id", required=True, type=int)
-    p.add_argument("--item", required=True, type=int)
-    p.set_defaults(func=cmd_cancel_runs)
