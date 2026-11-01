@@ -5,3 +5,4 @@ __pycache__/
 # beads: local only (no longer the status board); nothing under .beads is committed
 .beads/
 .beads.gate.lock
+docs/specs
