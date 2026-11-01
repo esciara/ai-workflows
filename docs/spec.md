@@ -127,7 +127,7 @@ The two highlighted steps are the only places the flow waits on a person; every 
 - Feature or question: stop. Low confidence: `triage: needs-human`, stop.
 - Duplicate: comment with the link, label `triage: duplicate`, stop. Possible fix on the default branch: comment with a "possibly fixed by X" link, no label; B2's reproduction confirms or rejects it. Never close.
 
-**B2 — Reproduce (**[TRI-08](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**, **[EXE-02](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**).** In a fresh sandbox on the default branch HEAD, with no secrets and no push rights:
+**B2 — Reproduce (**[TRI-08](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**, **[EXE-02](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**).** In a fresh sandbox on the default branch HEAD, with no secrets (except the model token, under the sandbox, scrub and gate of ADR-0037) and no push rights:
 
 1. Extract steps, expected vs actual behaviour, versions and environment from the issue.
 2. Turn them into an automated failing test (preferred) or, in a repo with no test harness, a script whose captured output shows the failure (enough to pass B2).
