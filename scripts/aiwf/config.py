@@ -15,8 +15,6 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[2]  # the ai-workflows checkout (at job.workflow_sha in CI, ADR-0019)
 SCHEMA_PATH = ROOT / "schema" / "ai-workflows.schema.json"
 DEFAULT_CONFIG_PATH = ".github/ai-workflows.yml"
-E2E_CONFIG_DIR = "tests/e2e/config"  # alternative configs for the playground's e2e caller only (ADR-0028)
-E2E_REPO = "esciara/ai-workflows-playground"  # the only repo where `e2e_config` is honoured; elsewhere it fails
 
 GhRunner = Callable[[list[str]], str]
 
@@ -67,17 +65,6 @@ def fetch_from_repo(repo: str, path: str, ref: str | None = None, gh: GhRunner |
     except (ValueError, UnicodeDecodeError):
         raise ConfigError(source, ["content is not valid base64/UTF-8"]) from None
     return text, source
-
-
-def read_e2e(name: str, root: Path = ROOT) -> tuple[str, str]:
-    """Return (text, source) for e2e config `name`: a plain file name in E2E_CONFIG_DIR of this checkout, never a path."""
-    source = f"ai-workflows:{E2E_CONFIG_DIR}/{name}"
-    if not name or name != Path(name).name or name.startswith(".") or not name.endswith((".yml", ".yaml")):
-        raise ConfigError(source, ["e2e config must be a .yml file name in " + E2E_CONFIG_DIR])
-    try:
-        return (root / E2E_CONFIG_DIR / name).read_text(encoding="utf-8"), source
-    except OSError:
-        raise ConfigError(source, ["file not found"]) from None
 
 
 def parse(text: str, source: str) -> dict[str, Any]:
@@ -166,13 +153,11 @@ def summary(cfg: dict[str, Any], source: str) -> str:
     return "\n".join(lines)
 
 
-def github_outputs(cfg: dict[str, Any], item_off: bool = False, e2e: bool = False) -> dict[str, str]:
-    """`item_off`: the event's issue or PR has `ai: off`, so nothing runs for it (ADR-0045). `e2e`: the playground's
-    e2e config is in use; only then do the workflows honour the e2e crash label (ADR-0045). A repo's own config cannot
-    set the key: the schema allows no unknown keys."""
+def github_outputs(cfg: dict[str, Any], item_off: bool = False) -> dict[str, str]:
+    """`item_off`: the event's issue or PR has `ai: off`, so nothing runs for it (ADR-0045)."""
     enabled = cfg["enabled"] and not item_off
     return {
-        "config": json.dumps({**cfg, "e2e": True} if e2e else cfg, separators=(",", ":"), sort_keys=True),
+        "config": json.dumps(cfg, separators=(",", ":"), sort_keys=True),
         "enabled": json.dumps(enabled),
         "review": json.dumps(enabled and cfg["workflows"]["review"]),
         "triage": json.dumps(enabled and cfg["workflows"]["triage"]),

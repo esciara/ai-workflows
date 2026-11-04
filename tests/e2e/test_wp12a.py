@@ -4,9 +4,10 @@ Runs against the playground (AIWF_E2E=1) with the e2e slot (AIWF_E2E_SLOT=1): ev
 (an `e2e/` PR branch, or the `e2e-target` label), which runs the workflows at the commit under test (ADR-0043).
 
 1. An issue opened with `ai: off` gets no triage, and a maintainer's `/ping` on it gets no reply (config gate).
-2. A forced crash (label `e2e-crash`, honoured only with the playground's e2e config, ADR-0045), on an issue (triage)
-   and on a PR (review, started by a maintainer's `/review`): the run fails, the item gets `ai: error` and exactly one
-   error comment linking that run; nothing retries it (run attempt stays 1, still one error comment after a grace).
+2. A forced crash (label `e2e-crash`: the playground's caller-e2e.yml then passes an invalid model token, so the
+   first agent job fails; no product hook), on an issue (triage) and on a PR (review, started by a maintainer's
+   `/review`): the run fails, the item gets `ai: error` and exactly one error comment linking that run; nothing
+   retries it (run attempt stays 1, still one error comment after a grace).
 
 `ai: off` on a PR (the review gate) and the pre-write live-label re-check (a label added between the gate and a write)
 are unit-tested (tests/test_guard.py).
@@ -142,7 +143,7 @@ def assert_crash_reported(number: int, run: dict, crashed: str, failed: str) -> 
     jobs = pg.jobs(run["id"])
     print(f"crash run {run['id']} {run['html_url']} -> {run['conclusion']}, jobs {jobs}")
     assert run["conclusion"] == "failure", jobs
-    assert jobs.get(crashed) == "failure", jobs
+    assert any(j.startswith(crashed) and c == "failure" for j, c in jobs.items()), jobs
     assert jobs.get(failed) == "success", jobs
     got = labels(number)
     assert ERROR in got and PENDING not in got, sorted(got)
@@ -175,19 +176,19 @@ def test_ai_off_issue_gets_no_triage_and_no_command_reply(e2e_target, issue_fact
 
 
 def test_forced_crash_on_triage_gives_ai_error_and_one_comment(e2e_target, issue_factory):
-    pg.ensure_label(CRASH, "d93f0b", "e2e only: forces a crash (honoured with the playground e2e config only)")
+    pg.ensure_label(CRASH, "d93f0b", "e2e only: the e2e caller passes an invalid model token")
     t0 = now()
     issue = issue_factory("forced crash", [CRASH])
     run = with_job("issues", issue["title"], t0, "triage / failed")
-    assert_crash_reported(issue["number"], run, "triage / context", "triage / failed")
+    assert_crash_reported(issue["number"], run, "triage / extract", "triage / failed")
     assert not bot_comments(issue["number"], TRIAGE_MARKER)
 
 
 def test_forced_crash_on_review_gives_ai_error_and_one_comment(e2e_target):
-    pg.ensure_label(CRASH, "d93f0b", "e2e only: forces a crash (honoured with the playground e2e config only)")
+    pg.ensure_label(CRASH, "d93f0b", "e2e only: the e2e caller passes an invalid model token")
     with draft_pr("[e2e] WP12a forced crash on review", [CRASH]) as pr:
         cmt = pg.comment(pr["number"], "/review")
         run = with_job("issue_comment", pr["title"], cmt["created_at"], "review / failed")
-        assert_crash_reported(pr["number"], run, "review / context", "review / failed")
+        assert_crash_reported(pr["number"], run, "review / pass", "review / failed")
         assert not bot_comments(pr["number"], REVIEW_MARKER)
         assert not labels(pr["number"]) & VERDICTS

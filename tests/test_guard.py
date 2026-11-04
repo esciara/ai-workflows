@@ -81,13 +81,12 @@ def test_cmd_report_error_reason(monkeypatch):
     assert "(failed job: context)" in body
 
 
-@pytest.mark.parametrize("item_off,e2e", [(False, False), (True, False), (False, True)])
-def test_config_outputs_item_off_and_e2e(item_off, e2e):
+@pytest.mark.parametrize("item_off", [False, True])
+def test_config_outputs_item_off(item_off):
     cfg = config.load("maintainers: [me]\nworkflows: {review: true, triage: true}\n", "t")
-    out = config.github_outputs(cfg, item_off=item_off, e2e=e2e)
+    out = config.github_outputs(cfg, item_off=item_off)
     assert out["review"] == out["triage"] == out["enabled"] == json.dumps(not item_off)
     assert out["item_off"] == json.dumps(item_off)
-    assert json.loads(out["config"]).get("e2e") is (True if e2e else None)
 
 
 def test_cli_config_reads_ai_off_from_the_event(tmp_path, monkeypatch):
@@ -98,7 +97,6 @@ def test_cli_config_reads_ai_off_from_the_event(tmp_path, monkeypatch):
     assert cli.main(["config", "--file", str(tmp_path / "c.yml"), "--github-output", str(out)]) == 0
     got = dict(line.split("=", 1) for line in out.read_text().splitlines())
     assert got["enabled"] == "false" and got["review"] == "false" and got["item_off"] == "true"
-    assert "e2e" not in json.loads(got["config"])
 
 
 def test_publish_writes_nothing_when_off(monkeypatch):
