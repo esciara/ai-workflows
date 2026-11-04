@@ -4,7 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D41`
-- Supersedes: [ADR-0008](0008-summary-comment-and-review.md), [ADR-0016](0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md)
+- Supersedes: [ADR-0008](archive/0008-summary-comment-and-review.md), [ADR-0016](archive/0016-review-summary-in-a-sticky-comment-reviews-only-when-needed.md)
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR-0049 · Factory loop: post-review acceptance-test changes that keep the assertions are the orchestrator's call (consolidated)
 
-- Status: Accepted
+- Status: Superseded by CLAUDE.md (process simplification, 2026-11-04)
 - Date: 2026-11-01
 - Deciders: maintainer
 - Alias: `D49`
@@ -8,7 +8,7 @@
 
 ## Context
 
-[ADR-0042](0042-factory-loop-consolidated.md) stops the loop and goes to the maintainer whenever an acceptance test changes after its `verify-wp` review. In practice most post-review changes do not touch what the test proves: they fix run selection, waits and polling, or fixture data and texts. WP11a and WP12b alone caused three maintainer interruptions for such changes. The stop exists so that a builder cannot weaken a reviewed test to make it pass; that risk lives in the assertions and the Done-when coverage, not in the plumbing around them. Narrowing the stop reverses part of ADR-0042, so per the README rule this ADR restates the full current loop, including what [ADR-0046](0046-status-views-derived-from-beads.md) and [ADR-0048](0048-per-wp-diagrams-required-and-generated.md) added to ADR-0042.
+[ADR-0042](0042-factory-loop-consolidated.md) stops the loop and goes to the maintainer whenever an acceptance test changes after its `verify-wp` review. In practice most post-review changes do not touch what the test proves: they fix run selection, waits and polling, or fixture data and texts. WP11a and WP12b alone caused three maintainer interruptions for such changes. The stop exists so that a builder cannot weaken a reviewed test to make it pass; that risk lives in the assertions and the Done-when coverage, not in the plumbing around them. Narrowing the stop reverses part of ADR-0042, so per the README rule this ADR restates the full current loop, including what [ADR-0046](0046-status-views-derived-from-beads.md) and [ADR-0048](../0048-per-wp-diagrams-required-and-generated.md) added to ADR-0042.
 
 ## Options considered
 
@@ -23,7 +23,7 @@ Ask-always was rejected for its cost on changes that prove nothing new; no rule 
 Replaces: ADR-0042 (its stop on any acceptance-test change after review, now limited to changes of assertions or Done-when coverage; the rest restated).
 
 - Stop-WPs are WP1, WP4, WP9 and WP12. Before writing code they post a short plan and wait for the maintainer's "go"; after the PR they stop and wait for review. Every other WP has no plan stop: when the review and the acceptance test pass, it opens its PR and the loop continues without waiting; the maintainer reviews these PRs in batches and always merges.
-- Each WP: branch `wp<N>-<slug>` → write the acceptance test `tests/e2e/test_wp<N>.py` (plus shared helpers in `tests/e2e/`), which drives the playground and asserts every Done-when condition → `scripts/dev/verify-wp <WP>` reviews it → build → the WP is done when `AIWF_E2E=1 pytest -n 4 tests/e2e/test_wp<N>.py -v` passes (e2e slot: [ADR-0043](0043-e2e-on-the-playground-consolidated.md)) → PR whose description holds the e2e output, the run IDs it prints and the review verdict. A split WP's acceptance test is `tests/e2e/test_wp<N><x>.py`, or the WP's `tests/e2e/test_wp<N>.py` when the split has none (ADR-0046).
+- Each WP: branch `wp<N>-<slug>` → write the acceptance test `tests/e2e/test_wp<N>.py` (plus shared helpers in `tests/e2e/`), which drives the playground and asserts every Done-when condition → `scripts/dev/verify-wp <WP>` reviews it → build → the WP is done when `AIWF_E2E=1 pytest -n 4 tests/e2e/test_wp<N>.py -v` passes (e2e slot: [ADR-0043](../0043-e2e-on-the-playground-consolidated.md)) → PR whose description holds the e2e output, the run IDs it prints and the review verdict. A split WP's acceptance test is `tests/e2e/test_wp<N><x>.py`, or the WP's `tests/e2e/test_wp<N>.py` when the split has none (ADR-0046).
 - The WP's PR also adds its diagram, `docs/diagrams/wp<N>.mmd` (one per split for a split WP), part of the WP's definition of done; the sync PR renders it into `docs/diagrams.md` (ADR-0048).
 - Acceptance tests run only when `AIWF_E2E=1`, so CI stays network-free. Timeouts and API failures fail the test, never pass it. Tests create and clean up their own fixtures and stay scoped to their own items.
 - `scripts/dev/verify-wp` runs a fresh `claude -p --model sonnet` with no tools, given only the spec, the WP's Done-when and the test source, and returns `{verdict, gaps, notes}` validated against `schema/verifier.json`: does the test assert every condition, with none missing, weakened or vacuous?

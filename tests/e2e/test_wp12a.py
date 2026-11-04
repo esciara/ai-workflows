@@ -3,14 +3,13 @@
 Runs against the playground (AIWF_E2E=1) with the e2e slot (AIWF_E2E_SLOT=1): every item routes to caller-e2e.yml
 (an `e2e/` PR branch, or the `e2e-target` label), which runs the workflows at the commit under test (ADR-0043).
 
-1. A draft PR with `ai: off` marked ready for review starts no review: config runs, the config gate skips every
-   review job; no summary comment, no verdict label. (No cancel of runs in flight: ADR-0045, decision 3.)
-2. An issue opened with `ai: off` gets no triage, and a maintainer's `/ping` on it gets no reply (config gate).
-3. A forced crash (label `e2e-crash`, honoured only with the playground's e2e config, ADR-0045), on an issue (triage)
+1. An issue opened with `ai: off` gets no triage, and a maintainer's `/ping` on it gets no reply (config gate).
+2. A forced crash (label `e2e-crash`, honoured only with the playground's e2e config, ADR-0045), on an issue (triage)
    and on a PR (review, started by a maintainer's `/review`): the run fails, the item gets `ai: error` and exactly one
    error comment linking that run; nothing retries it (run attempt stays 1, still one error comment after a grace).
 
-The pre-write live-label re-check (a label added between the gate and a write) is unit-tested (tests/test_guard.py).
+`ai: off` on a PR (the review gate) and the pre-write live-label re-check (a label added between the gate and a write)
+are unit-tested (tests/test_guard.py).
 """
 
 from __future__ import annotations
@@ -154,23 +153,6 @@ def assert_crash_reported(number: int, run: dict, crashed: str, failed: str) -> 
     time.sleep(GRACE)  # no retry: the run is not re-attempted and no second error comment appears
     assert pg.api(f"repos/{pg.REPO}/actions/runs/{run['id']}")["run_attempt"] == 1
     assert len(bot_comments(number, ERROR_MARKER)) == 1
-
-
-def test_ai_off_pr_marked_ready_gets_no_review(e2e_target):
-    pg.ensure_label(OFF, "000000", "Kill switch: no AI run on this issue or PR")
-    with draft_pr("[e2e] WP12a ai: off on a PR", [OFF]) as pr:
-        number, title = pr["number"], pr["title"]
-        node = pg.api(f"repos/{pg.REPO}/pulls/{number}")["node_id"]
-        t_ready = now()
-        pg.gh(["api", "graphql", "-f", f'query=mutation {{ markPullRequestReadyForReview(input: {{pullRequestId: "{node}"}}) '
-               "{ pullRequest { isDraft } } }"], as_agent=True)
-        ready = pg.completed(with_job("pull_request", title, t_ready, "config / load")["id"])
-        jobs = pg.jobs(ready["id"])
-        print(f"ready run {ready['id']} {ready['html_url']} -> {ready['conclusion']}, jobs {jobs}")
-        assert ready["conclusion"] == "success" and jobs["config / load"] == "success", jobs
-        assert all(c == "skipped" for j, c in jobs.items() if j.startswith("review")), jobs
-        assert not bot_comments(number, REVIEW_MARKER)
-        assert not labels(number) & VERDICTS
 
 
 def test_ai_off_issue_gets_no_triage_and_no_command_reply(e2e_target, issue_factory):

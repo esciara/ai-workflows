@@ -1,6 +1,6 @@
 # ADR-0046 · Status views derived from beads; split WPs get their own plan rows
 
-- Status: Accepted
+- Status: Superseded by CLAUDE.md (process simplification, 2026-11-04)
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D46`

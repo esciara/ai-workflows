@@ -13,9 +13,8 @@ Known design issues and accepted risks: see [`docs/known-issues.md`](docs/known-
 
 - `CLAUDE.md` — standing rules for every session in this repo.
 - `docs/spec.md` — what is built.
-- `docs/plan.md` — the order, as 15 work packages, and how each is checked.
-- `docs/progress.md` — where things stand.
+- `docs/plan.md` — the order, as 15 work packages, how each is checked, and where things stand (Status column).
 
 ## Status
 
-See `docs/progress.md`.
+See the Status column of `docs/plan.md`.

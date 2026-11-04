@@ -16,12 +16,12 @@ Key:
   - pale box with thick solid border = in progress (or in review)
   - very pale box with dotted border = not started
 
-Box status comes from the beads board (`docs/board.jsonl`) and the links from the WP table of `docs/plan.md`, both set by `scripts/dev/render-diagrams` (ADR-0046); `overview.mmd` declares only each WP's lane. Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't work in your viewer, use the table below.
+Box status comes from the Status column and the links from the WP table of `docs/plan.md`, both set by `scripts/dev/render-diagrams`; `overview.mmd` declares only each WP's lane. Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't work in your viewer, use the table below.
 
 <!-- BEGIN generated:overview (from docs/diagrams/overview.mmd by scripts/dev/render-diagrams; edit the .mmd, not this block) -->
 ```mermaid
 flowchart TD
-  %% Status is not typed here: render-diagrams sets each WP's class from its bead in docs/board.jsonl (ADR-0046).
+  %% Status is not typed here: render-diagrams sets each WP's class from its Status in docs/plan.md.
   %% Lanes: <lane> not started, <lane>Wip in progress, <lane>Done done.
   %% lane base: WP0 WP1
   %% lane a: WP2 WP3 WP4

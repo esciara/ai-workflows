@@ -4,7 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D38`
-- Supersedes: [ADR-0001](0001-permissions-granted-per-job-by-caller.md), [ADR-0013](0013-publish-job-pull-requests-write.md), [ADR-0017](0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md)
+- Supersedes: [ADR-0001](archive/0001-permissions-granted-per-job-by-caller.md), [ADR-0013](archive/0013-publish-job-pull-requests-write.md), [ADR-0017](archive/0017-top-level-permissions-empty-in-caller-and-reusable-workflows.md)
 
 ## Context
 
