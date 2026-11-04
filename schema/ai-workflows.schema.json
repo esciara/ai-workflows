@@ -33,10 +33,7 @@
       "properties": {
         "human_review_lines": {"type": "integer", "minimum": 1, "default": 400},
         "fix_rounds": {"type": "integer", "minimum": 1, "default": 3},
-        "info_requests": {"type": "integer", "minimum": 0, "default": 2},
-        "agent_budget_usd": {"type": "number", "exclusiveMinimum": 0, "maximum": 20, "default": 1, "description": "Per agent, Claude Code --max-budget-usd (ADR-0045)"},
-        "run_budget_usd": {"type": "number", "exclusiveMinimum": 0, "maximum": 50, "default": 5, "description": "Sum over one run's agents (ADR-0045)"},
-        "agent_minutes": {"type": "integer", "minimum": 1, "maximum": 15, "default": 10, "description": "Wall-clock cap per agent step (ADR-0045)"}
+        "info_requests": {"type": "integer", "minimum": 0, "default": 2}
       }
     },
     "reporter_silence_days": {

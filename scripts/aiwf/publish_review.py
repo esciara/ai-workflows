@@ -27,7 +27,6 @@ STATE_V = 2  # v1 (WP2a) kept finding keys only; its state reads as no prior sta
 STATE_RE = re.compile(r"<!-- ai-review:state (\{.*?\}) -->\s*\Z", re.S)
 BOT = "github-actions[bot]"  # the GITHUB_TOKEN identity; only its marker comments are trusted (ADR-0021)
 PENDING = "ai-review: pending"
-HUMAN = "ai-review: human-review"
 HEADINGS = {
     "ai-review: merge": "✅ Merge",
     "ai-review: changes-requested": "❌ Changes requested",
@@ -43,7 +42,6 @@ MAX_BODY = 60_000  # GitHub caps a comment at 65,536 characters
 THREAD_RE = re.compile(r"https://[A-Za-z0-9.-]+/[A-Za-z0-9._/-]+/pull/\d+#discussion_r\d+\Z")
 FINDING_RE = re.compile(r"<!-- ai-review:finding ([0-9a-f]{12}\+*) -->")
 CHANGES = "ai-review: changes-requested"
-USAGE_SUM = ("cost_usd", "turns", "duration_ms", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
 
 
 clean = publish.clean  # one table-safe line (shared with triage)
@@ -208,14 +206,6 @@ def set_verdict_label(gh: publish.GhRunner, repo: str, number: int, label: str) 
     publish.add_labels(gh, repo, number, label)
 
 
-def total_usage(usage: dict[str, Any]) -> dict[str, Any]:
-    """Per-agent usage plus `total`, summed over the agents (plan: Usage limits)."""
-    agents = {k: v for k, v in usage.items() if isinstance(v, dict)}
-    total = {f: sum(v[f] for v in agents.values() if isinstance(v.get(f), (int, float))) for f in USAGE_SUM}
-    total["cost_usd"] = round(total["cost_usd"], 4)
-    return {**agents, "total": total, "agents": len(agents)}
-
-
 def inline_comment(f: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
     """The review comment for an inline finding: its text, the other places, a `suggestion` block when it fits."""
     parts = [f"**{f['severity']}** · {clean(f['title'], 120)}", "", clean(f["detail"])]
@@ -311,8 +301,8 @@ def send_review(gh: publish.GhRunner, repo: str, number: int, facts: dict[str, A
     return notes
 
 
-def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str, Any], usage: dict[str, Any],
-                   repo: str, number: int, run_url: str, aiwf_sha: str, gh: publish.GhRunner) -> bool:
+def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str, Any], repo: str, number: int,
+                   run_url: str, aiwf_sha: str, gh: publish.GhRunner) -> bool:
     """Validate the 4 passes and the verifier, decide, then create or update the summary comment and set the label."""
     try:
         passes = {}
@@ -337,14 +327,12 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
     suspicious = list(dict.fromkeys(s for d in (*passes.values(), verify) for s in d["suspicious_instructions"]))[:10]
     data = {"summary": verify["summary"], "findings": findings, "history": history, "counts": counts,
             "tests": passes["tests"]["summary"], "suspicious_instructions": suspicious}
-    usage = total_usage(usage)
     for f in findings:  # a still-open finding keeps its thread; it is not commented again
         f["place"] = placement.INLINE if f.get("thread") else placement.place(f, facts)
 
     def upsert(cid: int | None) -> tuple[int | None, str]:
         """Create or update the summary comment; returns (id, html_url)."""
         state = {"v": STATE_V, "sha": facts["sha"], "verdict": label, "aiwf_sha": aiwf_sha, "run": run_url,
-                 "usage": usage["total"],
                  "open": [{"id": f["id"], "severity": f["severity"], "path": f["path"][:300], "line": f.get("line"),
                            "title": f["title"][:120], "detail": f["detail"][:300],
                            **({"thread": f["thread"]} if f.get("thread") else {})} for f in findings[:MAX_STATE]]}
@@ -369,15 +357,7 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
     print(f"{repo}#{number}: {label} ({'; '.join(reasons)}); verification {json.dumps(counts)}")
     print("placement: " + json.dumps({p: sum(f["place"] == p for f in findings)
                                       for p in (placement.INLINE, placement.COLLAPSED, placement.GENERAL)}))
-    print(f"usage: {json.dumps(usage)}")
     return True
-
-
-def read_json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
 
 
 def cmd_review_publish(args: argparse.Namespace) -> int:
@@ -397,24 +377,16 @@ def cmd_review_publish(args: argparse.Namespace) -> int:
             passes_raw[name] = (passes_dir / f"{name}.json").read_text(encoding="utf-8")
         except OSError:
             passes_raw[name] = ""
-    usage = {name: read_json(passes_dir / f"{name}.usage.json") for name in review.PASSES}
-    try:
-        usage["verify"] = json.loads(os.environ.get("USAGE") or "null")
-    except json.JSONDecodeError:
-        pass
-    if guard.check_budget(config.run_gh, args.repo, args.pr, args.run_url, HUMAN, usage):
-        set_verdict_label(config.run_gh, args.repo, args.pr, HUMAN)  # clears pending and stale verdicts (ADR-0045)
-        return 0
-    ok = publish_review(passes_raw, os.environ.get("VERIFY_JSON", ""), facts, usage, args.repo, args.pr,
+    ok = publish_review(passes_raw, os.environ.get("VERIFY_JSON", ""), facts, args.repo, args.pr,
                         args.run_url, os.environ.get("AIWF_SHA", ""), config.run_gh)
     return 0 if ok else 1
 
 
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("review-publish",
-                       help="Workflow A: verify, verdict, summary comment, label (env VERIFY_JSON, FACTS, USAGE)")
+                       help="Workflow A: verify, verdict, summary comment, label (env VERIFY_JSON, FACTS)")
     p.add_argument("--repo", required=True)
     p.add_argument("--pr", required=True, type=int)
     p.add_argument("--run-url", default="")
-    p.add_argument("--passes-dir", required=True, help="the passes' answers, <pass>.json and <pass>.usage.json")
+    p.add_argument("--passes-dir", required=True, help="the passes' answers, <pass>.json")
     p.set_defaults(func=cmd_review_publish)

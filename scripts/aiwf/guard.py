@@ -3,8 +3,7 @@
 - `item_off`: the live re-check before a write; a label added after the config gate still stops every write.
 - `report_error`: label `ai: error` plus one sticky error comment with the run link and a reason built from job names
   only (never agent text). Nothing re-runs: the maintainer reads the log, removes the label and re-runs if wanted.
-- `budget_hit` / `report_budget` (WP12b): an agent stopped by its cost or time budget, or a run total over budget,
-  escalates (`ai: budget` plus the workflow's hand-over label, one sticky note with the run link); not an error.
+- An agent that hits its time or turn limit (ADR-0050) fails its job, so it goes through `report_error` too.
 """
 
 from __future__ import annotations
@@ -19,9 +18,6 @@ OFF_LABEL = "ai: off"
 ERROR_LABEL = "ai: error"
 PENDING = "ai-review: pending"
 ERROR_MARKER = "<!-- ai-workflows:error -->"
-BUDGET_LABEL = "ai: budget"
-BUDGET_MARKER = "<!-- ai-workflows:budget -->"
-BUDGET_SUBTYPE = "error_max_budget_usd"  # Claude Code's result subtype when --max-budget-usd stops the agent
 BOT = "github-actions[bot]"  # only the GITHUB_TOKEN identity's marker comment is ours (ADR-0021)
 
 GhRunner = Callable[[list[str]], str]
@@ -75,7 +71,6 @@ def find_marker_comment(gh: GhRunner, repo: str, number: int, marker: str) -> in
     return None
 
 
-
 def report_error(gh: GhRunner, repo: str, number: int, run_url: str, reason: str) -> bool:
     """`ai: error` and one sticky error comment; nothing when the item now has `ai: off`. Idempotent."""
     remove_label(gh, repo, number, PENDING)
@@ -90,66 +85,6 @@ def report_error(gh: GhRunner, repo: str, number: int, run_url: str, reason: str
     else:
         gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{cid}", "-f", f"body={body}"])
     print(f"{repo}#{number}: {ERROR_LABEL} ({reason})")
-    return True
-
-
-def budget_hit(usage: dict[str, Any], limits: dict[str, Any]) -> str:
-    """Why the run is over budget, or "": an agent stopped by `--max-budget-usd` or by its step timeout, or the sum of
-    the agents' cost over `run_budget_usd`. `usage` maps agent name to its usage record (scripts/agent-usage.sh)."""
-    agents = {k: v for k, v in usage.items() if isinstance(v, dict)}
-    for name in sorted(agents):
-        if agents[name].get("subtype") == BUDGET_SUBTYPE:
-            return f"agent `{name}` hit its cost budget"  # the cap may differ from the config (e2e)
-        if agents[name].get("timed_out") is True:
-            return f"agent `{name}` hit its time budget ({limits.get('agent_minutes')} min)"
-    total = sum(v["cost_usd"] for v in agents.values() if isinstance(v.get("cost_usd"), (int, float)))
-    cap = limits.get("run_budget_usd")
-    if isinstance(cap, (int, float)) and total > cap:
-        return f"the run's agents cost ${total:.2f}, over the run budget (${cap})"
-    return ""
-
-
-def budget_body(run_url: str, reason: str, escalate: str) -> str:
-    return (f"{BUDGET_MARKER}\n⏱️ **ai-workflows stopped: budget reached** ({reason}). [Run log]({run_url})\n\n"
-            f"Nothing was published and nothing is retried. Labelled `{escalate}`: a person takes over. To run it "
-            "again, raise the limits in `.github/ai-workflows.yml` if needed, remove `ai: budget` and re-run.")
-
-
-def report_budget(gh: GhRunner, repo: str, number: int, run_url: str, reason: str, escalate: str) -> bool:
-    """`ai: budget` + `escalate` and one sticky budget note; nothing but pending removal under `ai: off`."""
-    remove_label(gh, repo, number, PENDING)
-    if item_off(gh, repo, number):
-        print(f"{repo}#{number} has '{OFF_LABEL}': budget hit not reported")
-        return False
-    gh(["api", "-X", "POST", f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={BUDGET_LABEL}",
-        "-f", f"labels[]={escalate}"])
-    body = budget_body(run_url, reason, escalate)
-    cid = find_marker_comment(gh, repo, number, BUDGET_MARKER)
-    if cid is None:
-        gh(["api", "-X", "POST", f"repos/{repo}/issues/{number}/comments", "-f", f"body={body}"])
-    else:
-        gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{cid}", "-f", f"body={body}"])
-    print(f"::warning title=Budget reached::{repo}#{number}: {reason}")
-    return True
-
-
-def check_budget(gh: GhRunner, repo: str, number: int, run_url: str, escalate: str,
-                 usage: dict[str, Any] | None = None) -> bool:
-    """`usage` (agent -> usage; default env AIWF_USAGE) against the limits in env AIWF_CONFIG: report a budget hit and
-    set the step output `budget=true`."""
-    try:
-        if usage is None:
-            usage = json.loads(os.environ.get("AIWF_USAGE") or "{}")
-        limits = json.loads(os.environ.get("AIWF_CONFIG") or "{}").get("limits") or {}
-    except (json.JSONDecodeError, AttributeError):
-        return False
-    reason = budget_hit(usage if isinstance(usage, dict) else {}, limits)
-    if not reason:
-        return False
-    report_budget(gh, repo, number, run_url, reason, escalate)
-    if os.environ.get("GITHUB_OUTPUT"):
-        with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
-            fh.write("budget=true\n")
     return True
 
 

@@ -161,9 +161,8 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
             print(f"::warning title=Classifier reference dropped::{name}={json.dumps(value)} is not a valid reference")
     fix_conf = fix_confidence(data, os.environ.get(RANGE_ENV, "")) if fix else ""
     want = labels_for(data, is_duplicate(data, dup))
-    for stale in (publish.ERROR_LABEL, publish.BUDGET_LABEL):  # left by an earlier run (ADR-0045)
-        if stale in current:
-            remove_label(gh, repo, issue, stale)
+    if publish.ERROR_LABEL in current:  # left by an earlier run (ADR-0045)
+        remove_label(gh, repo, issue, publish.ERROR_LABEL)
     for label in B1_LABELS:
         if label in current and label not in want:
             remove_label(gh, repo, issue, label)

@@ -64,8 +64,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: {}
-    env:
-      AGENT_BUDGET: ${{ fromJSON(inputs.config).limits.agent_budget_usd }}
     outputs:
       json: ${{ steps.claude.outputs.structured_output }}
     steps:
@@ -81,7 +79,7 @@ jobs:
           # Claude's --json-schema rejects the draft 2020-12 `$schema` key; publish validates against the full file.
           echo "SCHEMA=$(jq -c 'del(."$schema")' .ai-workflows/schema/ping.json)" >> "$GITHUB_ENV"
       - id: claude
-        timeout-minutes: ${{ fromJSON(inputs.config).limits.agent_minutes }}  # wall-clock budget (ADR-0045)
+        timeout-minutes: 5  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
         uses: anthropics/claude-code-action/base-action@6d5ae526d25ce88daa2200be073e1a373167f064 # v1.0.265
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -90,7 +88,6 @@ jobs:
             --max-turns 2
             --tools StructuredOutput
             --json-schema '${{ env.SCHEMA }}'
-            --max-budget-usd ${{ env.AGENT_BUDGET }}
 
   publish:
     needs: [parse, agent]

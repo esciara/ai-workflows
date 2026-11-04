@@ -12,9 +12,6 @@ limits:
   human_review_lines: 400
   fix_rounds: 3
   info_requests: 2
-  agent_budget_usd: 1             # per agent (Claude Code --max-budget-usd; notional USD on a subscription)
-  run_budget_usd: 5               # sum over one run's agents; a hit escalates with `ai: budget`
-  agent_minutes: 10               # wall-clock cap per agent (max 15)
 reporter_silence_days: {ping: 4, stale: 14, close: 21}   # must be increasing
 notify: none                    # none | slack | telegram
 fork_prs: on-command            # on-command (review fork PRs only after /review) | off

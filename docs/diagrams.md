@@ -43,7 +43,7 @@ flowchart TD
   WP3 --> WP10
 
   WP1 --> WP11["WP11 Notifications<br/>Slack / Telegram"]
-  WP1 --> WP12["WP12 Guardrails<br/>ai: off, budgets, errors"]
+  WP1 --> WP12["WP12 Guardrails<br/>ai: off, limits, errors"]
   WP3 --> WP13["WP13 Contributor mode<br/>fork guide, local plugin"]
   WP8 --> WP13
   WP3 --> WP14["WP14 Onboarding kit<br/>install guide, templates"]
@@ -164,7 +164,7 @@ flowchart TD
   V -- yes --> F["Keep confirmed findings<br/>severity: blocking / should-fix / nit"]
   F --> H["Step 9: last run's findings<br/>marked resolved or still open"]
   H --> R["Rubric → verdict"]
-  R --> M["Summary comment updated in place<br/>findings, history, usage of the 5 agents"]
+  R --> M["Summary comment updated in place<br/>findings, history"]
   M --> L["Verdict label"]
 ```
 
@@ -233,6 +233,22 @@ flowchart TD
   H & T --> S["One triage comment<br/>updated in place"]
 ```
 
+## WP11a — Notification senders
+
+Done when ([docs/plan.md, line 46](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46)): A `workflow_dispatch` test event sends one message with a working link, on both channels
+
+```mermaid
+flowchart TD
+  D["workflow_dispatch on the caller<br/>(test event)"] --> J["notify.yml job send<br/>permissions: {}"]
+  E["WP11b: one of the 5 events<br/>(text + link)"] -.-> J
+  J --> S["aiwf notify --channels<br/>secrets via env only"]
+  S --> SL["Slack incoming webhook<br/>expects 200 ok"]
+  S --> TG["Telegram sendMessage<br/>expects ok + message_id"]
+  SL --> R["AIWF_NOTIFY_RESULT line per message<br/>no secret, no request URL"]
+  TG --> R
+  R --> M["Maintainer clicks link back to GitHub"]
+```
+
 ## WP12a — Guardrails: `ai: off`, `ai: error`
 
 Done when ([docs/plan.md, line 49](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L49)): `ai: off` stops a run; a forced crash gives `ai: error` + comment
@@ -245,7 +261,7 @@ flowchart TD
   J --> W{"Before each write<br/>live labels have 'ai: off'?"}
   W -- yes --> N["Write nothing<br/>only remove 'ai-review: pending'"]
   W -- no --> P["Orchestrator publishes<br/>via gh api"]
-  J -- "a job fails<br/>e2e: label 'e2e-crash'" --> F["'failed' job"]
+  J -- "a job fails<br/>(agent error or timeout)" --> F["'failed' job"]
   F --> R["Label 'ai: error'<br/>+ one sticky error comment with run link<br/>no retry"]
 ```
 
@@ -256,16 +272,10 @@ Done when ([docs/plan.md, line 50](https://github.com/esciara/ai-workflows/blob/
 ```mermaid
 flowchart TD
   T["Issue or PR event<br/>text is untrusted data"] --> A["Agents: extract, classify<br/>or 4 review passes + verify<br/>no tools, no secrets"]
-  A -- "each agent" --> B["--max-budget-usd agent_budget_usd<br/>step timeout agent_minutes"]
-  A --> U["Usage record per agent<br/>cost, subtype, timed out"]
+  A -- "each agent" --> B["--max-turns + fixed step timeout-minutes"]
+  B -- "limit hit: the job fails" --> F["'failed' job: 'ai: error'<br/>+ one sticky error comment, no retry"]
   A --> J["JSON with suspicious_instructions<br/>schema-checked"]
-  U --> V{"Before verify<br/>passes cost > run_budget_usd?"}
-  V -- yes --> SK["Verify skipped"]
-  U --> C{"Publish: budget check<br/>agent stopped or run total over?"}
-  SK --> C
-  C -- yes --> E["Labels 'ai: budget' + 'ai-review: human-review'<br/>or 'triage: needs-human'<br/>one sticky budget note with run link<br/>no 'ai: error', no retry"]
-  C -- no --> P["Normal publish"]
-  J --> P
+  J --> P["Normal publish"]
   P --> I["Comment line 'Possible prompt injection (ignored)'<br/>quotes cleaned; never followed"]
 ```
 <!-- END generated:per-wp -->
