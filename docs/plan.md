@@ -53,6 +53,15 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 
 Rows with a letter (WP2a, WP2b, …) split the WP above them into PRs; the WP's own row keeps the full Done when, and each split's Done when is what its PR proves. Status is one of done, in progress, todo or paused; it is hand-edited, by each WP's own PR.
 
+Open items (hand-edited like the Status column):
+
+- Dev env: add pytest-xdist to dev deps; fresh worktrees lack .venv (verify-wp/tests jsonschema import) [was aiwf-e8d].
+- guard-bash false positive on `git worktree add` [was aiwf-2gp].
+- ADR-0031: amend in place — worktree commits use App identity (as CLAUDE.md says) [was aiwf-zyh].
+- Update code/test comments citing superseded (now archived) ADRs [was aiwf-8xt].
+- WP14: install guide keeps 'Allow GitHub Actions to create and approve pull requests' off [was aiwf-wp14.1].
+- WP14: pin callers to a tag or SHA instead of @main [was aiwf-wp14.2].
+
 Metrics logging from the spec is left out of this plan; it is worth adding once both workflows have run for a few weeks.
 
 **WP11 maintainer setup (chat alerts).** Before WP11 can pass, the maintainer sets these repository secrets on the test repo (and later on each target repo that wants alerts): Slack, create an Incoming Webhook for a channel and store it as `SLACK_WEBHOOK_URL`; Telegram, create a bot with @BotFather, get your chat ID, and store them as `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
