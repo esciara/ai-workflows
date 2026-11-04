@@ -40,6 +40,12 @@ def test_real_workflow_passes_policy(path):
     assert policy.check_file(path) == []
 
 
+@pytest.mark.parametrize("path", sorted((ROOT / ".github" / "actions").glob("*/action.yml")), ids=lambda p: p.parent.name)
+def test_composite_actions_pin_their_actions(path):
+    assert policy.pin_errors(path.read_text()) == []
+    assert policy.pin_errors(path.read_text().replace("@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0", "@v7"))
+
+
 def test_every_fixture_has_an_expectation():
     assert {p.name for p in BAD.glob("*.yml")} == set(EXPECTED)
 
