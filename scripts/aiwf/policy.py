@@ -85,14 +85,9 @@ def is_agent_job(job: dict[str, Any], raw: str) -> bool:
     return bool(AGENT_MARKER_RE.search(raw))
 
 
-def check_text(text: str) -> list[str]:
-    """Policy violations in one workflow file, as 'rule: detail' strings. [] for non-workflows."""
-    doc = load_workflow(text)
-    if doc is None:
-        return []
+def pin_errors(text: str) -> list[str]:
+    """Every external `uses:` is a full SHA with a version comment on the same line (workflows and composite actions)."""
     errors: list[str] = []
-
-    # Pinning: every external `uses:` is a full SHA with a version comment on the same line.
     for n, line in enumerate(text.splitlines(), 1):
         if line.lstrip().startswith("#"):
             continue
@@ -107,6 +102,15 @@ def check_text(text: str) -> list[str]:
             errors.append(f"unpinned: line {n}: {ref} (needs a 40-hex commit SHA)")
         elif not VERSION_COMMENT_RE.search(rest):
             errors.append(f"unpinned: line {n}: {ref} (needs a '# vX' version comment)")
+    return errors
+
+
+def check_text(text: str) -> list[str]:
+    """Policy violations in one workflow file, as 'rule: detail' strings. [] for non-workflows."""
+    doc = load_workflow(text)
+    if doc is None:
+        return []
+    errors = pin_errors(text)
 
     # Top level: `permissions: {}`, so a job without its own block gets nothing (ADR-0017).
     top = doc.get("permissions")
