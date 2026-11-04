@@ -1,6 +1,6 @@
 # ADR-0030 · Generated docs: single writer kept, enforcement dropped
 
-- Status: Accepted
+- Status: Superseded by CLAUDE.md (process simplification, 2026-11-04)
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D30`

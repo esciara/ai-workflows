@@ -1,5 +1,5 @@
-"""Source-vs-source checks of the hand-written docs (ADR-0047). Never a render against its source: nothing here reads a
-generated block, docs/board.jsonl, docs/progress.md or docs/diagrams.md, so no check can go stale between sync PRs.
+"""Source-vs-source checks of the hand-written docs. Never a render against its source: nothing here reads a generated
+block or docs/diagrams.md. ADRs are read from docs/adr/ and docs/adr/archive/ (superseded ones).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ DIAGRAMS_DIR = ROOT / "docs" / "diagrams"
 ADR_FILE = re.compile(r"^(\d{4})-[a-z0-9-]+\.md$")
 ADR_REF = re.compile(r"ADR-(\d{4})")
 HEADER = re.compile(r"^- (Status|Supersedes|Superseded by|Amends|Amended by): (.*)$")
-STATUS = re.compile(r"^(Proposed|Accepted|Superseded by ADR-(\d{4}))$")
+STATUS = re.compile(r"^(Proposed|Accepted|Superseded by ADR-(\d{4})|Superseded by CLAUDE\.md \(.+\))$")
 PLAN_ROW = re.compile(r"^\| (WP\d+)([a-z]?) \|")
 WP_REF = re.compile(r"WP\d+[a-z]?")
 EDGE = re.compile(r"\b(WP\d+)(?:\[[^\]]*\])?(?::::\w+)?\s*-->\s*(WP\d+)\b")
@@ -30,7 +30,7 @@ NODE = re.compile(r"\b(WP\d+)\[")
 def adr_headers(adr_dir: Path = ADR_DIR) -> dict[str, dict[str, list[str]]]:
     """ADR number -> header field -> values (ADR numbers referenced; the raw text for Status). Header = lines before '## '."""
     out = {}
-    for path in sorted(adr_dir.glob("*.md")):
+    for path in sorted([*adr_dir.glob("*.md"), *adr_dir.glob("archive/*.md")]):
         if not (m := ADR_FILE.match(path.name)):
             continue
         fields: dict[str, list[str]] = {}
@@ -49,7 +49,7 @@ def adr_problems(headers: dict[str, dict[str, list[str]]]) -> list[str]:
     for num, f in headers.items():
         status = f.get("Status", [])
         if len(status) != 1 or not (s := STATUS.match(status[0])):
-            problems.append(f"ADR-{num}: Status {status} is not Proposed, Accepted or 'Superseded by ADR-NNNN'")
+            problems.append(f"ADR-{num}: Status {status} is not Proposed, Accepted, 'Superseded by ADR-NNNN' or 'Superseded by CLAUDE.md (...)'")
             continue
         superseded_by = {s.group(2)} if s.group(2) else set()
         if f.get("Superseded by") and set(f["Superseded by"]) != superseded_by:
@@ -115,8 +115,9 @@ def plan_vs_overview_problems(plan_text: str, overview_text: str) -> list[str]:
 
 def known_issue_problems(text: str, adr_dir: Path = ADR_DIR) -> list[str]:
     """ADR mentions and docs/adr links in docs/known-issues.md resolve to ADR files. Bead ids are not checked (ADR-0047)."""
-    files = {p.name for p in adr_dir.glob("*.md")}
-    numbers = {m.group(1) for name in files if (m := ADR_FILE.match(name))}
+    files = {str(p.relative_to(adr_dir)) for p in [*adr_dir.glob("*.md"), *adr_dir.glob("archive/*.md")]}
+    names = {p.rsplit("/", 1)[-1] for p in files}
+    numbers = {m.group(1) for name in names if (m := ADR_FILE.match(name))}
     problems = [f"ADR-{n} has no file" for n in sorted(set(ADR_REF.findall(text)) - numbers)]
     problems += [f"link adr/{name} has no file" for name in sorted(set(re.findall(r"adr/([^)\s#]+\.md)", text)) - files)]
     return problems

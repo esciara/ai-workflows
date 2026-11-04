@@ -22,8 +22,8 @@ jobs:
       - run: pip install -e '.[test]'
       - run: pytest -q
 
-  # Secret scan of the full git history (incl. docs/board.jsonl) with gitleaks' default rules,
-  # as render-progress does locally (ADR-0036). Binary pinned by version + SHA-256; no license or secret needed.
+  # Secret scan of the full git history with gitleaks' default rules.
+  # Binary pinned by version + SHA-256; no license or secret needed.
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5

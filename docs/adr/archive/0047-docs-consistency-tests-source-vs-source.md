@@ -1,6 +1,6 @@
 # ADR-0047 · Docs consistency tests: source against source only
 
-- Status: Accepted
+- Status: Superseded by CLAUDE.md (process simplification, 2026-11-04)
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D47`

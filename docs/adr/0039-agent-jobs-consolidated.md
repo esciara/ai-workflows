@@ -4,7 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D39`
-- Supersedes: [ADR-0003](0003-agents-in-their-own-read-only-jobs.md), [ADR-0012](0012-agents-use-base-action.md), [ADR-0018](0018-agent-jobs-get-no-token-permissions.md)
+- Supersedes: [ADR-0003](archive/0003-agents-in-their-own-read-only-jobs.md), [ADR-0012](archive/0012-agents-use-base-action.md), [ADR-0018](archive/0018-agent-jobs-get-no-token-permissions.md)
 
 ## Context
 

@@ -1,6 +1,6 @@
 # ADR-0033 · Stall-only risks get no mechanism; claims retired
 
-- Status: Accepted
+- Status: Superseded by CLAUDE.md (process simplification, 2026-11-04)
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D33`
