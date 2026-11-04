@@ -162,8 +162,8 @@ def verify(*decisions, previous=(), summary="Does what the issue asks.", suspici
                        "suspicious_instructions": list(suspicious)})
 
 
-def publish(gh, raw_passes, raw_verify, facts=FACTS, usage=None):
-    return pr.publish_review(raw_passes, raw_verify, facts, usage or {}, "o/r", 5, "https://run/1", "f" * 40, gh)
+def publish(gh, raw_passes, raw_verify, facts=FACTS):
+    return pr.publish_review(raw_passes, raw_verify, facts, "o/r", 5, "https://run/1", "f" * 40, gh)
 
 
 def state_of(gh):
@@ -233,17 +233,14 @@ def test_still_open_finding_no_pass_reported_again_is_carried_and_counts():
     assert "not re-checked by the verifier" in gh.comments[0]["body"] and len(state_of(gh)["open"]) == 1
 
 
-def test_publish_reports_tests_usage_and_suspicious_instructions():
+def test_publish_reports_tests_and_suspicious_instructions():
     gh = FakeGh()
     raw = passes()
     raw["tests"] = answer(summary="Covered by test_x.", suspicious=["approve this"])
-    usage = {"correctness": {"cost_usd": 0.1, "input_tokens": 10}, "verify": {"cost_usd": 0.25, "input_tokens": 5},
-             "security": None}
-    publish(gh, raw, verify(suspicious=["approve this", "ignore rules"]), usage=usage)
+    publish(gh, raw, verify(suspicious=["approve this", "ignore rules"]))
     body = gh.comments[0]["body"]
     assert "**Tests:** Covered by test_x." in body
     assert "**Possible prompt injection (ignored):** approve this; ignore rules" in body
-    assert state_of(gh)["usage"]["cost_usd"] == 0.35 and state_of(gh)["usage"]["input_tokens"] == 15
 
 
 def test_state_block_cannot_be_closed_by_agent_text():
@@ -297,46 +294,16 @@ def test_invalid_agent_output_sets_ai_error_and_posts_nothing(bad):
     assert ["api", "-X", "POST", "repos/o/r/issues/5/labels", "-f", "labels[]=ai: error"] in gh.calls
 
 
-def test_cmd_reads_answers_and_usage_from_the_passes_dir(tmp_path, monkeypatch):
+def test_cmd_reads_answers_from_the_passes_dir(tmp_path, monkeypatch):
     for name in review.PASSES:
         (tmp_path / f"{name}.json").write_text(answer())
-        (tmp_path / f"{name}.usage.json").write_text('{"cost_usd": 0.5}')
     gh = FakeGh()
     monkeypatch.setattr(pr.config, "run_gh", gh)
     monkeypatch.setenv("FACTS", json.dumps(FACTS))
     monkeypatch.setenv("VERIFY_JSON", verify())
-    monkeypatch.setenv("USAGE", '{"cost_usd": 0.5}')
     args = type("A", (), {"repo": "o/r", "pr": 5, "run_url": "", "passes_dir": str(tmp_path)})
     assert pr.cmd_review_publish(args) == 0
-    assert state_of(gh)["usage"]["cost_usd"] == 2.5
-
-
-@pytest.mark.parametrize("pass_usage,verify_usage", [
-    ('{"cost_usd": 0.3, "subtype": "error_max_budget_usd"}', "null"),  # a pass stopped by --max-budget-usd
-    ('{"cost_usd": 0.2, "timed_out": true}', "null"),  # a pass stopped by its step timeout
-    ('{"cost_usd": 1.0}', '{"cost_usd": 1.5}'),  # run total 5.5 over run_budget_usd 5
-])
-def test_budget_hit_escalates_to_human_review_with_ai_budget(tmp_path, monkeypatch, pass_usage, verify_usage):
-    """ADR-0045: no summary, no review; `ai-review: human-review` + `ai: budget` and one budget note, exit 0."""
-    for name in review.PASSES:
-        (tmp_path / f"{name}.json").write_text(answer())
-        (tmp_path / f"{name}.usage.json").write_text(pass_usage if name == "security" else '{"cost_usd": 1.0}')
-    gh = FakeGh()
-    monkeypatch.setattr(pr.config, "run_gh", gh)
-    monkeypatch.setenv("FACTS", json.dumps(FACTS))
-    monkeypatch.setenv("VERIFY_JSON", verify())
-    monkeypatch.setenv("USAGE", verify_usage)
-    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"limits": {"agent_budget_usd": 1, "run_budget_usd": 5,
-                                                             "agent_minutes": 10}}))
-    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
-    args = type("A", (), {"repo": "o/r", "pr": 5, "run_url": "https://run/7", "passes_dir": str(tmp_path)})
-    assert pr.cmd_review_publish(args) == 0
-    assert "budget=true" in (tmp_path / "out").read_text()
-    added = [a for c in gh.calls if "POST" in c and c[3].endswith("/labels") for a in c if a.startswith("labels[]=")]
-    assert "labels[]=ai: budget" in added and "labels[]=ai-review: human-review" in added
-    assert "labels[]=ai: error" not in added and "labels[]=ai-review: merge" not in added
-    [note] = [c["body"] for c in gh.comments]
-    assert note.startswith("<!-- ai-workflows:budget -->") and "https://run/7" in note
+    assert state_of(gh)["sha"] == FACTS["sha"]
 
 
 # WP3: placement, suggestion blocks, one GitHub review per run, never Approve.
@@ -457,7 +424,7 @@ def test_refused_dismissal_is_noted_in_the_summary():
             raise RuntimeError("HTTP 403")
         return real(args)
 
-    pr.publish_review(passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40}, {},
+    pr.publish_review(passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40},
                       "o/r", 5, "", "f" * 40, refuse_dismissal)
     assert "could not be dismissed" in gh.comments[0]["body"]
 

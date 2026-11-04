@@ -18,7 +18,6 @@ from jsonschema import Draft202012Validator
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schema"
 ERROR_LABEL = "ai: error"
-BUDGET_LABEL = "ai: budget"
 INJECTION = "**Possible prompt injection (ignored):** "
 MAX_INPUT = 64_000
 

@@ -4,6 +4,7 @@
 - Date: 2026-11-01
 - Deciders: maintainer
 - Alias: `D45`
+- Amended by: [ADR-0050](0050-budgets-as-time-and-turn-limits.md) (decisions 5 and 6 replaced: no e2e crash hook in the product, budgets are time and turn limits)
 
 ## Context
 
@@ -36,8 +37,8 @@ The spec says `ai: off` on an item "stops every run immediately", an agent or sa
    - and it buys little: an agent in flight holds no token (ADR-0045 decision 2, Rule of Two), so it cannot write; only its usage is lost.
    A run already in flight when `ai: off` is set finishes, but writes nothing (decision 2). The policy test now asserts no job has `actions: write`.
 4. **Error reporting.** Each reusable workflow (`review.yml`, `triage.yml`, `commands.yml`) ends with a job `failed`: needs every job, runs when one failed, adds `ai: error` and creates or updates one sticky comment (marker `<!-- ai-workflows:error -->`, bot-authored only) with the run link and the names of the failed jobs, never agent text. Cancelled runs report nothing. Nothing re-runs. B1 publish removes a stale `ai: error`, as review `start` already does.
-5. **e2e crash.** `config.yml` adds `"e2e": true` to the config JSON only when `e2e_config` is used, which is honoured only on the playground (ADR-0043); the schema forbids unknown keys, so a repo config cannot set it. With it, the label `e2e-crash` fails the first step of the review and triage `context` jobs.
-6. **Budgets (WP12b).** Three new `limits` keys in the config: `agent_budget_usd` (default 1), `run_budget_usd` (default 5), `agent_minutes` (default 10, at most 15, under the agent jobs' fixed timeouts).
+5. **e2e crash (replaced by ADR-0050).** `config.yml` adds `"e2e": true` to the config JSON only when `e2e_config` is used, which is honoured only on the playground (ADR-0043); the schema forbids unknown keys, so a repo config cannot set it. With it, the label `e2e-crash` fails the first step of the review and triage `context` jobs.
+6. **Budgets (WP12b; replaced by ADR-0050).** Three new `limits` keys in the config: `agent_budget_usd` (default 1), `run_budget_usd` (default 5), `agent_minutes` (default 10, at most 15, under the agent jobs' fixed timeouts).
    - Every agent step (ping, extract, classify, the 4 review passes, verify) gets `--max-budget-usd agent_budget_usd` and a step `timeout-minutes: agent_minutes`; policy-tested. Spike on subscription auth (`claude -p --max-budget-usd 0.0001`): Claude Code stops at the next turn boundary with `subtype: error_max_budget_usd` and `terminal_reason: budget_exhausted`, the turn in progress already spent. So the cap can be overshot by one turn; agents run at most 3 turns.
    - `scripts/agent-usage.sh` writes each agent's usage record (cost, turns, tokens, `subtype`, `timed_out` = the step did not succeed after about `agent_minutes`).
    - Run total: review `verify` does not start when the passes already cost more than `run_budget_usd`; each publish step (B1 `publish`, A `review-publish`) checks every agent's record first: an agent stopped by cost or time, or a run total over `run_budget_usd`, is a budget hit (`guard.budget_hit`).

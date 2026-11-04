@@ -489,11 +489,6 @@ def test_publish_clears_a_stale_ai_error():
     assert any(c[3].endswith("/labels/ai%3A%20error") for c in gh.writes("DELETE"))
 
 
-def test_publish_clears_a_stale_ai_budget():
-    gh = FakeGh(labels=["ai: budget"])
-    run(gh)
-    assert any(c[3].endswith("/labels/ai%3A%20budget") for c in gh.writes("DELETE"))
-
 
 def test_injection_is_reported_from_both_agents_and_not_obeyed(monkeypatch):
     """ADR-0045: quotes from the classifier and the extractor, cleaned and de-duplicated, in one report line."""
