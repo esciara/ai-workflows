@@ -1,4 +1,4 @@
-"""ADR-0025 seams: per-module commands, per-workflow publishers, the e2e slot and the e2e config (ADR-0026, ADR-0028)."""
+"""ADR-0025 seams: per-module commands, per-workflow publishers, the e2e slot (ADR-0026)."""
 
 import os
 import signal
@@ -44,33 +44,11 @@ def test_unknown_kind_posts_nothing():
     assert calls == []
 
 
-@pytest.mark.parametrize("name", ["playground.yml"])
-def test_e2e_config_read_from_this_checkout(name, tmp_path):
-    cfg = config.load(*config.read_e2e(name))
-    assert cfg["maintainers"] == ["esciara"]
-    out = tmp_path / "out"
-    assert cli.main(["config", "--repo", config.E2E_REPO, "--e2e-config", name, "--github-output", str(out)]) == 0
-    assert '"maintainers":["esciara"]' in out.read_text()
-
-
-@pytest.mark.parametrize("argv", [["--repo", "o/r"], ["--file", "x.yml"]])
-def test_e2e_config_fails_outside_the_playground(argv, tmp_path, capsys):
-    assert cli.main(["config", *argv, "--e2e-config", "playground.yml", "--github-output", str(tmp_path / "o")]) == 1
-    assert "honoured only for esciara/ai-workflows-playground" in capsys.readouterr().err
-    assert not (tmp_path / "o").exists()
-
-
-@pytest.mark.parametrize("name", ["../../../.github/ai-workflows.yml", "/etc/passwd", "sub/x.yml", ".hidden.yml", "x.json", "missing.yml"])
-def test_e2e_config_rejects_paths_and_missing(name):
-    with pytest.raises(config.ConfigError):
-        config.read_e2e(name)
-
-
-def test_no_e2e_config_reads_the_repo(monkeypatch, tmp_path):
+def test_config_reads_the_repo(monkeypatch, tmp_path):
     seen = []
     monkeypatch.setattr(config, "run_gh", lambda args: seen.append(args) or ("main" if "--jq" in args else
                         '{"type": "file", "content": "bWFpbnRhaW5lcnM6IFthXQo="}'))  # "maintainers: [a]\n"
-    assert cli.main(["config", "--repo", "o/r", "--e2e-config", "", "--github-output", str(tmp_path / "o")]) == 0
+    assert cli.main(["config", "--repo", "o/r", "--github-output", str(tmp_path / "o")]) == 0
     assert any("repos/o/r/contents/.github/ai-workflows.yml?ref=main" in a for a in seen)
 
 

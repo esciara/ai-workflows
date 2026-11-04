@@ -5,5 +5,5 @@ flowchart TD
   J --> W{"Before each write<br/>live labels have 'ai: off'?"}
   W -- yes --> N["Write nothing<br/>only remove 'ai-review: pending'"]
   W -- no --> P["Orchestrator publishes<br/>via gh api"]
-  J -- "a job fails<br/>e2e: label 'e2e-crash'" --> F["'failed' job"]
+  J -- "a job fails<br/>(agent error or timeout)" --> F["'failed' job"]
   F --> R["Label 'ai: error'<br/>+ one sticky error comment with run link<br/>no retry"]

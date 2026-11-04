@@ -3,7 +3,7 @@ stays in the summary.
 
 Runs against the playground (AIWF_E2E=1) with the e2e slot (AIWF_E2E_SLOT=1): the PR comes from an `e2e/` branch, so
 caller-e2e.yml reviews it with review.yml@e2e-target, which the slot points at the commit under test (ADR-0028/0029).
-The playground's e2e config (tests/e2e/config/playground.yml) makes only `.github/**` high risk, so `src/` is low risk.
+The playground's e2e config (.github/ai-workflows-e2e.yml in the playground) makes only `.github/**` high risk, so `src/` is low risk.
 
 One PR carries both seeds, committed before the PR is opened so the `opened` event reviews them: a blocking bug in a
 new `Cart.apply_bulk_discount` (the percent is not divided by 100) and typos in a docstring of `money.py` (a nit).

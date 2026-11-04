@@ -39,13 +39,8 @@ def read_event() -> dict:
 
 def cmd_config(args: argparse.Namespace) -> int:
     try:
-        if args.e2e_config and args.repo != config.E2E_REPO:  # fail closed (ADR-0028)
-            raise config.ConfigError("e2e_config", [f"honoured only for {config.E2E_REPO}, not {args.repo or args.file}"])
         if args.file:
             text, source = Path(args.file).read_text(encoding="utf-8"), args.file
-        elif args.e2e_config:
-            text, source = config.read_e2e(args.e2e_config)
-            print(f"::notice title=e2e config::{source} (ADR-0028; the e2e caller only)")
         else:
             text, source = config.fetch_from_repo(args.repo, args.path, args.ref or None)
         cfg = config.load(text, source)
@@ -63,7 +58,7 @@ def cmd_config(args: argparse.Namespace) -> int:
         print(f"::notice title=ai: off::the item has '{guard.OFF_LABEL}': every workflow skips it (ADR-0045)")
     out = args.github_output or os.environ.get("GITHUB_OUTPUT")
     if out:
-        write_outputs(out, config.github_outputs(cfg, item_off=item_off, e2e=bool(args.e2e_config)))
+        write_outputs(out, config.github_outputs(cfg, item_off=item_off))
     return 0
 
 
@@ -109,8 +104,6 @@ def register(sub: argparse._SubParsersAction) -> None:
     src.add_argument("--file", help="local file (tests, local runs)")
     p.add_argument("--path", default=config.DEFAULT_CONFIG_PATH)
     p.add_argument("--ref", default="", help="git ref; default is the repo's default branch")
-    p.add_argument("--e2e-config", default="", help=f"e2e caller only: read this file under {config.E2E_CONFIG_DIR}/ "
-                   "of the ai-workflows checkout instead of the repo (ADR-0028)")
     p.add_argument("--github-output", default=None, help="file to append outputs to (default $GITHUB_OUTPUT)")
     p.set_defaults(func=cmd_config)
     p = sub.add_parser("parse-command", help="accept a slash command (env COMMENT_BODY, COMMENT_AUTHOR, AIWF_CONFIG)")

@@ -79,9 +79,6 @@ jobs:
       contents: read
       issues: read
     steps:
-      # e2e only (ADR-0045): with the playground's e2e config, the label `e2e-crash` forces a crash here.
-      - if: fromJSON(inputs.config).e2e && (contains(github.event.issue.labels.*.name, 'e2e-crash') || contains(github.event.pull_request.labels.*.name, 'e2e-crash'))
-        run: echo "::error::forced crash (label e2e-crash, e2e config only)" && exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
@@ -118,8 +115,7 @@ jobs:
     timeout-minutes: 10
     permissions: {}
     env:
-      # Per-agent cost budget (ADR-0045); the e2e-only label `e2e-budget` makes it near zero (playground e2e config only).
-      AGENT_BUDGET: ${{ fromJSON(inputs.config).e2e && contains(github.event.issue.labels.*.name, 'e2e-budget') && '0.0001' || fromJSON(inputs.config).limits.agent_budget_usd }}
+      AGENT_BUDGET: ${{ fromJSON(inputs.config).limits.agent_budget_usd }}  # per agent (ADR-0045)
     outputs:
       json: ${{ steps.claude.outputs.structured_output }}
       usage: ${{ steps.usage.outputs.usage }}
@@ -210,8 +206,7 @@ jobs:
     timeout-minutes: 15
     permissions: {}
     env:
-      # Per-agent cost budget (ADR-0045); the e2e-only label `e2e-budget` makes it near zero (playground e2e config only).
-      AGENT_BUDGET: ${{ fromJSON(inputs.config).e2e && contains(github.event.issue.labels.*.name, 'e2e-budget') && '0.0001' || fromJSON(inputs.config).limits.agent_budget_usd }}
+      AGENT_BUDGET: ${{ fromJSON(inputs.config).limits.agent_budget_usd }}  # per agent (ADR-0045)
     outputs:
       json: ${{ steps.claude.outputs.structured_output }}
       usage: ${{ steps.usage.outputs.usage }}
