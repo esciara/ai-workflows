@@ -14,9 +14,9 @@ from typing import Any
 from urllib.parse import quote
 
 from aiwf import publish
+from aiwf.ghapi import get_or_none, remove_label, upsert_marker_comment
 
 MARKER = "<!-- ai-workflows:triage -->"
-BOT = "github-actions[bot]"  # the workflow's GITHUB_TOKEN identity; only its marker comments are ours (ADR-0021)
 TYPE_LABELS = {"bug": "type: bug", "feature": "type: feature", "question": "type: question"}
 DUPLICATE = "triage: duplicate"
 NEEDS_HUMAN = "triage: needs-human"
@@ -24,19 +24,11 @@ RANGE_ENV = "AIWF_FIX_RANGE_CONFIDENCE"  # `low` when the fix candidates were no
 B1_LABELS = (*TYPE_LABELS.values(), DUPLICATE, NEEDS_HUMAN)  # cleared on /retriage before the new result
 
 
-def get(gh: publish.GhRunner, path: str) -> Any | None:
-    """GET as JSON, or None when the API refuses it (404 for an unknown issue or commit)."""
-    try:
-        return json.loads(gh(["api", path]) or "null")
-    except RuntimeError:
-        return None
-
-
 def check_duplicate(gh: publish.GhRunner, repo: str, issue: int, number: int | None) -> dict[str, Any] | None:
     """The issue `number` when it is another real issue, open or closed as completed; else None."""
     if not number or number == issue:
         return None
-    other = get(gh, f"repos/{repo}/issues/{number}")
+    other = get_or_none(gh, f"repos/{repo}/issues/{number}")
     if not other or "pull_request" in other:
         return None
     if other["state"] != "open" and other.get("state_reason") != "completed":
@@ -48,16 +40,16 @@ def check_commit(gh: publish.GhRunner, repo: str, branch: str, sha: str | None) 
     """The commit when it exists and is on `branch` (the branch is ahead of it or at it); else None."""
     if not sha:
         return None
-    commit = get(gh, f"repos/{repo}/commits/{sha}")
+    commit = get_or_none(gh, f"repos/{repo}/commits/{sha}")
     if not commit:
         return None
-    cmp = get(gh, f"repos/{repo}/compare/{commit['sha']}...{quote(branch, safe='')}")
+    cmp = get_or_none(gh, f"repos/{repo}/compare/{commit['sha']}...{quote(branch, safe='')}")
     return commit if cmp and cmp.get("status") in {"ahead", "identical"} else None
 
 
 def check_pr(gh: publish.GhRunner, repo: str, branch: str, number: int) -> dict[str, Any] | None:
     """The pull request when it exists and was merged into `branch`; else None."""
-    pr = get(gh, f"repos/{repo}/pulls/{number}")
+    pr = get_or_none(gh, f"repos/{repo}/pulls/{number}")
     if not pr or not pr.get("merged_at") or (pr.get("base") or {}).get("ref") != branch:
         return None
     return pr
@@ -101,32 +93,6 @@ def body(data: dict[str, Any], dup: dict[str, Any] | None, fix: dict[str, Any] |
     return "\n".join(lines)
 
 
-def find_comment(gh: publish.GhRunner, repo: str, issue: int) -> int | None:
-    out = gh(["api", "--paginate", f"repos/{repo}/issues/{issue}/comments?per_page=100", "--jq", ".[]"])
-    for line in out.splitlines():
-        if line.strip():
-            c = json.loads(line)
-            if c["user"]["login"] == BOT and MARKER in (c.get("body") or ""):
-                return c["id"]
-    return None
-
-
-def upsert_comment(gh: publish.GhRunner, repo: str, issue: int, text: str) -> None:
-    """One triage comment per issue, updated in place on reruns."""
-    cid = find_comment(gh, repo, issue)
-    if cid is None:
-        publish.comment(gh, repo, issue, text)
-    else:
-        gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{cid}", "-f", f"body={text}"])
-
-
-def remove_label(gh: publish.GhRunner, repo: str, issue: int, label: str) -> None:
-    try:
-        gh(["api", "-X", "DELETE", f"repos/{repo}/issues/{issue}/labels/{quote(label, safe='')}"])
-    except RuntimeError:
-        pass  # not set
-
-
 def suspicious_instructions(data: dict[str, Any]) -> list[str]:
     """The classifier's and the extractor's quotes of instructions found in the issue (env EXTRACT_JSON, read
     leniently: the extract job's output was schema-checked by Claude; a missing or odd value adds nothing)."""
@@ -150,8 +116,8 @@ def labels_for(data: dict[str, Any], duplicate: bool) -> list[str]:
 
 
 def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
-    current = {lb["name"] for lb in (get(gh, f"repos/{repo}/issues/{issue}") or {}).get("labels", [])}
-    branch = (get(gh, f"repos/{repo}") or {}).get("default_branch", "main")
+    current = {lb["name"] for lb in (get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}).get("labels", [])}
+    branch = (get_or_none(gh, f"repos/{repo}") or {}).get("default_branch", "main")
     dup_ref = (data.get("duplicate_of") or {}).get("number")
     dup = check_duplicate(gh, repo, issue, dup_ref)
     fix_ref = data.get("possibly_fixed_by") if data["type"] == "bug" else None
@@ -167,7 +133,7 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
         if label in current and label not in want:
             remove_label(gh, repo, issue, label)
     publish.add_labels(gh, repo, issue, *want)
-    upsert_comment(gh, repo, issue, body(data, dup, fix, fix_conf, run_url, suspicious_instructions(data)))
+    upsert_marker_comment(gh, repo, issue, MARKER, body(data, dup, fix, fix_conf, run_url, suspicious_instructions(data)))
     print(f"triaged {repo}#{issue}: {', '.join(want)}")
 
 

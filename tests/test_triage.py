@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from aiwf import cli, publish, publish_triage as pt, triage
+from aiwf import cli, ghapi, publish, publish_triage as pt, triage
 
 REPO = "o/r"
 
@@ -452,7 +452,7 @@ def test_commit_not_on_default_branch_is_dropped(compare, commits):
 
 
 def test_retriage_replaces_old_b1_labels_and_updates_the_comment():
-    ours = {"id": 55, "user": {"login": pt.BOT}, "body": f"{pt.MARKER}\nold"}
+    ours = {"id": 55, "user": {"login": ghapi.BOT}, "body": f"{pt.MARKER}\nold"}
     forged = {"id": 44, "user": {"login": "mallory"}, "body": f"{pt.MARKER}\nforged"}
     gh = FakeGh(labels=["type: bug", "triage: duplicate", "keep-open"], comments=[forged, ours])
     run(gh, type="feature")
