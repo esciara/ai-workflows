@@ -2,10 +2,10 @@ import json
 
 import pytest
 
-from aiwf import cli, config, guard
+from aiwf import cli, config, ghapi, guard
 from aiwf import publish_review as pr
 
-BOT = guard.BOT
+BOT = ghapi.BOT
 
 
 class FakeGh:

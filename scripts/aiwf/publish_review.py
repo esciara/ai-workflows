@@ -17,15 +17,14 @@ import re
 import tempfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
 from aiwf import config, guard, publish, review
 from aiwf import review_placement as placement
+from aiwf.ghapi import BOT, find_marker_comment, remove_label
 
 MARKER = "<!-- ai-review:summary v1 -->"
 STATE_V = 2  # v1 (WP2a) kept finding keys only; its state reads as no prior state
 STATE_RE = re.compile(r"<!-- ai-review:state (\{.*?\}) -->\s*\Z", re.S)
-BOT = "github-actions[bot]"  # the GITHUB_TOKEN identity; only its marker comments are trusted (ADR-0021)
 PENDING = "ai-review: pending"
 HEADINGS = {
     "ai-review: merge": "✅ Merge",
@@ -180,29 +179,23 @@ def valid_state(prev: Any) -> bool:
 
 def find_summary(gh: publish.GhRunner, repo: str, number: int) -> tuple[int | None, dict[str, Any] | None]:
     """(comment id, prior state) of the bot's own summary comment; a forged marker from anyone else is ignored."""
-    pages = json.loads(gh(["api", "--paginate", "--slurp", f"repos/{repo}/issues/{number}/comments?per_page=100"]))
-    for c in (c for page in pages for c in page):
-        body = c.get("body") or ""
-        if c["user"]["login"] == BOT and body.startswith(MARKER):
-            m = STATE_RE.search(body)
-            try:
-                prev = json.loads(m.group(1)) if m else None
-            except json.JSONDecodeError:
-                prev = None
-            if not valid_state(prev):
-                prev = None  # missing, invalid or older state: treated as no prior state (ADR-0021)
-            return c["id"], prev
-    return None, None
+    found = find_marker_comment(gh, repo, number, MARKER)
+    if found is None:
+        return None, None
+    m = STATE_RE.search(found.get("body") or "")
+    try:
+        prev = json.loads(m.group(1)) if m else None
+    except json.JSONDecodeError:
+        prev = None
+    if not valid_state(prev):
+        prev = None  # missing, invalid or older state: treated as no prior state (ADR-0021)
+    return found["id"], prev
 
 
 def set_verdict_label(gh: publish.GhRunner, repo: str, number: int, label: str) -> None:
     for old in [PENDING, *HEADINGS]:
         if old != label:
-            try:
-                gh(["api", "-X", "DELETE", f"repos/{repo}/issues/{number}/labels/{quote(old, safe='')}"])
-            except RuntimeError as exc:
-                if "404" not in str(exc) and "Not Found" not in str(exc):
-                    raise
+            remove_label(gh, repo, number, old)
     publish.add_labels(gh, repo, number, label)
 
 
@@ -363,7 +356,7 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
 def cmd_review_publish(args: argparse.Namespace) -> int:
     if guard.item_off(config.run_gh, args.repo, args.pr):  # set after the config gate (ADR-0045)
         print(f"::notice title=ai: off::#{args.pr} has '{guard.OFF_LABEL}': nothing published")
-        guard.remove_label(config.run_gh, args.repo, args.pr, PENDING)
+        remove_label(config.run_gh, args.repo, args.pr, PENDING)
         return 0
     facts = json.loads(os.environ.get("FACTS") or "null")
     if not isinstance(facts, dict):

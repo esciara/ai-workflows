@@ -12,13 +12,13 @@ import argparse
 import json
 import os
 from typing import Any, Callable
-from urllib.parse import quote
+
+from aiwf.ghapi import remove_label, upsert_marker_comment
 
 OFF_LABEL = "ai: off"
 ERROR_LABEL = "ai: error"
 PENDING = "ai-review: pending"
 ERROR_MARKER = "<!-- ai-workflows:error -->"
-BOT = "github-actions[bot]"  # only the GITHUB_TOKEN identity's marker comment is ours (ADR-0021)
 
 GhRunner = Callable[[list[str]], str]
 
@@ -42,14 +42,6 @@ def item_off(gh: GhRunner, repo: str, number: int) -> bool:
     return OFF_LABEL in item_labels(gh, repo, number)
 
 
-def remove_label(gh: GhRunner, repo: str, number: int, label: str) -> None:
-    try:
-        gh(["api", "-X", "DELETE", f"repos/{repo}/issues/{number}/labels/{quote(label, safe='')}"])
-    except RuntimeError as exc:
-        if "404" not in str(exc) and "Not Found" not in str(exc):
-            raise
-
-
 def failed_jobs(needs: dict[str, Any]) -> list[str]:
     """Names of the needed jobs that failed (`toJSON(needs)`); job names are ours, never agent text."""
     return sorted(name for name, job in needs.items() if isinstance(job, dict) and job.get("result") == "failure")
@@ -61,16 +53,6 @@ def error_body(run_url: str, reason: str) -> str:
             "`/review` (PR) or `/retriage` (issue).")
 
 
-def find_marker_comment(gh: GhRunner, repo: str, number: int, marker: str) -> int | None:
-    out = gh(["api", "--paginate", f"repos/{repo}/issues/{number}/comments?per_page=100", "--jq", ".[]"])
-    for line in out.splitlines():
-        if line.strip():
-            c = json.loads(line)
-            if c["user"]["login"] == BOT and (c.get("body") or "").startswith(marker):
-                return c["id"]
-    return None
-
-
 def report_error(gh: GhRunner, repo: str, number: int, run_url: str, reason: str) -> bool:
     """`ai: error` and one sticky error comment; nothing when the item now has `ai: off`. Idempotent."""
     remove_label(gh, repo, number, PENDING)
@@ -78,12 +60,7 @@ def report_error(gh: GhRunner, repo: str, number: int, run_url: str, reason: str
         print(f"{repo}#{number} has '{OFF_LABEL}': error not reported")
         return False
     gh(["api", "-X", "POST", f"repos/{repo}/issues/{number}/labels", "-f", f"labels[]={ERROR_LABEL}"])
-    body = error_body(run_url, reason)
-    cid = find_marker_comment(gh, repo, number, ERROR_MARKER)
-    if cid is None:
-        gh(["api", "-X", "POST", f"repos/{repo}/issues/{number}/comments", "-f", f"body={body}"])
-    else:
-        gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{cid}", "-f", f"body={body}"])
+    upsert_marker_comment(gh, repo, number, ERROR_MARKER, error_body(run_url, reason))
     print(f"{repo}#{number}: {ERROR_LABEL} ({reason})")
     return True
 

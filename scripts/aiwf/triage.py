@@ -17,7 +17,8 @@ import re
 from typing import Any, Callable
 from urllib.parse import quote
 
-from aiwf import config, publish
+from aiwf import config, ghapi, publish
+from aiwf.ghapi import get_json
 
 GhRunner = Callable[[list[str]], str]
 
@@ -46,17 +47,8 @@ def clip(text: str | None, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + " [... truncated]"
 
 
-def get_json(gh: GhRunner, path: str) -> Any:
-    return json.loads(gh(["api", path]) or "null")
-
-
 def get_or_none(gh: GhRunner, path: str) -> Any:
-    """GET as JSON, or None when the API refuses it (404: no release, unknown tag)."""
-    try:
-        return get_json(gh, path)
-    except RuntimeError as exc:
-        print(f"::notice title=Triage lookup skipped::{path.split('?')[0]}: {str(exc)[:200]}")
-        return None
+    return ghapi.get_or_none(gh, path, notice="Triage lookup skipped")
 
 
 def issue_block(issue: dict[str, Any], limit: int, tag: str = "issue") -> str:
