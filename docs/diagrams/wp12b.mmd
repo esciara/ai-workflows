@@ -1,7 +1,0 @@
-flowchart TD
-  T["Issue or PR event<br/>text is untrusted data"] --> A["Agents: extract, classify<br/>or 4 review passes + verify<br/>no tools, no secrets"]
-  A -- "each agent" --> B["--max-turns + fixed step timeout-minutes"]
-  B -- "limit hit: the job fails" --> F["'failed' job: 'ai: error'<br/>+ one sticky error comment, no retry"]
-  A --> J["JSON with suspicious_instructions<br/>schema-checked"]
-  J --> P["Normal publish"]
-  P --> I["Comment line 'Possible prompt injection (ignored)'<br/>quotes cleaned; never followed"]

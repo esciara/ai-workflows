@@ -8,7 +8,7 @@
 
 ## Context
 
-[ADR-0042](0042-factory-loop-consolidated.md) stops the loop and goes to the maintainer whenever an acceptance test changes after its `verify-wp` review. In practice most post-review changes do not touch what the test proves: they fix run selection, waits and polling, or fixture data and texts. WP11a and WP12b alone caused three maintainer interruptions for such changes. The stop exists so that a builder cannot weaken a reviewed test to make it pass; that risk lives in the assertions and the Done-when coverage, not in the plumbing around them. Narrowing the stop reverses part of ADR-0042, so per the README rule this ADR restates the full current loop, including what [ADR-0046](0046-status-views-derived-from-beads.md) and [ADR-0048](../0048-per-wp-diagrams-required-and-generated.md) added to ADR-0042.
+[ADR-0042](0042-factory-loop-consolidated.md) stops the loop and goes to the maintainer whenever an acceptance test changes after its `verify-wp` review. In practice most post-review changes do not touch what the test proves: they fix run selection, waits and polling, or fixture data and texts. WP11a and WP12b alone caused three maintainer interruptions for such changes. The stop exists so that a builder cannot weaken a reviewed test to make it pass; that risk lives in the assertions and the Done-when coverage, not in the plumbing around them. Narrowing the stop reverses part of ADR-0042, so per the README rule this ADR restates the full current loop, including what [ADR-0046](0046-status-views-derived-from-beads.md) and [ADR-0048](0048-per-wp-diagrams-required-and-generated.md) added to ADR-0042.
 
 ## Options considered
 
