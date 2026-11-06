@@ -96,9 +96,13 @@ def dispatch(ref: str = "main") -> int:
 
 
 def completed(run_id: int) -> dict[str, Any]:
+    """The finished run. GitHub can mark a run completed while a job's conclusion is still null, so wait for those too."""
+
     def done() -> dict[str, Any] | None:
         run = api(f"repos/{REPO}/actions/runs/{run_id}")
-        return run if run["status"] == "completed" else None
+        if run["status"] != "completed" or None in jobs(run_id).values():
+            return None
+        return run
 
     return poll(done, f"run {run_id} to complete")
 

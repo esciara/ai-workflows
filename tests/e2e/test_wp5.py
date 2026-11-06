@@ -24,11 +24,11 @@ DUPLICATE = "triage: duplicate"
 TITLE_PREFIX = "[e2e] WP5"
 
 BUG = (
-    "Coupon discount stays after removing items",
-    "Steps:\n\n```python\nfrom minicart.cart import Cart\nfrom minicart.discounts import apply_coupon\n"
-    "cart = Cart()\ncart.add('A', '15.00')\ncart.add('B', '10.00')\napply_coupon(cart, 'FIVEOFF')  # needs 20.00\n"
-    "cart.remove('B')\nprint(cart.total())\n```\n\nExpected: 15.00, since FIVEOFF needs a subtotal of at least 20.00 "
-    "and the cart is now at 15.00.\nActual: 10.00; the 5.00 discount is still applied.\n\nminicart from main, Python 3.12.",
+    "Fractional quantity is accepted, then total() fails",
+    "Steps:\n\n```python\nfrom minicart.cart import Cart\ncart = Cart()\ncart.add('A', '10.00', quantity=1.5)\n"
+    "print(cart.total())\n```\n\nExpected: `add` refuses the quantity with a ValueError, since it must be a whole "
+    "number.\nActual: `add` accepts it, and `total()` then raises `TypeError: unsupported operand type(s) for *: "
+    "'decimal.Decimal' and 'float'`.\n\nminicart from main, Python 3.12.",
 )
 FEATURE = (
     "Support gift cards as a payment method",
