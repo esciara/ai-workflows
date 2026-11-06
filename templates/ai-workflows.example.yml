@@ -1,19 +1,20 @@
 # .github/ai-workflows.yml — per-repo configuration. Schema: schema/ai-workflows.schema.json.
 # Read from the repo's default branch only. Only `maintainers` is required; the rest shows the defaults or examples.
+# "not used yet, WPx": accepted and validated, but nothing reads it until that work package (docs/plan.md) is built.
 enabled: true                   # repo kill switch: false stops every run
 maintainers: [<OWNER>]          # B4 questions, assignments, pings, allowed command authors
 default_branch: main
-setup: npm ci                   # how an agent installs the project in its sandbox
-test: npm test                  # B2 repro and B5 exit condition
+setup: npm ci                   # how an agent installs the project in its sandbox; not used yet, WP6
+test: npm test                  # B2 repro and B5 exit condition; not used yet, WP6
 risk_paths:                     # unmatched paths are low risk
   high: ["src/auth/**", "migrations/**", ".github/**", "infra/**"]
   medium: []
 limits:
   human_review_lines: 400
-  fix_rounds: 3
-  info_requests: 2
-reporter_silence_days: {ping: 4, stale: 14, close: 21}   # must be increasing
-notify: none                    # none | slack | telegram
+  fix_rounds: 3                 # not used yet, WP9
+  info_requests: 2              # not used yet, WP6
+reporter_silence_days: {ping: 4, stale: 14, close: 21}   # must be increasing; not used yet, WP7
+notify: none                    # none | slack | telegram; not used yet, WP11b
 fork_prs: on-command            # on-command (review fork PRs only after /review) | off
 workflows:
   review: true                  # Workflow A
