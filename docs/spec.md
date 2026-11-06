@@ -108,14 +108,14 @@ Four passes review the PR at once; only findings that survive the refute step co
 
 [Diagram in the online doc: Workflow B · issue to fix PR, 2 human waits, 3-round cap]
 
-The two highlighted steps are the only places the flow waits on a person; every other exit stops with a label rather than guessing.
+The two highlighted steps are the only places the flow waits on a person, apart from an outsider's bug, which waits for the maintainer's `/reproduce` before B2; every other exit stops with a label rather than guessing.
 
 **Steps at a glance**
 
 | Step | What it does | Exit when it can't go on | Waits on |
 | --- | --- | --- | --- |
 | B1 Classify | Labels bug, feature or question; spots duplicates | Not a bug: label, stop | — |
-| B2 Reproduce | Turns the report into a failing test in a sandbox | No repro: ask the reporter; ping at day 4, stale at 14, closed at 21 | Reporter |
+| B2 Reproduce | Turns the report into a failing test in a sandbox | No repro: ask the reporter; ping at day 4, stale at 14, closed at 21 | Reporter (an outsider's bug: first the maintainer's `/reproduce`) |
 | B3 Analyse | Root cause, blast radius, fix plan, risk and size | — | — |
 | B4 Ask the maintainer | Posts the analysis, waits for a command | `/no-fix`: `fix: declined`, stop | Maintainer |
 | B5 Fix loop | Implementer, then adversarial reviewer, up to 3 rounds | Round 3 rejected: draft PR, `fix: needs-maintainer` | — |
@@ -133,6 +133,8 @@ The two highlighted steps are the only places the flow waits on a person; every 
 2. Turn them into an automated failing test (preferred) or, in a repo with no test harness, a script whose captured output shows the failure (enough to pass B2).
 3. **Reproduced:** store the test and its output on the session record, label `triage: reproduced`, go to B3.
 4. **Not reproduced:** comment to the reporter (`@author`) with what was tried, the environment used, what happened, and two to four specific questions; label `triage: needs-info`. A reply from the reporter restarts B2. After 2 unsuccessful requests (answers that still give no repro), label `triage: needs-human` and stop.
+
+**Who starts B2 (v1, ADR-0037).** B2 runs code, so it starts on its own only when the issue's author is trusted: in `maintainers`, with write or admin permission, which covers the maintainer and any collaborator listed there. On anyone else's bug, B1 stops with `triage: needs-human` and a note until a maintainer comments `/reproduce`, which starts or restarts B2; after that, a reply from the reporter while the issue has `triage: needs-info` restarts B2 as above.
 
 **Reporter silence.** Counted from the agent's last `triage: needs-info` comment. Any reply from the reporter stops the clock, removes `triage: no-response` and `stale`, and restarts B2. A maintainer can exempt an issue with `keep-open`.
 
@@ -227,7 +229,7 @@ jobs:
 | `ai-review: pending` / `merge` / `changes-requested` / `human-review` | A | Review running / verdict |
 | `ai: off` | A maintainer | Kill switch on that issue or PR ([CTL-08](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) |
 
-**Commands** — accepted only from users with write or admin permission: `/review` (A), `/retriage`, `/fix [guidance]`, `/no-fix <reason>` (B).
+**Commands** — accepted only from users with write or admin permission: `/review` (A), `/retriage`, `/reproduce`, `/fix [guidance]`, `/no-fix <reason>` (B).
 
 **Runtime.** Every AI step runs Claude Code inside GitHub Actions through [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action), authenticated with the maintainer's Claude subscription, not an API key: run `claude setup-token` once on your machine and store the token as the repo secret `CLAUDE_CODE_OAUTH_TOKEN`. Each role above is a separate Claude Code run with its own allowed-tools list. Runs draw on the subscription's usage limits, shared with your own use, so the per-agent time and turn limits in Guardrails matter.
 
