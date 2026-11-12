@@ -20,6 +20,12 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 - The WP's PR also updates its row's Status in `docs/plan.md`. Put a small diagram of the runtime flow in the PR description when it helps the reader; none is required.
 - Stop-WPs: WP1, WP4, WP9 and WP12. Before writing code, post a short plan (files, approach, how you'll run the check) and wait for "go" unless the maintainer has said to proceed without asking; after the PR, stop and wait for review.
 - Other WPs: no plan stop. When the tests pass, put the results in the PR description and continue to the next WP without waiting. The maintainer reviews these PRs in batches and always does the merges.
+- **Pending [ADR-0051](docs/adr/0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (Proposed; takes effect only once it is accepted and its Maintainer setup is done; until then the two bullets above hold).** It replaces them with:
+  - Before build, per WP, the maintainer approves the spec text and the acceptance tests (`tests/e2e/test_wp<N>.py`) as PR reviews; for a stop-WP this is its plan stop.
+  - After that, the App enables GitHub auto-merge (rebase) through `scripts/dev/as-agent`; GitHub merges when `test`, `gitleaks` and the Workflow A verdict check are green and, for a WP PR, the e2e output and run IDs are in the description. Never a direct merge, never an approval.
+  - PRs touching CODEOWNERS paths (workflows, guard and `as-*` scripts, policy tests, sandbox/secrets code, spec, acceptance tests) wait for the maintainer's review.
+  - Collect everything that needs the maintainer and ask at most once or twice a day, in one list.
+  - Every 3-4 merged WPs, write a whole-codebase review (architecture, duplication, spec drift, refactor candidates) for the maintainer and stop new WP work until they agree on the refactor list.
 - Always stop and ask when the policy tests (`tests/test_workflow_policy.py`) fail.
 - Ask the maintainer only for: the stops above (policy-test failure, stop-WP plans, spec/plan/code conflicts), a new product or security decision (new ADR), relaxing a hard rule or a security boundary, and irreversible actions outside this repo and the playground. Decide PR splits, merge-order proposals and rebases yourself, and report them.
 - Keep PRs small. If a WP grows past roughly 600 changed lines, split it (a split gets its own row in the plan's WP table, e.g. WP2a) and say so in the PR.
