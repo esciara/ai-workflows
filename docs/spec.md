@@ -67,7 +67,7 @@ Four passes review the PR at once; only findings that survive the refute step co
 | Label | When | What the maintainer does |
 | --- | --- | --- |
 | `ai-review: changes-requested` | Any blocking finding, or a required CI check is red | Waits for the author to push |
-| `ai-review: human-review` | Risk tier `high`, or the reviewer lacks context to judge (no linked issue, generated code, > 400 changed lines) | Reads the flagged files, decides |
+| `ai-review: human-review` | Risk tier `high`, or the reviewer lacks context to judge (no linked issue (a repo may also accept a plan reference, config `linked_issue`), generated code, > 400 changed lines) | Reads the flagged files, decides |
 | `ai-review: merge` | No blocking findings, CI green, tier `low` or `medium` | Skims the comment and merges |
 
 **Review comment template**
