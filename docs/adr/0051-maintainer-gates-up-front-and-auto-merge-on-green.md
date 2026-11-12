@@ -58,12 +58,13 @@ Why: the maintainer's attention goes to what to build and how it is proven, wher
 Takes effect only after this ADR is accepted and the follow-up PRs below have merged. In order:
 
 1. Merge the follow-up PRs: CODEOWNERS, the Workflow A caller and verdict check on this repo, the `guard-bash` change.
-2. Repo Settings, General, Pull Requests: tick "Allow auto-merge". Keep only "Allow rebase merging".
-3. Ruleset `main` (Settings, Rules, Rulesets): in "Require a pull request before merging", set required approvals to 0, tick "Require review from Code Owners", keep "Dismiss stale pull request approvals when new commits are pushed" and "Require approval of the most recent reviewable push". Bypass list stays empty.
-4. Same ruleset, "Require status checks to pass": keep `test`, add `gitleaks` and the verdict check (name set by the follow-up PR, e.g. `AI workflows / verdict`), source GitHub Actions.
-5. Check: an App PR touching only `docs/` with green checks merges by itself; an App PR touching `scripts/dev/guard-bash` waits for your approval; your approval on it lets it merge.
+2. Repo Settings, Secrets and variables, Actions: add `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`). Then Actions, "AI review", Run workflow once on `main` (creates the labels). Push to any open PR and check that its "AI review" run ends with a verdict label and a `verdict` check.
+3. Repo Settings, General, Pull Requests: tick "Allow auto-merge". Keep only "Allow rebase merging".
+4. Ruleset `main` (Settings, Rules, Rulesets): in "Require a pull request before merging", set required approvals to 0, tick "Require review from Code Owners", keep "Dismiss stale pull request approvals when new commits are pushed" and "Require approval of the most recent reviewable push". Bypass list stays empty.
+5. Same ruleset, "Require status checks to pass": keep `test`, add `gitleaks` and `verdict` (job of `.github/workflows/ai-review.yml`), source GitHub Actions.
+6. Check: an App PR touching only `docs/` with green checks merges by itself; an App PR touching `scripts/dev/guard-bash` waits for your approval; your approval on it lets it merge.
 
-The App needs no new permission: enabling auto-merge needs pull requests write and contents write, which it has ([ADR-0031](0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md)). Verify step 3 on the repo: GitHub documents code-owner review as required when owned files change; that it still applies with 0 general approvals is to be confirmed by step 5.
+The App needs no new permission: enabling auto-merge needs pull requests write and contents write, which it has ([ADR-0031](0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md)). Verify step 4 on the repo: GitHub documents code-owner review as required when owned files change; that it still applies with 0 general approvals is to be confirmed by step 6.
 
 ## Follow-ups (own PRs, not this one)
 
