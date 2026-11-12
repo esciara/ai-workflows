@@ -1,0 +1,12 @@
+# Workflow A dogfooded on this repo (ADR-0051): its verdict is the required `AI review / verdict` check.
+# Read from the default branch only. Schema: schema/ai-workflows.schema.json.
+maintainers: [esciara]
+default_branch: main
+setup: pip install -e '.[test]'
+test: pytest -q
+risk_paths:
+  high: [".github/**", "scripts/dev/**", "scripts/aiwf/devguard.py", "scripts/aiwf/policy.py", "scripts/aiwf/commands.py", "scripts/aiwf/review_gate.py"]
+required_checks: [test, gitleaks]
+workflows:
+  review: true
+  triage: false

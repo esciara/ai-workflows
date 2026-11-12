@@ -1,0 +1,61 @@
+# Workflow A on this repo (ADR-0051). Reviews every same-repo PR with the reusable workflow from main (never the PR's
+# own copy), then `verdict` passes only on `ai-review: merge`. `verdict` is a required check of the ruleset; it must be
+# a job of this run: labels added with GITHUB_TOKEN start no other workflow run.
+name: AI review
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch: {}   # once after install: create the label set
+
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  config:
+    uses: esciara/ai-workflows/.github/workflows/config.yml@main
+    permissions:
+      contents: read
+
+  labels:
+    needs: config
+    if: needs.config.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch'
+    uses: esciara/ai-workflows/.github/workflows/labels.yml@main
+    permissions:
+      issues: write
+
+  review:
+    needs: config
+    if: needs.config.outputs.review == 'true' && github.event_name == 'pull_request'
+    uses: esciara/ai-workflows/.github/workflows/review.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      checks: read
+    with:
+      config: ${{ needs.config.outputs.config }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # Required check: green only when this run's review ended with the `ai-review: merge` label.
+  verdict:
+    needs: review
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          REVIEW: ${{ needs.review.result }}
+        run: |
+          if [ "$REVIEW" != success ]; then echo "review did not succeed: $REVIEW"; exit 1; fi
+          labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name')
+          echo "$labels"
+          if ! grep -qx 'ai-review: merge' <<<"$labels"; then echo "verdict is not ai-review: merge"; exit 1; fi
