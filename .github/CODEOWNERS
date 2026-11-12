@@ -1,0 +1,27 @@
+# ADR-0051: PRs touching these paths need the maintainer's review (ruleset: "Require review from Code Owners").
+# Everything else auto-merges when the required checks are green. Keep tests/test_codeowners.py in sync.
+
+# Workflows, composite actions, Dependabot, this file
+/.github/                           @esciara
+
+# Spec and acceptance tests (gates 1 and 2; every later edit, even waits or fixture data)
+/docs/spec.md                       @esciara
+/tests/e2e/test_wp*.py              @esciara
+
+# Dev-agent guard hook and identity scripts (ADR-0031)
+/scripts/dev/guard-bash             @esciara
+/scripts/dev/as-*                   @esciara
+/scripts/aiwf/devguard.py           @esciara
+/.claude/settings.json              @esciara
+/tests/test_devguard.py             @esciara
+/tests/test_as_agent.py             @esciara
+
+# Workflow security policy and its tests
+/scripts/aiwf/policy.py             @esciara
+/tests/test_workflow_policy.py      @esciara
+/tests/test_codeowners.py           @esciara
+
+# Trust boundaries: command authors (ADR-0005), fork-PR review gate (ADR-0044).
+# Add the ADR-0037 sandbox/scrub code here when it lands.
+/scripts/aiwf/commands.py           @esciara
+/scripts/aiwf/review_gate.py        @esciara
