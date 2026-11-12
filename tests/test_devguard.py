@@ -15,6 +15,8 @@ ALLOWED = [
     f"scripts/dev/as-maintainer pr review 4 -R {PG} --approve",
     "git push https://github.com/opinionated-digital-center/ai-workflows-playground.git HEAD:fork-bug",
     "uv run --extra test pytest -q", "echo hello | grep gh",
+    # ADR-0051: enabling auto-merge as the App, nothing else
+    f"{AGENT} gh pr merge 7 --auto --rebase", f"{AGENT} gh pr merge 7 --rebase --auto -R esciara/ai-workflows",
 ]
 BLOCKED = [
     "gh pr merge 3", "cd x && gh pr merge 3", f"{AGENT} gh pr merge 3 --rebase", "echo \"gh pr merge\"",  # known false positive
@@ -29,6 +31,12 @@ BLOCKED = [
     f"{AGENT} git push origin +x", f"{AGENT} git push --delete origin x", f"{AGENT} git push origin :x",
     f"{AGENT} git push --mirror origin", f"{AGENT} gh api -X DELETE repos/esciara/ai-workflows/git/refs/heads/x",
     f"sh -c \"{AGENT} git push origin 'HEAD:main'\"", "git -C dir push origin main",
+    "gh pr merge 7 --auto --rebase", f"{AGENT} gh pr merge 7 --auto", f"{AGENT} gh pr merge 7 --rebase",
+    f"{AGENT} gh pr merge 7 --auto --rebase --admin", f"{AGENT} gh pr merge 7 --auto --squash",
+    f"{AGENT} gh pr merge 7 --auto --auto --rebase", f"{AGENT} gh pr merge 7 --auto --rebase -R {PG}",
+    f"{AGENT} gh pr merge 7 --auto --rebase; gh pr close 7", f"{AGENT} gh pr merge 7 --auto --rebase && {AGENT} gh pr merge 8 --rebase",
+    f"bash -c '{AGENT} gh pr merge 7 --auto --rebase'", f"{AGENT} gh pr merge $(echo 7) --auto --rebase",
+    "scripts/dev/as-maintainer gh pr merge 7 --auto --rebase", f"{AGENT} gh pr merge 7 --auto --rebase\ngh pr merge 8",
 ]
 
 

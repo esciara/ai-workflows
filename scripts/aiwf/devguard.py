@@ -3,6 +3,8 @@
 - `decide(command)`: the Claude Code `PreToolUse` Bash hook (`scripts/dev/guard-bash`). GitHub writes go through
   `scripts/dev/as-agent` (the agent App); bare `gh` may only read; bare `git push` is blocked; merges, approvals by
   agents, `gh auth token`, pushes to main, force pushes without a lease and remote branch deletion are always blocked.
+  One exception (ADR-0051): `scripts/dev/as-agent gh pr merge <N> --auto --rebase` as the whole command, which only
+  enables GitHub auto-merge; GitHub merges when the ruleset (required checks, code-owner review) is satisfied.
   A pattern match, not a boundary (the ruleset is): it matches command text, so `echo "gh pr merge"` is blocked too.
 - `maintainer_allowed(args)`: the allow-list of `scripts/dev/as-maintainer` (maintainer comments, reviews and the
   labels-sync dispatch, on the playground only).
@@ -130,8 +132,33 @@ def gh_is_read(args: list[str]) -> bool:
     return words[1:2] != [] and words[1] in GH_READS.get(group, set())
 
 
+THIS_REPO = "esciara/ai-workflows"
+
+
+def is_auto_merge(command: str) -> bool:
+    """`as-agent gh pr merge <N> --auto --rebase [-R esciara/ai-workflows]` as the whole command (ADR-0051)."""
+    if re.search(r"[;&|`$()<>\n'\"\\]", command):
+        return False
+    words = command.split()
+    if len(words) < 6 or os.path.basename(words[0]) != "as-agent" or words[1:4] != ["gh", "pr", "merge"]:
+        return False
+    rest = words[4:]
+    if not re.fullmatch(r"\d+", rest[0]):
+        return False
+    flags, i = [], 1
+    while i < len(rest):
+        if rest[i] in {"-R", "--repo"} and i + 1 < len(rest) and rest[i + 1] == THIS_REPO:
+            i += 2
+            continue
+        flags.append(rest[i])
+        i += 1
+    return sorted(flags) == ["--auto", "--rebase"]
+
+
 def decide(command: str) -> tuple[bool, str]:
     """(allowed, reason) for a Bash tool command in a Claude Code session of this repo."""
+    if is_auto_merge(command.strip()):
+        return True, ""
     for pattern, why in ALWAYS:
         if pattern.search(command):
             return False, why
