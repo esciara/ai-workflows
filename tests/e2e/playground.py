@@ -229,7 +229,7 @@ def fork_put(path: str, branch: str, text: str, message: str) -> str:
     return api(f"repos/{FORK}/contents/{path}", *fields, method="PUT", as_tester=True, tester_repo=FORK)["commit"]["sha"]
 
 
-METRICS_ARTIFACT = "ai-workflows-metrics"  # spec: Usage per run; artifact name and file are an open WP15 decision
+METRICS_ARTIFACT = "ai-workflows-metrics"  # spec: Usage per run; artifact and file per ADR-0052
 METRICS_FILE = "metrics.jsonl"
 
 

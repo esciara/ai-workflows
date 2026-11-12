@@ -13,6 +13,15 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Priority: P1 (was aiwf-6k3).
 - ADR: [ADR-0043](adr/0043-e2e-on-the-playground-consolidated.md)
 
+### Workflow B cannot open PRs with "Allow GitHub Actions to create and approve pull requests" off
+
+- Date: 2026-11-12
+- What: the install guide keeps the repo setting "Allow GitHub Actions to create and approve pull requests" off (plan open item, spec: Installing). With it off, the workflow's `GITHUB_TOKEN` cannot create pull requests, yet the spec has the orchestrator open the B5 draft PR and the B6 fix PR with that token.
+- Why it matters: Workflow B's fix stage (slice 4: WP9, WP10) cannot open its PRs on a repo set up from the guide.
+- Current mitigation: none needed for slice 1 (Workflow A only comments, requests changes and labels); the spec scopes the setting to Workflow A. Slice 4 decides: turn the setting on for B, or open PRs with a GitHub App token (new ADR).
+- Priority: P2, before slice 4.
+- ADR: [ADR-0052](adr/0052-playground-caller-pins-the-release-metrics-in-a-run-artifact.md) (context); the decision is still open.
+
 ## Accepted risks
 
 ### Unreviewed code on `e2e-target` runs with playground secrets

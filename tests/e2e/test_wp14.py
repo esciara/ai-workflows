@@ -13,7 +13,7 @@ Manual checklist (not automated; no writes to esciara/pyteleinfo from tests):
 
 1. Before running the playground test, the maintainer updates the playground's normal caller
    (`.github/workflows/ai-workflows.yml`) from `templates/caller.yml` at the release, following `docs/install.md`,
-   keeping only its e2e routing `if:` on the `config` job (ADR-0028).
+   keeping only its e2e routing `if:` on the `config` job (ADR-0052, a playground PR).
 2. On esciara/pyteleinfo, the maintainer follows `docs/install.md` alone, with a timer: start at reading the guide,
    stop when a test PR there gets its verdict label. Pass: under 30 minutes, no help from outside the guide. Record
    the time and any gap in the guide in the WP14 PR.

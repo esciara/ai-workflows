@@ -3,8 +3,7 @@ agent's turns, duration and tokens (spec: Guardrails, Usage per run).
 
 Runs against the playground (AIWF_E2E=1) with the e2e slot (AIWF_E2E_SLOT=1): the PR comes from an `e2e/` branch, so
 caller-e2e.yml reviews it with review.yml@e2e-target, which the slot points at the commit under test (ADR-0028/0029).
-The metrics line is read from the run's `ai-workflows-metrics` artifact (`metrics.jsonl`); that location is the
-recommended answer to an open WP15 decision, kept in one helper (`playground.metrics_lines`) so the gate can change it.
+The metrics line is read from the run's `ai-workflows-metrics` artifact (`metrics.jsonl`), per ADR-0052.
 """
 
 from __future__ import annotations
