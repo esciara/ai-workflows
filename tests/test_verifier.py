@@ -7,12 +7,12 @@ from aiwf import verifier
 PLAN = """| ID | Package | Depends on | Delivers | Done when |
 | --- | --- | --- | --- | --- |
 | WP0 | Repo bootstrap | — | Layout | Caller loads config in a green run |
-| WP1 | Shared runtime | WP0 | Runtime | `/ping` gets a reply; all labels exist |
+| WP1 | Shared runtime | WP0 | Runtime | a command is accepted; all labels exist |
 """
 
 
 def test_done_when_extracts_the_wp_cell():
-    assert verifier.done_when(PLAN, "WP1") == "`/ping` gets a reply; all labels exist"
+    assert verifier.done_when(PLAN, "WP1") == "a command is accepted; all labels exist"
 
 
 def test_done_when_from_real_plan():
@@ -29,7 +29,7 @@ def test_pack_holds_spec_done_when_and_test_source():
     pack = verifier.build_pack("WP1")
     assert "<spec>" in pack and '<done_when wp="WP1">' in pack
     assert '<file path="tests/e2e/test_wp1.py">' in pack and '<file path="tests/e2e/playground.py">' in pack
-    assert "def test_non_maintainer_ping_is_ignored" in pack
+    assert "def test_non_maintainer_retriage_is_refused" in pack
 
 
 def test_test_files_lists_test_first_then_helpers():

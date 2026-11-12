@@ -32,7 +32,7 @@ EXPECTED = {
 
 def test_real_workflows_found():
     names = {p.name for p in REAL}
-    assert {"ci.yml", "config.yml", "commands.yml", "labels.yml", "caller.yml"} <= names
+    assert {"ci.yml", "config.yml", "review.yml", "triage.yml", "labels.yml", "caller.yml"} <= names
 
 
 @pytest.mark.parametrize("path", REAL, ids=lambda p: str(p.relative_to(ROOT)))
@@ -175,4 +175,4 @@ def test_every_agent_step_has_a_time_and_turn_limit():
                 assert "--max-turns " in step["with"]["claude_args"], where
                 minutes = step.get("timeout-minutes")
                 assert isinstance(minutes, int) and 0 < minutes < job["timeout-minutes"], where  # a step timeout fails
-    assert seen >= 5  # ping, extract, classify, review pass, verify
+    assert seen >= 4  # extract, classify, review pass, verify

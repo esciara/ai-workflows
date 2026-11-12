@@ -3,7 +3,7 @@
 Runs against the playground (AIWF_E2E=1) with the e2e slot (AIWF_E2E_SLOT=1): every item routes to caller-e2e.yml
 (an `e2e/` PR branch, or the `e2e-target` label), which runs the workflows at the commit under test (ADR-0043).
 
-1. An issue opened with `ai: off` gets no triage, and a maintainer's `/ping` on it gets no reply (config gate).
+1. An issue opened with `ai: off` gets no triage, and a maintainer's `/retriage` on it gets none either (config gate).
 2. A forced crash (label `e2e-crash`: the playground's caller-e2e.yml then passes an invalid model token, so the
    first agent job fails; no product hook), on an issue (triage) and on a PR (review, started by a maintainer's
    `/review`): the run fails, the item gets `ai: error` and exactly one error comment linking that run; nothing
@@ -156,7 +156,7 @@ def assert_crash_reported(number: int, run: dict, crashed: str, failed: str) -> 
     assert len(bot_comments(number, ERROR_MARKER)) == 1
 
 
-def test_ai_off_issue_gets_no_triage_and_no_command_reply(e2e_target, issue_factory):
+def test_ai_off_issue_gets_no_triage_even_on_command(e2e_target, issue_factory):
     pg.ensure_label(OFF, "000000", "Kill switch: no AI run on this issue or PR")
     t0 = now()
     issue = issue_factory("ai: off issue", [OFF])
@@ -166,13 +166,14 @@ def test_ai_off_issue_gets_no_triage_and_no_command_reply(e2e_target, issue_fact
     assert not bot_comments(number, TRIAGE_MARKER), "triaged despite ai: off"
     assert not {lb for lb in labels(number) if lb.startswith(("type:", "triage:"))}, sorted(labels(number))
 
-    cmt = pg.comment(number, "/ping")
+    cmt = pg.comment(number, "/retriage")
     run = pg.completed(with_job("issue_comment", title, cmt["created_at"], "config / load")["id"])
     jobs = pg.jobs(run["id"])
-    print(f"/ping run {run['id']} {run['html_url']} -> {run['conclusion']}, jobs {jobs}")
+    print(f"/retriage run {run['id']} {run['html_url']} -> {run['conclusion']}, jobs {jobs}")
     assert run["conclusion"] == "success" and jobs["config / load"] == "success", jobs
-    assert all(c == "skipped" for j, c in jobs.items() if j.startswith("commands")), jobs
-    assert not pg.bot_pings_after(number, cmt["id"]), "replied to /ping despite ai: off"
+    assert all(c == "skipped" for j, c in jobs.items() if j.startswith("triage")), jobs
+    assert not bot_comments(number, TRIAGE_MARKER), "triaged on /retriage despite ai: off"
+    assert not {lb for lb in labels(number) if lb.startswith(("type:", "triage:"))}, sorted(labels(number))
 
 
 def test_forced_crash_on_triage_gives_ai_error_and_one_comment(e2e_target, issue_factory):

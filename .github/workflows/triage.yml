@@ -27,39 +27,11 @@ on:
 permissions: {}
 
 jobs:
-  # Which events run B1: a new issue, or `/retriage` from a maintainer (ADR-0005) on an issue (not a PR).
-  gate:
-    if: github.event_name == 'issues' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    outputs:
-      classify: ${{ github.event_name == 'issues' || steps.parse.outputs.command == 'retriage' }}
-    steps:
-      - if: github.event_name == 'issue_comment'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
-          path: .ai-workflows
-          persist-credentials: false
-      - if: github.event_name == 'issue_comment'
-        uses: ./.ai-workflows/.github/actions/aiwf-setup
-      - if: github.event_name == 'issue_comment'
-        id: parse
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          AIWF_CONFIG: ${{ inputs.config }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
-          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
-        run: ~/.aiwf-venv/bin/aiwf parse-command --repo "$REPO"
-
   # B1 pass-1 context with a read-only token: the issue under triage.
+  # Which events run B1: a new issue, or `/retriage` from a maintainer (ADR-0005) on an issue (not a PR). config.yml
+  # parses the comment once; any other comment skips every job here.
   context:
-    needs: gate
-    if: needs.gate.outputs.classify == 'true'
+    if: github.event_name == 'issues' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request && fromJSON(inputs.config).command == 'retriage')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -221,7 +193,7 @@ jobs:
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
   # The reason names the failed jobs only.
   failed:
-    needs: [gate, context, extract, candidates, classify, publish]
+    needs: [context, extract, candidates, classify, publish]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5

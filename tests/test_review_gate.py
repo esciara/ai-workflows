@@ -6,7 +6,8 @@ from aiwf import cli, review_gate
 from aiwf.review_gate import Gate
 
 REPO = "acme/app"
-CFG = {"maintainers": ["Alice"], "fork_prs": "on-command"}
+CFG = {"maintainers": ["Alice"], "fork_prs": "on-command", "command": ""}
+REVIEW = {**CFG, "command": "review"}  # config.yml accepted a /review
 
 
 def pr(number=7, sha="a" * 40, head_repo=REPO, draft=False, state="open"):
@@ -61,51 +62,42 @@ def test_fork_detection_ignores_case():
 # --- /review ---------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("login,permission,ok", [
-    ("alice", "write", True),
-    ("alice", "admin", True),
-    ("ALICE", "write", True),
-    ("alice", "read", False),
-    ("alice", "none", False),
-    ("mallory", "write", False),  # write access but not in maintainers
-    ("mallory", "admin", False),
-    ("mallory", "none", False),
-])
-def test_review_needs_maintainer_and_write_access(login, permission, ok):
-    gh = fake_gh(permission, pr(head_repo="outsider/app", sha="b" * 40))
-    gate = review_gate.decide("issue_comment", comment_event(login=login), CFG, REPO, gh)
-    assert gate.run is ok
-    if ok:
-        assert gate == Gate(True, "/review", 7, "b" * 40, True)
+def test_review_runs_on_the_command_config_yml_accepted():
+    """The comment itself is parsed and the author checked once, by config.yml (ADR-0005, tests/test_commands.py)."""
+    gh = fake_gh(pull=pr(head_repo="outsider/app", sha="b" * 40))
+    gate = review_gate.decide("issue_comment", comment_event(), REVIEW, REPO, gh)
+    assert gate == Gate(True, "/review", 7, "b" * 40, True)
+    assert not [c for c in gh.calls if "/collaborators/" in c[1]]  # no second author check
 
 
 def test_review_on_same_repo_pr_is_a_forced_run():
-    gate = review_gate.decide("issue_comment", comment_event(), CFG, REPO, fake_gh(pull=pr(draft=True)))
+    gate = review_gate.decide("issue_comment", comment_event(), REVIEW, REPO, fake_gh(pull=pr(draft=True)))
     assert gate == Gate(True, "/review", 7, "a" * 40, False)
 
 
 def test_fork_prs_off_refuses_a_fork_but_not_a_same_repo_pr():
-    cfg = {**CFG, "fork_prs": "off"}
+    cfg = {**REVIEW, "fork_prs": "off"}
     fork = review_gate.decide("issue_comment", comment_event(), cfg, REPO, fake_gh(pull=pr(head_repo="o/app")))
     assert not fork.run and fork.fork
     assert review_gate.decide("issue_comment", comment_event(), cfg, REPO, fake_gh()).run
 
 
-@pytest.mark.parametrize("body", ["/ping", "/fix", "please /review", "> /review", "review", "", None])
-def test_other_comments_are_ignored(body):
+@pytest.mark.parametrize("command", ["", "retriage", "fix", "no-fix", None])
+def test_other_comments_are_ignored(command):
+    """Even a comment reading `/review`: config.yml refused it (not a maintainer, or no write access)."""
     gh = fake_gh()
-    assert not review_gate.decide("issue_comment", comment_event(body=body), CFG, REPO, gh).run
+    assert not review_gate.decide("issue_comment", comment_event(), {**CFG, "command": command}, REPO, gh).run
     assert not [c for c in gh.calls if "/pulls/" in c[1]]
 
 
 def test_review_on_an_issue_is_ignored():
     gh = fake_gh()
-    assert not review_gate.decide("issue_comment", comment_event(on_pr=False), CFG, REPO, gh).run
+    assert not review_gate.decide("issue_comment", comment_event(on_pr=False), REVIEW, REPO, gh).run
     assert gh.calls == []
 
 
 def test_closed_pr_is_not_reviewed():
-    assert not review_gate.decide("issue_comment", comment_event(), CFG, REPO, fake_gh(pull=pr(state="closed"))).run
+    assert not review_gate.decide("issue_comment", comment_event(), REVIEW, REPO, fake_gh(pull=pr(state="closed"))).run
 
 
 @pytest.mark.parametrize("event", ["pull_request_target", "issues", "push", ""])

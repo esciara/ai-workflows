@@ -30,6 +30,7 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Also parses a comment's slash command once (ADR-0005); review and triage run only on the command they handle.
   config:
     uses: esciara/ai-workflows/.github/workflows/config.yml@main
     permissions:
@@ -44,20 +45,6 @@ jobs:
     uses: esciara/ai-workflows/.github/workflows/labels.yml@main
     permissions:
       issues: write
-
-  # Slash commands (WP1: /ping).
-  commands:
-    needs: config
-    if: needs.config.outputs.enabled == 'true' && github.event_name == 'issue_comment'
-    uses: esciara/ai-workflows/.github/workflows/commands.yml@main
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-    with:
-      config: ${{ needs.config.outputs.config }}
-    secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   # Workflow A: PR events review same-repo PRs; `/review` from a maintainer reviews any PR, fork PRs included (WP4).
   review:

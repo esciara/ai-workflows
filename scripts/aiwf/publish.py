@@ -1,6 +1,6 @@
 """Validate an agent's JSON answer against its schema, then write to GitHub (orchestrator only).
 
-Per-workflow publishers (ADR-0025): each `aiwf.publish_<workflow>` module (commands, review = Workflow A,
+Per-workflow publishers (ADR-0025): each `aiwf.publish_<workflow>` module (review = Workflow A,
 triage = Workflow B) exports `PUBLISHERS = {kind: fn(data, repo, issue, run_url, gh)}`; this module validates, then
 dispatches by kind. A new workflow adds a module, never a line here. Shared low-level gh helpers live here.
 """

@@ -1,6 +1,10 @@
-"""WP1 acceptance test. Done when: `/ping` from a maintainer gets a reply; from a non-maintainer is ignored; all labels exist.
+"""WP1 acceptance test. Done when: a command from a maintainer is accepted, from a non-maintainer is refused; all
+labels exist.
 
-Runs against the playground (AIWF_E2E=1), whose caller must call commands.yml at the ref under test.
+Runs against the playground (AIWF_E2E=1, AIWF_E2E_SLOT=1): command items are labelled `e2e-target`, so their comments
+run the playground's caller-e2e.yml at the ref under test. config.yml parses each comment once (ADR-0005); review.yml
+and triage.yml run only on the command they handle. Accepted = the command's first job runs; refused = config ran and
+every job of the workflow the command belongs to was skipped.
 """
 
 import json
@@ -22,43 +26,69 @@ SPEC_LABELS = {
     "ai-review: pending", "ai-review: merge", "ai-review: changes-requested", "ai-review: human-review",
     "ai: off", "ai: error", "stale", "keep-open",
 }
+FIXTURE_TITLE = "[e2e] WP1 command fixture"
 
 
-def ping_as_maintainer(item: dict) -> None:
-    cmt = pg.comment(item["number"], "/ping")
-    run_id = pg.run_for(cmt, item["title"])
-    run = pg.completed(run_id)
-    print(f"maintainer /ping on #{item['number']}: run {run_id} {run['html_url']} -> {run['conclusion']}")
-    assert run["conclusion"] == "success", pg.jobs(run_id)
-    jobs = pg.jobs(run_id)
-    assert jobs.get("commands / agent") == "success" and jobs.get("commands / publish") == "success", jobs
-    replies = pg.bot_pings_after(item["number"], cmt["id"])
-    assert len(replies) == 1, f"expected exactly one ping reply after comment {cmt['id']}, got {len(replies)}"
-    print(f"reply: {replies[0]['html_url']}")
+@pytest.fixture
+def command_issue(request, e2e_target) -> dict:
+    """A reusable e2e test-fixture issue per test (found by title, created once, never deleted): one per test, since
+    the caller serialises runs per issue."""
+    return pg.reusable_issue(f"{FIXTURE_TITLE} ({request.node.originalname})",
+                             "Reusable fixture for tests/e2e/test_wp1.py in esciara/ai-workflows: slash commands are "
+                             "posted here. Not a real report.", e2e=True)
 
 
-def test_maintainer_ping_on_issue_gets_one_reply(fixture_issue):
-    ping_as_maintainer(fixture_issue)
+@pytest.fixture
+def command_pr(e2e_target):
+    """A draft e2e PR (its own events start no review); branch deleted, PR closed on exit."""
+    with pg.throwaway_pr("[e2e] WP1 command on a PR", e2e=True, wp="wp1", slug="command", draft=True) as pr:
+        yield pr
 
 
-def test_maintainer_ping_on_pr_gets_one_reply(throwaway_pr):
-    ping_as_maintainer(throwaway_pr)
-
-
-def test_non_maintainer_ping_is_ignored(fixture_issue):
-    if not os.environ.get("AI_WORKFLOWS_TESTER_APP_ID"):
+def command_run(item: dict, body: str, as_tester: bool = False) -> tuple[dict, dict[str, str]]:
+    if as_tester and not os.environ.get("AI_WORKFLOWS_TESTER_APP_ID"):
         pytest.fail("AI_WORKFLOWS_TESTER_APP_ID is not set; cannot post as the tester App (not a pass)", pytrace=False)
-    cmt = pg.comment(fixture_issue["number"], "/ping", as_tester=True)
-    assert cmt["user"].endswith("[bot]") and cmt["user"] != pg.BOT, cmt
-    run_id = pg.run_for(cmt, fixture_issue["title"])
-    run = pg.completed(run_id)
-    jobs = pg.jobs(run_id)
-    print(f"tester /ping by {cmt['user']}: run {run_id} {run['html_url']} -> {run['conclusion']}, jobs {jobs}")
-    assert jobs.get("commands / parse") == "success", jobs  # the command was seen and refused, not crashed
-    assert jobs.get("commands / agent") == "skipped", jobs
-    assert jobs.get("commands / publish") == "skipped", jobs
-    # The wait window is the whole run: publish, the only job that replies, is skipped and the run is over.
-    assert pg.bot_pings_after(fixture_issue["number"], cmt["id"]) == []
+    cmt = pg.comment(item["number"], body, as_tester=as_tester)
+    if as_tester:
+        assert cmt["user"].endswith("[bot]") and cmt["user"] != pg.BOT, cmt
+    run = pg.completed(pg.run_for(cmt, item["title"], pg.E2E_WORKFLOW))
+    jobs = pg.jobs(run["id"])
+    print(f"{body} by {cmt['user']} on #{item['number']}: run {run['id']} {run['html_url']} -> {run['conclusion']}, "
+          f"jobs {jobs}")
+    assert jobs.get("config / load") == "success", jobs  # the comment was parsed, not crashed
+    return run, jobs
+
+
+def ran(jobs: dict[str, str], workflow: str) -> dict[str, str]:
+    return {j: c for j, c in jobs.items() if j.startswith(f"{workflow} / ")}
+
+
+def test_maintainer_retriage_on_issue_is_accepted(command_issue):
+    run, jobs = command_run(command_issue, "/retriage")
+    assert run["conclusion"] == "success", jobs
+    assert jobs.get("triage / context") == "success", jobs
+    assert jobs.get("triage / publish") == "success", jobs
+
+
+def test_maintainer_review_on_pr_is_accepted(command_pr):
+    run, jobs = command_run(command_pr, "/review")
+    assert run["conclusion"] == "success", jobs
+    assert jobs.get("review / gate") == "success" and jobs.get("review / start") == "success", jobs
+    assert jobs.get("review / publish") == "success", jobs
+
+
+def test_non_maintainer_retriage_is_refused(command_issue):
+    run, jobs = command_run(command_issue, "/retriage", as_tester=True)
+    assert run["conclusion"] == "success", jobs
+    triage = ran(jobs, "triage")
+    assert triage and all(c == "skipped" for c in triage.values()), jobs
+
+
+def test_non_maintainer_review_is_refused(command_pr):
+    run, jobs = command_run(command_pr, "/review", as_tester=True)
+    assert run["conclusion"] == "success", jobs
+    review = ran(jobs, "review")
+    assert review and all(c == "skipped" for c in review.values()), jobs
 
 
 def test_all_spec_labels_exist_and_match_schema():
