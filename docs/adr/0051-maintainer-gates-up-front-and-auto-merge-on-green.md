@@ -5,6 +5,7 @@
 - Deciders: maintainer
 - Alias: `D51`
 - Amends: [ADR-0031](0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md) ("the maintainer approves and merges"; the ruleset on `main`)
+- Amended by: [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (`verdict` passes on the maintainer's approval, last-push approval off, linked-issue rule configurable)
 
 ## Context
 
@@ -60,7 +61,7 @@ Takes effect only after this ADR is accepted and the follow-up PRs below have me
 1. Merge the follow-up PRs: CODEOWNERS, the Workflow A caller and verdict check on this repo, the `guard-bash` change.
 2. Repo Settings, Secrets and variables, Actions: add `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`). Then Actions, "AI review", Run workflow once on `main` (creates the labels). Push to any open PR and check that its "AI review" run ends with a verdict label and a `verdict` check.
 3. Repo Settings, General, Pull Requests: tick "Allow auto-merge". Keep only "Allow rebase merging".
-4. Ruleset `main` (Settings, Rules, Rulesets): in "Require a pull request before merging", set required approvals to 0, tick "Require review from Code Owners", keep "Dismiss stale pull request approvals when new commits are pushed" and "Require approval of the most recent reviewable push". Bypass list stays empty.
+4. Ruleset `main` (Settings, Rules, Rulesets): in "Require a pull request before merging", set required approvals to 0, tick "Require review from Code Owners", keep "Dismiss stale pull request approvals when new commits are pushed". Untick "Require approval of the most recent reviewable push" ([ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md)). Bypass list stays empty.
 5. Same ruleset, "Require status checks to pass": keep `test`, add `gitleaks` and `verdict` (job of `.github/workflows/ai-review.yml`), source GitHub Actions.
 6. Check: an App PR touching only `docs/` with green checks merges by itself; an App PR touching `scripts/dev/guard-bash` waits for your approval; your approval on it lets it merge.
 

@@ -25,7 +25,7 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 - Checkpoints: every 3-4 merged WPs, write a whole-codebase review (architecture, duplication, spec drift, refactor candidates) for the maintainer and stop new WP work until they agree on the refactor list.
 - Always stop and ask when the policy tests (`tests/test_workflow_policy.py`) fail.
 - Ask the maintainer only for: the stops above (policy-test failure, stop-WP plans, spec/plan/code conflicts), a new product or security decision (new ADR), relaxing a hard rule or a security boundary, and irreversible actions outside this repo and the playground. Decide PR splits, merge-order proposals and rebases yourself, and report them.
-- Keep PRs small. If a WP grows past roughly 600 changed lines, split it (a split gets its own row in the plan's WP table, e.g. WP2a) and say so in the PR.
+- Keep PRs small. If a WP grows past roughly 400 changed lines, split it (a split gets its own row in the plan's WP table, e.g. WP2a) and say so in the PR.
 - ADRs are only for product and security decisions (`docs/adr/README.md`). Process and how-we-work rules live only in this file, edited in place; git history is the record. When a product or security decision is not covered by the spec, list options with a recommendation and ask; record the answer as a new ADR in `docs/adr/` (next free number, template in `docs/adr/README.md`). It starts as `Proposed`, lists the options considered, and becomes `Accepted` when the maintainer approves it. It may be amended in place while not yet implemented. Superseded ADRs move to `docs/adr/archive/`.
 
 ## Roles (parallel sessions)
