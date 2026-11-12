@@ -18,18 +18,22 @@ This repo builds two GitHub automations, packaged as reusable workflows that oth
 - Each WP: write its tests → build → open a PR on this repo. Acceptance = unit tests for the logic, plus 1–2 happy-path e2e scenarios on the test repo in `tests/e2e/test_wp<N>.py`, run with `AIWF_E2E=1 pytest -n 4 tests/e2e/test_wp<N>.py -v` (add `AIWF_E2E_SLOT=1` when a test uses the `e2e_target` fixture: it takes the e2e slot and points `e2e-target` at HEAD; without it such tests fail, ADR-0043). Not every Done-when condition needs an e2e test. The PR description holds the unit and e2e results and run IDs.
 - `scripts/dev/verify-wp <WP>` is advisory: run it on the acceptance test, paste its output in the PR description. It never blocks and is no stop; the maintainer judges the tests in the PR.
 - The WP's PR also updates its row's Status in `docs/plan.md`. Put a small diagram of the runtime flow in the PR description when it helps the reader; none is required.
-- Stop-WPs: WP1, WP4, WP9 and WP12. Before writing code, post a short plan (files, approach, how you'll run the check) and wait for "go" unless the maintainer has said to proceed without asking; after the PR, stop and wait for review.
-- Other WPs: no plan stop. When the tests pass, put the results in the PR description and continue to the next WP without waiting. The maintainer reviews these PRs in batches and always does the merges.
-- **Pending [ADR-0051](docs/adr/0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (Proposed; takes effect only once it is accepted and its Maintainer setup is done; until then the two bullets above hold).** It replaces them with:
-  - Before build, per WP, the maintainer approves the spec text and the acceptance tests (`tests/e2e/test_wp<N>.py`) as PR reviews; for a stop-WP this is its plan stop.
-  - After that, the App enables GitHub auto-merge (rebase) through `scripts/dev/as-agent`; GitHub merges when `test`, `gitleaks` and the Workflow A verdict check are green and, for a WP PR, the e2e output and run IDs are in the description. Never a direct merge, never an approval.
-  - PRs touching CODEOWNERS paths (workflows, guard and `as-*` scripts, policy tests, sandbox/secrets code, spec, acceptance tests) wait for the maintainer's review.
-  - Collect everything that needs the maintainer and ask at most once or twice a day, in one list.
-  - Every 3-4 merged WPs, write a whole-codebase review (architecture, duplication, spec drift, refactor candidates) for the maintainer and stop new WP work until they agree on the refactor list.
+- Maintainer gates (ADR-0051): before build, per WP, the maintainer approves the spec text and the acceptance tests (`tests/e2e/test_wp<N>.py`) as PR reviews. For a stop-WP (WP1, WP4, WP9, WP12) this is its plan stop: post a short plan (files, approach, how you'll run the check) with the test PR and wait for the approval.
+- Merging (ADR-0051): the App enables GitHub auto-merge (rebase) through `scripts/dev/as-agent`; GitHub merges when `test`, `gitleaks` and the Workflow A verdict check are green and, for a WP PR, the unit and e2e results and run IDs are in the description. Agents never merge directly and never approve. Auto-merge is active only once the follow-up PRs (CODEOWNERS, Workflow A caller and verdict check on this repo, `guard-bash` allowing auto-merge) have merged and the maintainer has done ADR-0051's Maintainer setup; until then the maintainer merges.
+- Exception PRs: PRs touching CODEOWNERS paths (workflows, guard and `as-*` scripts, `.claude/settings.json`, policy tests, sandbox/secrets code, spec, acceptance tests) wait for the maintainer's review. Every edit to `tests/e2e/test_wp*.py` after approval goes to the maintainer, even waits or fixture data.
+- After opening a PR, continue to the next WP without waiting. Collect everything that needs the maintainer and ask at most once or twice a day, in one list; the maintainer may pre-approve so GitHub merges when checks pass.
+- Checkpoints: every 3-4 merged WPs, write a whole-codebase review (architecture, duplication, spec drift, refactor candidates) for the maintainer and stop new WP work until they agree on the refactor list.
 - Always stop and ask when the policy tests (`tests/test_workflow_policy.py`) fail.
 - Ask the maintainer only for: the stops above (policy-test failure, stop-WP plans, spec/plan/code conflicts), a new product or security decision (new ADR), relaxing a hard rule or a security boundary, and irreversible actions outside this repo and the playground. Decide PR splits, merge-order proposals and rebases yourself, and report them.
 - Keep PRs small. If a WP grows past roughly 600 changed lines, split it (a split gets its own row in the plan's WP table, e.g. WP2a) and say so in the PR.
 - ADRs are only for product and security decisions (`docs/adr/README.md`). Process and how-we-work rules live only in this file, edited in place; git history is the record. When a product or security decision is not covered by the spec, list options with a recommendation and ask; record the answer as a new ADR in `docs/adr/` (next free number, template in `docs/adr/README.md`). It starts as `Proposed`, lists the options considered, and becomes `Accepted` when the maintainer approves it. It may be amended in place while not yet implemented. Superseded ADRs move to `docs/adr/archive/`.
+
+## Roles (parallel sessions)
+
+- `aiwf-orch`: orchestrator; assigns work, collects the maintainer's batch, keeps the plan's Status column.
+- `aiwf-review`: phase 1, Workflow A in use.
+- `aiwf-issues`: phase 2, Workflow B.
+- `aiwf-checkpoint`: the whole-codebase review every 3-4 merged WPs.
 
 ## Layout (target, created in WP0)
 

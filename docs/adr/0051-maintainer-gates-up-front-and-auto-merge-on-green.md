@@ -1,6 +1,6 @@
 # ADR-0051 · Maintainer gates up front; PRs on this repo auto-merge when green
 
-- Status: Proposed
+- Status: Accepted (2026-11-12, maintainer)
 - Date: 2026-11-12
 - Deciders: maintainer
 - Alias: `D51`
@@ -47,6 +47,7 @@ Recommendation: (a). (b) rebuilds what GitHub already does; (c) is not determini
   - CODEOWNERS itself: `.github/CODEOWNERS`.
   The ruleset is changed only by the maintainer (the App has no administration permission).
 - **Batching.** Whatever still needs the maintainer (gates, exception PRs, new ADRs) is collected and asked for at most once or twice a day, in one list. The maintainer may pre-approve an exception PR; GitHub then merges it when the checks pass, as long as no new commit is pushed (stale approvals are dismissed).
+- **Sessions.** Parallel sessions: `aiwf-orch` (orchestrator), `aiwf-review` (phase 1, Workflow A in use), `aiwf-issues` (phase 2, Workflow B), `aiwf-checkpoint` (checkpoint reviews).
 - **Checkpoints.** Every 3-4 merged WPs, a whole-codebase review (architecture, duplication, drift from the spec, refactor candidates) is written up for the maintainer. New WP work stops until the maintainer agrees on the refactor list.
 - [ADR-0031](0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md) still holds except: "the maintainer approves and merges" becomes "the App enables auto-merge; GitHub merges when the ruleset is satisfied", and the ruleset changes as in Maintainer setup. Agents still never call a direct merge (`gh pr merge` without `--auto`) and never approve.
 
@@ -69,12 +70,11 @@ The App needs no new permission: enabling auto-merge needs pull requests write a
 - `.github/CODEOWNERS` with the exception paths, owner `@esciara`.
 - Workflow A on this repo: a caller workflow here (like `templates/caller.yml`, review jobs only) plus a `verdict` job in the same workflow that `needs` the review and fails unless the verdict is `ai-review: merge`. It must live in the same run: labels added with `GITHUB_TOKEN` do not trigger new workflow runs, so a separate `on: labeled` check would never fire. This PR touches `.github/workflows/`, so it is itself an exception PR.
 - `scripts/dev/guard-bash`: allow `gh pr merge --auto --rebase` through `as-agent`, keep blocking direct merges and approvals (exception PR).
-- CLAUDE.md "How to work": the gate, auto-merge, batching and checkpoint rules (marked section in this PR, applied on acceptance).
 
 ## Consequences
 
 - Routine PRs merge without the maintainer; the maintainer reviews specs, acceptance tests, exception PRs and checkpoint reports, batched once or twice a day.
-- Any edit to `tests/e2e/test_wp*.py` after approval needs a review, including plumbing-only edits (waits, run selection, fixture data); path rules cannot tell them apart. Accepted: they are batched, and pre-approval is possible.
+- Decided (maintainer, 2026-11-12): every edit to `tests/e2e/test_wp*.py` after approval goes to the maintainer through CODEOWNERS, including plumbing-only edits (waits, run selection, fixture data); path rules cannot tell them apart. These edits are batched, and pre-approval is possible.
 - Risk: AI reviews AI code. Mitigations: the tests that prove a WP are human-approved before build; Workflow A's verdict is a required check; security-relevant paths always need the maintainer; checkpoints catch drift and duplication that per-PR review misses.
 - Risk: the e2e result is reported by the agent in the PR description, not a GitHub check (e2e runs on this machine against the playground). Workflow A reads the description; a WP PR without e2e output and run IDs should not get `ai-review: merge`. Accepted for now; an e2e check in CI is a possible later change.
 - Risk: e2e helpers (`tests/e2e/conftest.py`, `tests/e2e/playground.py`) are not owned, so a change there could weaken a test without review. Accepted; checkpoints review them. Add them to CODEOWNERS if this bites.
