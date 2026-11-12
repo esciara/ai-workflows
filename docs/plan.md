@@ -24,7 +24,7 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 
 ## Work packages
 
-| **TL;DR** — 15 packages, kept with their IDs for history; the Slice column says which slice each belongs to. Each has a check you can run on the test repo; a package is done only when its check passes and the evidence (run links, screenshots of labels and comments) is in its PR. |
+| **TL;DR** — 16 packages, kept with their IDs for history; the Slice column says which slice each belongs to. Each has a check you can run on the test repo; a package is done only when its check passes and the evidence (run links, screenshots of labels and comments) is in its PR. |
 | --- |
 
 | ID | Slice | Package | Depends on | Delivers | Done when | Status |
@@ -49,7 +49,8 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 | WP12a | base | Guardrails: `ai: off`, `ai: error` | WP1 | `ai: off`, `ai: error` | `ai: off` stops a run; a forced crash gives `ai: error` + comment | done |
 | WP12b | base | Guardrails: injection, budgets | WP1 | Budgets, injection reporting | An injected instruction is reported, not obeyed | done |
 | WP13 | 5 | Contributor mode | WP3, WP8 | Fork caller guide (level 1); local Claude Code plugin with review and analyse skills (level 0) | Review runs on a branch locally and in a fork, with nothing posted upstream | todo |
-| WP14 | 1 | Onboarding kit | WP3 | Install guide, rights checklist, caller + config templates | A second repo is set up from the guide alone in under 30 minutes | todo |
+| WP14 | 1 | Onboarding kit | WP3, WP15 | Install guide (`docs/install.md`), rights checklist, caller + config templates; first release tag, callers pinned to it (ADR-0040) | A second repo is set up from the guide alone in under 30 minutes (`tests/e2e/test_wp14.py`, plus its manual checklist) | todo |
+| WP15 | 1 | Per-run usage metrics | WP2 | One JSON line of usage metrics per Workflow A run (spec: Usage per run) | A reviewed PR's run records exactly one metrics line with the run, the PR and each agent's turns, duration and tokens (`tests/e2e/test_wp15.py`) | todo |
 
 Slice `base` marks shared runtime built before the slices. Rows with a letter (WP2a, WP2b, …) split the WP above them into PRs; the WP's own row keeps the full Done when, and each split's Done when is what its PR proves. Status is one of done, in progress, todo or paused; it is hand-edited, by each WP's own PR.
 
@@ -71,8 +72,8 @@ Open items (hand-edited like the Status column):
 
 | Slice | Contents | Done when |
 | --- | --- | --- |
-| 0 · Cleanup | Process simplification (#61, done). Workflow simplification (#62): test hooks out of the product, budgets → time/turn limits (ADR-0050), shared setup action. MED batch: one command parse and drop `/ping`; config settings not used yet marked "not used yet, WPx" in `templates/ai-workflows.example.yml`; one shared `gh` helper module; diagrams in the PR description instead of required per-WP diagrams, and drop the docs-consistency ceremony; B2 for trusted authors only, plus `/reproduce` for outsiders, written into the spec as v1. LOW batch: dev tools moved out of the shipped `scripts/aiwf` package; per-run metrics as one JSON line per run; guard-bash false positive on `git worktree add` fixed | Merged, e2e green |
-| 1 · Review in use | WP14 onboarding kit (install guide, rights checklist, templates; callers pinned to a release tag or SHA, not `@main`; first release tag); metrics used to settle the "Usage limits" open point | Workflow A runs on `esciara/pyteleinfo`, set up from the guide alone in under 30 minutes, and the first usage numbers are recorded |
+| 0 · Cleanup | Process simplification (#61, done). Workflow simplification (#62): test hooks out of the product, budgets → time/turn limits (ADR-0050), shared setup action. MED batch: one command parse and drop `/ping`; config settings not used yet marked "not used yet, WPx" in `templates/ai-workflows.example.yml`; one shared `gh` helper module; diagrams in the PR description instead of required per-WP diagrams, and drop the docs-consistency ceremony; B2 for trusted authors only, plus `/reproduce` for outsiders, written into the spec as v1. LOW batch: dev tools moved out of the shipped `scripts/aiwf` package; guard-bash false positive on `git worktree add` fixed | Merged, e2e green |
+| 1 · Review in use | WP15 per-run metrics (one JSON line per run, moved from slice 0), then WP14 onboarding kit (install guide, rights checklist, templates; callers pinned to a release tag or SHA, not `@main`; first release tag); metrics used to settle the "Usage limits" open point | Workflow A runs on `esciara/pyteleinfo`, set up from the guide alone in under 30 minutes, and the first usage numbers are recorded |
 | 2 · Triage in use | B1 (WP5, built) enabled on `esciara/pyteleinfo`, plus its "new issue triaged" notification (part of WP11b) | New issues there get classified and the maintainer gets a chat alert |
 | 3 · Bugs reproduced and analysed | WP6 (paused branch `wp6-reproduce`), WP7, WP8, plus their notifications (WP11b) | A real bug on `esciara/pyteleinfo` is reproduced, analysed, and the maintainer is asked `/fix` |
 | 4 · Bugs fixed | WP9, WP10, plus the remaining notifications (WP11b) | `/fix` gives a reviewed PR with no other manual step |
@@ -92,4 +93,4 @@ Open items (hand-edited like the Status column):
 
 - [ ] **Sandbox for B2 and B5 (WP6).** The Actions runner is a VM per job; whether that is isolation enough, or whether repro code runs in a container with no network, is decided when WP6 starts.
 - [x] **Where run state lives (WP1).** The hidden marker comment carries per-item state; whether a separate store is needed for the session record is decided in WP1. Decided in ADR-0021: no separate store; labels plus the marker comment, with bulky material in artifacts.
-- [ ] **Usage limits (WP2).** The real usage per reviewed PR on your subscription is measured in WP2, and the per-run budgets in the config are set from it.
+- [ ] **Usage limits (WP2).** The real usage per reviewed PR on your subscription is measured in WP2, and the per-run budgets in the config are set from it. Slice 1: measured with WP15's metrics lines from the first reviewed PRs on `esciara/pyteleinfo`; the numbers are recorded here.

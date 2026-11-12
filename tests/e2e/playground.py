@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import calendar
 import contextlib
 import json
 import os
@@ -226,3 +227,55 @@ def fork_put(path: str, branch: str, text: str, message: str) -> str:
     if found.returncode == 0 and found.stdout.strip():
         fields.append(f"sha={found.stdout.strip()}")
     return api(f"repos/{FORK}/contents/{path}", *fields, method="PUT", as_tester=True, tester_repo=FORK)["commit"]["sha"]
+
+
+METRICS_ARTIFACT = "ai-workflows-metrics"  # spec: Usage per run; artifact name and file are an open WP15 decision
+METRICS_FILE = "metrics.jsonl"
+
+
+def metrics_lines(run_id: int, tmp: Path) -> list[str]:
+    """The non-empty lines of the run's metrics file, from its METRICS_ARTIFACT artifact (exactly one artifact)."""
+    arts = [a for a in api(f"repos/{REPO}/actions/runs/{run_id}/artifacts?per_page=100")["artifacts"]
+            if a["name"] == METRICS_ARTIFACT]
+    assert len(arts) == 1, f"run {run_id}: expected one `{METRICS_ARTIFACT}` artifact, got {len(arts)}"
+    gh(["run", "download", str(run_id), "-R", REPO, "-n", METRICS_ARTIFACT, "-D", str(tmp)])
+    files = list(tmp.rglob("*"))
+    assert [f.name for f in files if f.is_file()] == [METRICS_FILE], f"artifact holds {[f.name for f in files]}"
+    return [line for line in (tmp / METRICS_FILE).read_text().splitlines() if line.strip()]
+
+
+METRICS_AGENTS = {"correctness", "security", "maintainability", "tests", "verify"}  # the 4 passes + verify
+METRICS_AGENT_INTS = ("duration_ms", "num_turns", "input_tokens", "output_tokens", "cache_read_input_tokens",
+                      "cache_creation_input_tokens")
+METRICS_MAX_TURNS = 3  # every Workflow A agent step runs with --max-turns 3 (ADR-0050)
+
+
+def _ts(stamp: str) -> float:
+    return calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))
+
+
+def check_metrics(line: str, run: dict[str, Any], pr: int, sha: str, aiwf_sha: str, verdict: str) -> dict[str, Any]:
+    """One metrics line (spec: Usage per run) describes this run, this PR and commit, and every agent's usage."""
+    m = json.loads(line)
+    assert isinstance(m, dict), f"metrics line is not a JSON object: {line[:200]}"
+    assert m.get("v") == 1 and m.get("workflow") == "review", m
+    assert m.get("repo") == REPO, m
+    assert m.get("run_id") == run["id"] and m.get("run_attempt") == run["run_attempt"], m
+    assert m.get("pr") == pr and m.get("head_sha") == sha and m.get("aiwf_sha") == aiwf_sha, m
+    assert m.get("verdict") == verdict, f"metrics verdict {m.get('verdict')!r}, label {verdict!r}"
+    wall = _ts(run["updated_at"]) - _ts(run["run_started_at"])
+    assert isinstance(m.get("duration_s"), (int, float)) and 0 < m["duration_s"] <= wall + 60, (m.get("duration_s"), wall)
+    agents = m.get("agents")
+    assert isinstance(agents, list), m
+    names = [a.get("agent") for a in agents]
+    assert sorted(names) == sorted(METRICS_AGENTS), f"agents {names}, expected one entry each for {sorted(METRICS_AGENTS)}"
+    for a in agents:
+        for field in METRICS_AGENT_INTS:
+            value = a.get(field)
+            assert isinstance(value, int) and not isinstance(value, bool) and value >= 0, (a["agent"], field, value)
+        assert 1 <= a["num_turns"] <= METRICS_MAX_TURNS, a
+        assert a["duration_ms"] > 0 and a["output_tokens"] > 0, a
+        assert a["input_tokens"] + a["cache_read_input_tokens"] + a["cache_creation_input_tokens"] > 0, a
+        assert isinstance(a.get("cost_usd"), (int, float)) and not isinstance(a["cost_usd"], bool), a  # notional
+    print(f"metrics for run {run['id']}: {line}")
+    return m

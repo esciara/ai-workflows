@@ -276,6 +276,8 @@ fork_prs: on-command            # public repos: review fork PRs only after /revi
 
 Rights needed to install in maintainer mode: write access to add the workflow files and labels; admin (owner, on a personal repo) to add the secrets `CLAUDE_CODE_OAUTH_TOKEN` and the chat secrets, and to set the branch protection that lets Request changes block merges.
 
+**Installing.** A target repo is set up from the install guide (`docs/install.md`) alone: copy the caller template (`templates/caller.yml`) to `.github/workflows/ai-workflows.yml` and the example config (`templates/ai-workflows.example.yml`) to `.github/ai-workflows.yml`, add the `CLAUDE_CODE_OAUTH_TOKEN` secret, run the workflow once by hand to create the labels. The caller pins every reusable workflow of this repo to a release: a full commit SHA with its version tag in a comment (`@<sha> # v0.x.y`), never a branch such as `@main`; upgrading means bumping that SHA. For Workflow A, the repo setting "Allow GitHub Actions to create and approve pull requests" stays off: Workflow A only comments, requests changes and labels.
+
 **Contributor ladder.** Before using it on someone else's repo, read its contribution guide and any AI policy, then go no higher than the policy allows.
 
 | Level | What the AI does | Needs |
@@ -320,6 +322,8 @@ Rights needed to install in maintainer mode: write access to add the workflow fi
 | `/fix` rate after analysis | Whether root causes convince |
 | Rounds per fix; escalation rate | Loop effectiveness |
 | Time and cost per reviewed PR and per fixed bug | Whether it is worth running |
+
+**Usage per run.** Every Workflow A run records exactly one JSON line of usage metrics on its session record: the run id, PR number, reviewed commit, verdict and wall time, and for each agent (each review pass and the verify pass) its duration, number of turns and token usage as reported by `claude-code-action`. It feeds the "Time and cost per reviewed PR" row and sets the per-agent time and turn limits from real numbers.
 
 ## Open questions
 
