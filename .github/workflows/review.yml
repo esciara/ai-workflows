@@ -22,8 +22,9 @@ permissions: {}
 jobs:
   # Which PR head to review, if any (ADR-0044): PR events of same-repo non-draft PRs, or `/review` from a maintainer
   # (ADR-0005) on any open PR. Fork PR events never start a review; their code is only ever read as text.
+  # config.yml parses the comment once; any other comment skips every job here.
   gate:
-    if: github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request)
+    if: github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request && fromJSON(inputs.config).command == 'review')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -1,4 +1,8 @@
-"""Slash-command parsing and the command-author check (ADR-0005)."""
+"""Slash-command parsing and the command-author check (ADR-0005).
+
+A comment is parsed once per run, in config.yml's `load` job (`from_event`); the other reusable workflows only compare
+the accepted command name it outputs.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,6 @@ from typing import Callable
 
 # command -> whether it takes text after it: None = ignored, "optional", "required"
 COMMANDS: dict[str, str | None] = {
-    "ping": None,
     "review": None,
     "retriage": None,
     "fix": "optional",
@@ -71,3 +74,11 @@ def accept(body: str | None, login: str, maintainers: list[str], repo: str, gh: 
     if login.lower() not in {m.lower() for m in maintainers}:
         return None  # skip the API call for anyone outside the config
     return cmd if authorize(login, maintainers, repo_permission(repo, login, gh)) else None
+
+
+def from_event(event: str, payload: dict, maintainers: list[str], repo: str, gh: GhRunner) -> Command | None:
+    """The accepted command of an `issue_comment` event payload (untrusted data), or None for any other event."""
+    if event != "issue_comment":
+        return None
+    comment = payload.get("comment") or {}
+    return accept(comment.get("body"), (comment.get("user") or {}).get("login", ""), maintainers, repo, gh)

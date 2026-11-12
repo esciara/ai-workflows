@@ -53,32 +53,20 @@ def cmd_config(args: argparse.Namespace) -> int:
         print(f"::error title=Cannot read config::{exc}", file=sys.stderr)
         return 1
     print(config.summary(cfg, source))
-    item_off = guard.OFF_LABEL in guard.event_labels(read_event())
+    event = read_event()
+    item_off = guard.OFF_LABEL in guard.event_labels(event)
     if item_off:
         print(f"::notice title=ai: off::the item has '{guard.OFF_LABEL}': every workflow skips it (ADR-0045)")
+    cmd = None
+    if cfg["enabled"] and not item_off:  # the comment is parsed once per run, here (ADR-0005)
+        cmd = commands.from_event(os.environ.get("GITHUB_EVENT_NAME", ""), event, cfg.get("maintainers", []),
+                                  args.repo or os.environ.get("GITHUB_REPOSITORY", ""), config.run_gh)
+        if os.environ.get("GITHUB_EVENT_NAME") == "issue_comment":
+            print(f"accepted command: /{cmd.name}" if cmd else "no accepted command")
     out = args.github_output or os.environ.get("GITHUB_OUTPUT")
     if out:
-        write_outputs(out, config.github_outputs(cfg, item_off=item_off))
-    return 0
-
-
-def cmd_parse_command(args: argparse.Namespace) -> int:
-    """Untrusted inputs come from env vars, never from the command line."""
-    cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
-    cmd = commands.accept(
-        os.environ.get("COMMENT_BODY", ""),
-        os.environ.get("COMMENT_AUTHOR", ""),
-        cfg.get("maintainers", []),
-        args.repo,
-        config.run_gh,
-    )
-    if cmd is None:
-        print("no accepted command")
-        return 0
-    print(f"accepted command: /{cmd.name}")
-    out = args.github_output or os.environ.get("GITHUB_OUTPUT")
-    if out:
-        write_outputs(out, {"command": cmd.name, "args": json.dumps(cmd.args)})
+        write_outputs(out, config.github_outputs(cfg, item_off=item_off, command=cmd.name if cmd else "",
+                                                 command_args=json.dumps(cmd.args) if cmd else ""))
     return 0
 
 
@@ -104,10 +92,6 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--ref", default="", help="git ref; default is the repo's default branch")
     p.add_argument("--github-output", default=None, help="file to append outputs to (default $GITHUB_OUTPUT)")
     p.set_defaults(func=cmd_config)
-    p = sub.add_parser("parse-command", help="accept a slash command (env COMMENT_BODY, COMMENT_AUTHOR, AIWF_CONFIG)")
-    p.add_argument("--repo", required=True)
-    p.add_argument("--github-output", default=None)
-    p.set_defaults(func=cmd_parse_command)
     p = sub.add_parser("labels-sync", help="create or update the labels in schema/labels.yml")
     p.add_argument("--repo", required=True)
     p.set_defaults(func=cmd_labels_sync)

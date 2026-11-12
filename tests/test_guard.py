@@ -101,8 +101,8 @@ def test_cli_config_reads_ai_off_from_the_event(tmp_path, monkeypatch):
 def test_publish_writes_nothing_when_off(monkeypatch):
     gh = FakeGh(labels=["ai: off"])
     monkeypatch.setattr(config, "run_gh", gh)
-    monkeypatch.setenv("AGENT_JSON", '{"reply": "fine"}')
-    assert cli.main(["publish", "--kind", "ping", "--repo", "o/r", "--issue", "3"]) == 0
+    monkeypatch.setenv("AGENT_JSON", "{}")
+    assert cli.main(["publish", "--kind", "classifier", "--repo", "o/r", "--issue", "3"]) == 0
     assert gh.writes() == []
 
 

@@ -13,7 +13,7 @@ from aiwf import cli, config, e2eslot, publish
 
 def test_shared_commands_registered_once():
     assert cli.command_modules()[0] is cli
-    for argv in (["labels-sync", "--repo", "o/r"], ["publish", "--kind", "ping", "--repo", "o/r", "--issue", "1"]):
+    for argv in (["labels-sync", "--repo", "o/r"], ["publish", "--kind", "classifier", "--repo", "o/r", "--issue", "1"]):
         with pytest.raises(SystemExit):
             cli.main([*argv, "--bogus"])  # parses up to the unknown flag: the command exists
 
@@ -32,9 +32,9 @@ def test_duplicate_command_is_an_error(monkeypatch):
 
 
 def test_publishers_come_from_per_workflow_modules():
-    from aiwf import publish_commands
+    from aiwf import publish_triage
 
-    assert publish.publishers()["ping"] is publish_commands.publish_ping
+    assert publish.publishers()["classifier"] is publish_triage.publish_classifier
 
 
 def test_unknown_kind_posts_nothing():
@@ -111,18 +111,21 @@ def test_throwaway_e2e_pr_uses_prefix_then_labels_and_cleans_up(monkeypatch):
         calls.append((method, path, fields))
         if path.endswith("/labels?per_page=100"):
             return [{"name": pg.E2E_LABEL}]
-        if path.endswith("/pulls") and method == "POST":
-            return {"number": 5}
         return {"default_branch": "main", "object": {"sha": "abc"}, "state": "open"}
 
+    def gh(args, as_agent=False, **_):
+        calls.append((args[2], args[3], tuple(args[4:])))  # the PR is created with gh (`-F draft=…` is a boolean)
+        return '{"number": 5}'
+
     monkeypatch.setattr(pg, "api", api)
-    monkeypatch.setattr(pg, "gh", lambda args, as_tester=False: calls.append(("GH", args[2], args[3])))
+    monkeypatch.setattr(pg, "gh", gh)
     with pg.throwaway_pr("[e2e] t", e2e=True, wp="wp2", slug="demo") as pr:
         assert pr["branch"].startswith("e2e/wp2-demo-") and pr["number"] == 5
     ref = next(c for c in calls if c[1].endswith("/git/refs"))
     assert f"ref=refs/heads/{pr['branch']}" in ref[2]
     i_pr = next(i for i, c in enumerate(calls) if c[1].endswith("/pulls") and c[0] == "POST")
     i_lb = next(i for i, c in enumerate(calls) if c[1].endswith("/issues/5/labels"))
+    assert "draft=false" in calls[i_pr][2]
     assert i_pr < i_lb and set(calls[i_lb][2]) == {f"labels[]={pg.FIXTURE_LABEL}", f"labels[]={pg.E2E_LABEL}"}
     assert ("DELETE", f"repos/{pg.REPO}/git/refs/heads/{pr['branch']}", ()) in calls
     assert ("PATCH", f"repos/{pg.REPO}/pulls/5", ("state=closed",)) in calls

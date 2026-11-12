@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 REPO = os.environ.get("AIWF_E2E_REPO", "esciara/ai-workflows-playground")
 FORK = os.environ.get("AIWF_E2E_FORK", "opinionated-digital-center/ai-workflows-playground")  # outsider fork (WP4)
 WORKFLOW = "AI workflows"  # name of the caller workflow in the target repo
+E2E_WORKFLOW = "AI workflows (e2e)"  # name of the playground's caller-e2e.yml (items labelled `e2e-target`)
 BOT = "github-actions[bot]"
-PING_MARKER = "<!-- ai-workflows:ping -->"
 FIXTURE_LABEL = "test-fixture"
 E2E_LABEL = "e2e-target"  # routes an item to the playground's caller-e2e.yml (@e2e-target) instead of the normal one
 RUN_TIMEOUT = int(os.environ.get("AIWF_E2E_TIMEOUT", "600"))
@@ -73,14 +73,14 @@ def comment(number: int, body: str, as_tester: bool = False) -> dict[str, Any]:
     return {"id": c["id"], "created_at": c["created_at"], "user": c["user"]["login"]}
 
 
-def run_for(cmt: dict[str, Any], title: str) -> int:
-    """ID of the issue_comment run of the caller workflow created at or after the comment, for this item."""
+def run_for(cmt: dict[str, Any], title: str, workflow: str = WORKFLOW) -> int:
+    """ID of the issue_comment run of the caller `workflow` created at or after the comment, for this item."""
 
     def find() -> int | None:
         runs = api(f"repos/{REPO}/actions/runs?event=issue_comment&created=%3E%3D{cmt['created_at']}&per_page=50")
         hits = [
             r for r in runs["workflow_runs"]
-            if r["name"] == WORKFLOW and r["display_title"] == title and r["created_at"] >= cmt["created_at"]
+            if r["name"] == workflow and r["display_title"] == title and r["created_at"] >= cmt["created_at"]
         ]
         return min(hits, key=lambda r: (r["created_at"], r["id"]))["id"] if hits else None
 
@@ -108,18 +108,9 @@ def completed(run_id: int) -> dict[str, Any]:
 
 
 def jobs(run_id: int) -> dict[str, str]:
-    """Job name -> conclusion, e.g. {'commands / agent': 'skipped'}."""
+    """Job name -> conclusion, e.g. {'review / gate': 'skipped'}."""
     data = api(f"repos/{REPO}/actions/runs/{run_id}/jobs?per_page=100")
     return {j["name"]: j["conclusion"] for j in data["jobs"]}
-
-
-def bot_pings_after(number: int, comment_id: int) -> list[dict[str, Any]]:
-    out = gh(["api", "--paginate", f"repos/{REPO}/issues/{number}/comments?per_page=100", "--jq", ".[]"])
-    comments = [json.loads(line) for line in out.splitlines() if line.strip()]
-    return [
-        c for c in comments
-        if c["id"] > comment_id and c["user"]["login"] == BOT and PING_MARKER in (c["body"] or "")
-    ]
 
 
 def ensure_label(name: str = E2E_LABEL, color: str = "5319e7", description: str = "e2e: runs ai-workflows@e2e-target") -> None:
@@ -164,12 +155,14 @@ def pr_branch(*, e2e: bool, wp: str = "", slug: str = "") -> str:
 
 
 @contextlib.contextmanager
-def throwaway_pr(title: str, *, e2e: bool, wp: str = "", slug: str = "", base: str | None = None) -> Iterator[dict[str, Any]]:
+def throwaway_pr(title: str, *, e2e: bool, wp: str = "", slug: str = "", base: str | None = None,
+                 draft: bool = False) -> Iterator[dict[str, Any]]:
     """A test-fixture PR on its own branch from `base` (default branch if None); branch deleted, PR closed on exit.
 
     e2e PRs come from an `e2e/<wp>-<slug>-…` branch, so every PR event routes to the e2e caller, `opened` included.
     Labels (`test-fixture`, plus `e2e-target` when e2e) are added right after creation, since the pulls API cannot
-    set them; comment events on the PR carry no head ref and route by that label.
+    set them; comment events on the PR carry no head ref and route by that label. A `draft` PR's events start no
+    review (only a maintainer's `/review` does).
     """
     branch = pr_branch(e2e=e2e, wp=wp, slug=slug)
     base = base or api(f"repos/{REPO}")["default_branch"]
@@ -180,8 +173,10 @@ def throwaway_pr(title: str, *, e2e: bool, wp: str = "", slug: str = "", base: s
         api(f"repos/{REPO}/contents/e2e/{branch.replace('/', '-')}.md", f"message=test: e2e throwaway {branch}",
             "content=dGhyb3dhd2F5Cg==", f"branch={branch}", method="PUT")  # "throwaway\n"
         title = f"{title} ({branch})"
-        pr = api(f"repos/{REPO}/pulls", f"title={title}", f"head={branch}", f"base={base}",
-                 "body=Throwaway e2e PR from esciara/ai-workflows tests; closed by its teardown.", method="POST")
+        pr = json.loads(gh(["api", "-X", "POST", f"repos/{REPO}/pulls", "-f", f"title={title}", "-f", f"head={branch}",
+                            "-f", f"base={base}", "-f",
+                            "body=Throwaway e2e PR from esciara/ai-workflows tests; closed by its teardown.",
+                            "-F", f"draft={str(draft).lower()}"], as_agent=True))
         api(f"repos/{REPO}/issues/{pr['number']}/labels", *[f"labels[]={lb}" for lb in _labels(e2e)], method="POST")
         yield {"number": pr["number"], "title": title, "branch": branch}
     finally:

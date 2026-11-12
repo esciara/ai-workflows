@@ -1,7 +1,8 @@
 """Workflow A gate (WP4, ADR-0044): whether this event starts a review, and of which PR head.
 
 - `pull_request`: same-repo, non-draft PRs are reviewed; fork PRs never (`fork_prs: on-command`: only after `/review`).
-- `issue_comment` on a PR: `/review` from a maintainer (ADR-0005) reviews the PR's current head, fork or not, unless
+- `issue_comment` on a PR: `/review` from a maintainer (ADR-0005; accepted by config.yml, read from the config's
+  `command`) reviews the PR's current head, fork or not, unless
   `fork_prs: off` and the PR comes from a fork. Fork code is then read as text, never executed.
 The event payload is untrusted data: it is read from $GITHUB_EVENT_PATH, never from the command line.
 """
@@ -49,10 +50,7 @@ def decide(event: str, payload: dict[str, Any], cfg: dict[str, Any], repo: str, 
         issue = payload.get("issue") or {}
         if not issue.get("pull_request"):
             return Gate(False, "comment on an issue, not a PR")
-        comment = payload.get("comment") or {}
-        cmd = commands.accept(comment.get("body"), (comment.get("user") or {}).get("login", ""),
-                              cfg.get("maintainers", []), repo, gh)
-        if cmd is None or cmd.name != "review":
+        if cfg.get("command") != "review":  # accepted once, by config.yml (ADR-0005)
             return Gate(False, "no /review from a maintainer")
         pr = json.loads(gh(["api", f"repos/{repo}/pulls/{issue['number']}"]))
         if pr.get("state") != "open":

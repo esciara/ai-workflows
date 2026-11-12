@@ -6,7 +6,8 @@ second push, the comments) go to caller-e2e.yml, which runs review.yml@e2e-targe
 
 1. A fork push (`synchronize`, after the label) starts no review: the run's gate lets every review job skip (or the
    run waits for a first-time contributor's approval, which is not a review either); no verdict label, no summary.
-2. `/review` from a non-maintainer (the tester App) is refused by the gate: still no label, no summary.
+2. `/review` from a non-maintainer (the tester App) is refused by config.yml's command parse (ADR-0005), so every
+   review job skips: still no label, no summary.
 3. `/review` from the maintainer reviews the fork's head, read as text: one summary comment whose reviewed commit is
    the fork head, exactly one verdict label, `review / publish` succeeds.
 """
@@ -118,7 +119,7 @@ def test_fork_pr_is_not_reviewed_until_a_maintainer_comments_review(e2e_target):
         # 2. `/review` from a non-maintainer: refused.
         run, jobs = comment_run(pg.comment(number, "/review", as_tester=True), title)
         assert run["conclusion"] == "success", jobs
-        assert jobs.get("review / gate") == "success", jobs
+        assert jobs.get("config / load") == "success" and jobs.get("review / gate") == "skipped", jobs
         assert all(jobs.get(j) in (None, "skipped") for j in REVIEW_JOBS), jobs
         assert_not_reviewed(number, "after a non-maintainer's /review")
 

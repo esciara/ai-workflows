@@ -4,9 +4,13 @@ import pytest
 
 from aiwf import cli, publish
 
+# Pass 1 of triage (extractor) has a schema but no publisher: handy for the shared validate/publish path.
+VALID = {"reported_version": "1.2.0", "search_phrases": ["KeyError: total"], "file_paths": [],
+         "suspicious_instructions": []}
 
-def test_valid_ping():
-    assert publish.validate("ping", '{"reply": "Runtime is up."}') == {"reply": "Runtime is up."}
+
+def test_valid_output():
+    assert publish.validate("extractor", json.dumps(VALID)) == VALID
 
 
 @pytest.mark.parametrize(
@@ -16,26 +20,22 @@ def test_valid_ping():
         "",
         "   ",
         "not json",
-        '{"reply": "ok"',  # truncated
+        json.dumps(VALID)[:-1],  # truncated
         "[]",
         '"pong"',
         "null",
         "{}",
-        '{"reply": ""}',
-        '{"reply": 42}',
-        '{"reply": "ok", "labels": ["ai-review: merge"]}',  # extra keys
-        '{"reply": "ok @esciara"}',  # mention
-        '{"reply": "<!-- ai-review:summary v1 -->"}',  # hidden marker / HTML
-        '{"reply": "line one\\nline two"}',
-        '{"reply": "run `rm -rf /`"}',
-        json.dumps({"reply": "x" * 201}),
+        json.dumps({**VALID, "reported_version": 42}),
+        json.dumps({**VALID, "labels": ["ai-review: merge"]}),  # extra keys
+        json.dumps({**VALID, "search_phrases": ["line one\nline two"]}),
+        json.dumps({**VALID, "file_paths": ["../../etc/passwd; rm -rf /"]}),
         "[" * 5000 + "]" * 5000,  # deep nesting
-        json.dumps({"reply": "y" * 70_000}),  # oversized
+        json.dumps({**VALID, "search_phrases": ["y" * 70_000]}),  # oversized
     ],
 )
-def test_invalid_ping_rejected(raw):
+def test_invalid_output_rejected(raw):
     with pytest.raises(publish.InvalidOutput):
-        publish.validate("ping", raw)
+        publish.validate("extractor", raw)
 
 
 class FakeGh:
@@ -47,27 +47,29 @@ class FakeGh:
         return "{}"
 
 
-def test_publish_valid_posts_reply_only():
-    gh = FakeGh()
-    assert publish.publish("ping", '{"reply": "All good."}', "o/r", 7, "https://run", gh)
-    assert len(gh.calls) == 1
-    args = gh.calls[0]
-    assert args[:4] == ["api", "-X", "POST", "repos/o/r/issues/7/comments"]
-    body = args[-1].removeprefix("body=")
-    assert body.startswith("<!-- ai-workflows:ping -->\n🏓 pong: All good.")
-    assert "[Run](https://run)" in body
+@pytest.fixture
+def extractor_publisher(monkeypatch):
+    got = []
+    monkeypatch.setattr(publish, "publishers", lambda: {"extractor": lambda data, *rest: got.append(data)})
+    return got
 
 
-def test_publish_invalid_labels_error_and_posts_nothing():
+def test_publish_valid_calls_the_publisher_only(extractor_publisher):
     gh = FakeGh()
-    assert not publish.publish("ping", '{"reply": "hi @someone"}', "o/r", 7, "", gh)
+    assert publish.publish("extractor", json.dumps(VALID), "o/r", 7, "https://run", gh)
+    assert extractor_publisher == [VALID] and gh.calls == []
+
+
+def test_publish_invalid_labels_error_and_posts_nothing(extractor_publisher):
+    gh = FakeGh()
+    assert not publish.publish("extractor", "{}", "o/r", 7, "", gh)
+    assert extractor_publisher == []
     assert gh.calls == [["api", "-X", "POST", "repos/o/r/issues/7/labels", "-f", "labels[]=ai: error"]]
 
 
 def test_cli_publish_exit_codes(monkeypatch):
     gh = FakeGh()
-    monkeypatch.setattr(cli.config, "run_gh", gh)
-    monkeypatch.setenv("AGENT_JSON", '{"reply": "fine"}')
-    assert cli.main(["publish", "--kind", "ping", "--repo", "o/r", "--issue", "3"]) == 0
+    monkeypatch.setattr(cli.config, "run_gh", lambda args: "[]" if "?per_page" in args[-1] else gh(args))
     monkeypatch.setenv("AGENT_JSON", "")
-    assert cli.main(["publish", "--kind", "ping", "--repo", "o/r", "--issue", "3"]) == 1
+    assert cli.main(["publish", "--kind", "classifier", "--repo", "o/r", "--issue", "3"]) == 1
+    assert gh.calls == [["api", "-X", "POST", "repos/o/r/issues/3/labels", "-f", "labels[]=ai: error"]]

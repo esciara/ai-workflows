@@ -115,17 +115,16 @@ Milestones: see [docs/plan.md](plan.md#milestones-and-test-setup).
 
 ## WP1 — Shared runtime
 
-Done when ([docs/plan.md, line 33](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L33)): `/ping` from a maintainer gets a reply; from a non-maintainer is ignored; all labels exist
+Done when ([docs/plan.md, line 33](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L33)): A command from a maintainer is accepted, from a non-maintainer is refused; all labels exist
 
 ```mermaid
 flowchart TD
-  C["Comment '/ping'<br/>on target repo"] --> P{"Command parser<br/>in maintainers list<br/>AND write access?"}
-  P -- no --> I["Ignored<br/>no reply"]
-  P -- yes --> AG["Agent job<br/>Claude Code, read-only<br/>no GitHub token"]
-  AG -- JSON --> V{"Orchestrator<br/>does Claude's JSON answer<br/>match the ping answer schema?"}
-  V -- no --> E["Label 'ai: error'"]
-  V -- yes --> R["Orchestrator posts reply<br/>via gh api"]
-  L["Label bootstrap<br/>creates all labels"] -.-> R
+  C["Comment on target repo"] --> P{"config.yml parses it once<br/>known command, author in maintainers<br/>AND write access?"}
+  P -- no --> I["command = ''<br/>review and triage jobs skip"]
+  P -- yes --> O["command = review / retriage / fix / no-fix<br/>in config output"]
+  O --> RV["review.yml gate<br/>runs on 'review'"]
+  O --> TR["triage.yml<br/>runs B1 on 'retriage'"]
+  L["Label bootstrap<br/>creates all labels"]
 ```
 
 ## WP2a — A · context, CI wait, one pass, summary + label

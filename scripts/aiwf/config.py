@@ -153,11 +153,17 @@ def summary(cfg: dict[str, Any], source: str) -> str:
     return "\n".join(lines)
 
 
-def github_outputs(cfg: dict[str, Any], item_off: bool = False) -> dict[str, str]:
-    """`item_off`: the event's issue or PR has `ai: off`, so nothing runs for it (ADR-0045)."""
+def github_outputs(cfg: dict[str, Any], item_off: bool = False, command: str = "", command_args: str = "") -> dict[str, str]:
+    """`item_off`: the event's issue or PR has `ai: off`, so nothing runs for it (ADR-0045).
+
+    `command`: the slash command accepted from this event's comment (ADR-0005), parsed once here; '' when none. It is
+    also put in the config JSON (`command`, `command_args`), so reusable workflows gate on it without a new input.
+    """
     enabled = cfg["enabled"] and not item_off
     return {
-        "config": json.dumps(cfg, separators=(",", ":"), sort_keys=True),
+        "config": json.dumps({**cfg, "command": command, "command_args": command_args}, separators=(",", ":"),
+                             sort_keys=True),
+        "command": command,
         "enabled": json.dumps(enabled),
         "review": json.dumps(enabled and cfg["workflows"]["review"]),
         "triage": json.dumps(enabled and cfg["workflows"]["triage"]),
