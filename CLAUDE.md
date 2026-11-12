@@ -72,7 +72,7 @@ tests/                  unit tests for scripts (no network)
 
 ## Tooling
 
-- Use the `gh` CLI for GitHub operations from this machine. Agents run every GitHub write as the App `esciara-ai-workflows-agent` (ADR-0031): `scripts/dev/as-agent gh …` and `scripts/dev/as-agent git push …`; bare `gh` may only read. A `PreToolUse` hook (`scripts/dev/guard-bash`) blocks bare `gh` writes, bare `git push`, merges, agent approvals, `gh auth token`, pushes to `main`, force pushes without `--force-with-lease` and remote branch deletion; it matches command text, so e.g. `echo "gh pr merge"` is blocked too.
+- Use the `gh` CLI for GitHub operations from this machine. Agents run every GitHub write as the App `esciara-ai-workflows-agent` (ADR-0031): `scripts/dev/as-agent gh …` and `scripts/dev/as-agent git push …`; bare `gh` may only read. A `PreToolUse` hook (`scripts/dev/guard-bash`) blocks bare `gh` writes, bare `git push`, merges, agent approvals, `gh auth token`, pushes to `main`, force pushes without `--force-with-lease` and remote branch deletion; it matches command text, so e.g. `echo "gh pr merge"` is blocked too. Sole merge exception (ADR-0051): `scripts/dev/as-agent gh pr merge <N> --auto --rebase` as the whole command, which only enables auto-merge.
 - Branches are pushed only by the App (`scripts/dev/as-agent git push`), and worktree commits use the App identity; a branch the maintainer has pushed to can't be approved by them (ruleset: last push approval).
 - Maintainer setup (App, Keychain entry `ai-workflows-agent`, `AI_WORKFLOWS_AGENT_APP_ID`, ruleset on `main`): ADR-0031, section Maintainer setup.
 - Prefer a small, boring stack for scripts (e.g. TypeScript on Node 20 or Python 3.12 — pick one in WP0 and record it as an ADR in `docs/adr/`).
