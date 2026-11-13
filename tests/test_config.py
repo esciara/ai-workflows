@@ -93,6 +93,45 @@ def test_bad_enum_rejected():
     assert errors_of("maintainers: [a]\nnotify: email\n")[0].startswith("$.notify:")
 
 
+NOTIFY_OK = ["none", "slack", "telegram", "slack,telegram", "telegram,slack"]
+
+
+@pytest.mark.parametrize("value", NOTIFY_OK)
+def test_notify_accepts_each_channel_combo(value):
+    assert load_text(f"maintainers: [a]\nnotify: '{value}'\n")["notify"] == value
+
+
+@pytest.mark.parametrize("value", ["email", "slack,email", "slack,slack", "none,slack", "slack telegram", "Slack", ""])
+def test_notify_rejects_others(value):
+    assert errors_of(f"maintainers: [a]\nnotify: '{value}'\n")[0].startswith("$.notify:")
+
+
+def _schema_notify_values():
+    schema = json.loads((ROOT / "schema" / "ai-workflows.schema.json").read_text())
+    return schema["properties"]["notify"]["enum"]
+
+
+def test_notify_schema_values_all_parse():
+    """Schema and notify.parse_channels can't drift: every accepted value parses to its own channels."""
+    from aiwf import notify
+
+    for value in _schema_notify_values():
+        expected = [] if value == "none" else value.split(",")
+        assert notify.parse_channels(value) == expected
+
+
+def test_notify_every_channel_combo_in_schema():
+    """Vice versa: every ordered, non-repeating channel list parse_channels can return is in the schema."""
+    from itertools import permutations
+
+    from aiwf import notify
+
+    combos = {"none"} | {
+        ",".join(p) for n in range(1, len(notify.CHANNELS) + 1) for p in permutations(notify.CHANNELS, n)
+    }
+    assert set(_schema_notify_values()) == combos
+
+
 def test_bad_maintainer_login_reports_index():
     assert errors_of("maintainers: [ok, 'not a login']\n")[0].startswith("$.maintainers[1]:")
 

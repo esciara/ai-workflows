@@ -45,7 +45,7 @@ Copy `templates/ai-workflows.example.yml` to `.github/ai-workflows.yml` in the t
 - `default_branch`: your default branch.
 - `risk_paths`: paths whose changes need a human (`high`) or a closer look (`medium`).
 - `workflows.review: true`, `workflows.triage: false` for review only.
-- `notify`: `none`, `slack` or `telegram`.
+- `notify`: `none`, `slack`, `telegram` or both (`slack,telegram`).
 - `linked_issue`: leave it out (default `issue`) unless your PRs reference work by plan id; see "Linked issues" below.
 
 The config is read from the default branch only, so commit both files to it (a PR is fine; its own review starts once the files are on the default branch). Merge that files PR before the first run: its config/load check fails until the config is on the default branch.

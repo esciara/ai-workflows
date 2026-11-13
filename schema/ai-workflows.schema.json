@@ -46,7 +46,7 @@
         "close": {"type": "integer", "minimum": 1, "default": 21}
       }
     },
-    "notify": {"enum": ["none", "slack", "telegram"], "default": "none"},
+    "notify": {"enum": ["none", "slack", "telegram", "slack,telegram", "telegram,slack"], "default": "none", "description": "Chat channels for notifications; both may be set together. Keep in sync with aiwf.notify.parse_channels (tests/test_config.py)."},
     "linked_issue": {"enum": ["issue", "issue-or-plan-ref"], "default": "issue", "description": "issue-or-plan-ref: a WP id or docs/plan.md reference in the PR text also counts as a linked issue, and a WP PR (branch wp<N>-...) needs e2e run IDs in its description (ADR-0053)."},
     "fork_prs": {"enum": ["on-command", "off"], "default": "on-command"},
     "workflows": {
