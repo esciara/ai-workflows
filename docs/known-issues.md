@@ -10,6 +10,7 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - What: e2e runs on the playground go through one fixed caller that runs `esciara/ai-workflows/...@e2e-target`, and there is a single `e2e-target` pointer. Root cause: `uses: owner/repo/.github/workflows/x.yml@ref` is static, so all e2e runs share one mutable global target and WP tests cannot be isolated from each other.
 - Why it matters: issue/comment e2e tests queue behind one slot, and a stale or wrong pointer would make a test run another WP's code. The maintainer called this unsatisfactory; it must be fixed sooner rather than later.
 - Current mitigation: exactly one slot, held under the e2e file lock (ADR-0043), so no test silently runs another WP's code; only items routed to the e2e caller (label `e2e-target`, or same-repo PRs from `e2e/` branches) use it.
+- Fix decided: three fixed slots, [ADR-0056](adr/0056-three-fixed-e2e-slots-on-the-playground.md); this entry goes when its implementation merges.
 - Priority: P1 (was aiwf-6k3).
 - ADR: [ADR-0043](adr/0043-e2e-on-the-playground-consolidated.md)
 
