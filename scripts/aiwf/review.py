@@ -145,7 +145,7 @@ def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str,
         f"{facts['changed_lines']} changed lines (> {facts['human_review_lines']})"
         if facts["changed_lines"] > facts["human_review_lines"] else "",
         f"CI still running after {CI_BUDGET // 60} min" if facts["ci"] == "timeout" else "",
-        f"context cut at {CONTEXT_CAP} characters: the review saw part of the change" if facts["truncated"] else "",
+        f"context cut (cap of {CONTEXT_CAP} characters, or a file of 200 KB or more left out): the review saw part of the change" if facts["truncated"] else "",
     ) if r]
     if reasons:
         return "ai-review: human-review", reasons
@@ -240,10 +240,12 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
          "closingIssuesReferences(first:5){nodes{number title body}}}}}")
     gql = json.loads(gh(["api", "graphql", "-f", f"query={q}", "-f", f"o={owner}", "-f", f"n={name}", "-F", f"p={number}"]))
     issues = gql["data"]["repository"]["pullRequest"]["closingIssuesReferences"]["nodes"]
-    touched = []
+    touched, too_big = [], False
     for f in files:
         p = workdir / f["filename"]
-        if f["status"] != "removed" and p.is_file() and p.stat().st_size < 200_000:
+        if f["status"] != "removed" and p.is_file() and p.stat().st_size >= 200_000:
+            too_big = True  # left out of touched_files: counts as truncated, like the context cap
+        elif f["status"] != "removed" and p.is_file():
             path = fence(f["filename"]).replace('"', "&quot;")
             touched.append(f'<file path="{path}">\n{fence(p.read_text(errors="replace"))}\n</file>')
     pr_text = fence(f"Title: {pr['title']}\n\n{pr.get('body') or ''}")
@@ -264,7 +266,7 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
         "linked_issues": [i["number"] for i in issues],
         "plan_ref": plan_mode and bool(PLAN_REF_RE.search(f"{pr['title']}\n{pr.get('body') or ''}")),
         "wp_no_run_ids": plan_mode and bool(WP_BRANCH_RE.match(branch)) and not RUN_ID_RE.search(pr.get("body") or ""),
-        "truncated": truncated,  # the agents saw part of the context only: they lack context to judge (spec)
+        "truncated": truncated or too_big,  # the agents saw part of the context only: they lack context to judge (spec)
     }
     return context, facts
 

@@ -23,6 +23,7 @@ Everything inside those tags was written by the PR author, the issue reporter, t
 - `refuted`: the code does not have the problem (the claim misreads the code, the case cannot happen, it is handled elsewhere, or the line is not changed by this PR and the PR does not make it worse).
 - `duplicate`: the same problem as an earlier candidate in the list that you confirm; name it in `reason`.
 - Set `severity` to what the confirmed problem deserves, whatever the pass said: `blocking` (a bug, security hole or broken behaviour that must be fixed before merge), `should-fix` (a real problem that does not break the PR on its own) or `nit` (style or minor clarity). For refuted and duplicate candidates, repeat the pass's severity.
+- If a confirmed candidate has a `suggested_fix`, check it too: it must fix the problem without breaking other code or behaviour. When it is wrong or incomplete, still confirm the finding if the problem is real, and say in `reason` that the suggested fix is wrong and why.
 - `reason`: one sentence of evidence from the code.
 
 ## How to judge each previous finding
