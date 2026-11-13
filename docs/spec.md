@@ -233,7 +233,7 @@ jobs:
 
 **Runtime.** Every AI step runs Claude Code inside GitHub Actions through [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action), authenticated with the maintainer's Claude subscription, not an API key: run `claude setup-token` once on your machine and store the token as the repo secret `CLAUDE_CODE_OAUTH_TOKEN`. Each role above is a separate Claude Code run with its own allowed-tools list. Runs draw on the subscription's usage limits, shared with your own use, so the per-agent time and turn limits in Guardrails matter.
 
-**Chat notifications.** GitHub stays where decisions are made (commands are typed there); chat only alerts the maintainer, with a link back. One channel per repo, Slack or Telegram:
+**Chat notifications.** GitHub stays where decisions are made (commands are typed there); chat only alerts the maintainer, with a link back. Slack, Telegram or both; a repo sets one or both and each alert goes to every channel set:
 
 | Channel | Setup | Secrets |
 | --- | --- | --- |
@@ -263,7 +263,7 @@ limits:
   fix_rounds: 3
   info_requests: 2
 reporter_silence_days: {ping: 4, stale: 14, close: 21}
-notify: slack                   # or telegram
+notify: slack                   # slack, telegram, or both: slack,telegram
 fork_prs: on-command            # public repos: review fork PRs only after /review
 ```
 
