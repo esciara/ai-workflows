@@ -49,8 +49,10 @@ jobs:
   # requires both to pass, and the status shows the state in the merge box: success on `ai-review: merge` or on the
   # owner's approval of the head commit; pending (job green) while waiting for that approval (`human-review`, review not
   # run, Dependabot); failure (job red) on `changes-requested` or a failed review. Drafts are skipped (ready_for_review
-  # runs it). A review other than approved/dismissed keeps the current answer. On pull_request_review the labels may
-  # belong to an older head commit, so only approvals of the head SHA count there. Never approves anything.
+  # runs it). A comment review keeps the current answer. On other pull_request_review events the labels may belong to an
+  # older head commit, so only approvals of the head SHA count there; without one the step restores the AI verdict of the
+  # head SHA from its newest non-approval `verdict` status (a failure stays red; a later owner changes-requested or a
+  # dismissal revokes an approval). Never approves anything.
   verdict:
     needs: review
     if: always() && !github.event.pull_request.draft && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review')
@@ -77,10 +79,11 @@ jobs:
           }
           red() { status failure "$1"; echo "::error title=verdict::$1"; exit 1; }
           waiting() { status pending "waiting for maintainer approval of $short ($1)"; exit 0; }
-          if [ "$EVENT" = pull_request_review ] && [ "$REVIEW_STATE" != approved ] && [ "$REVIEW_STATE" != dismissed ]; then
-            current=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses" --jq '[.[] | select(.context == "verdict")][0].state // "none"')
+          if [ "$EVENT" = pull_request_review ] && [ "$REVIEW_STATE" = commented ]; then
+            current=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses?per_page=100" --jq '[.[] | select(.context == "verdict")][0].state // "none"')
             echo "review state $REVIEW_STATE ignored; verdict status of $short stays $current"
-            [ "$current" = success ] || [ "$current" = pending ]; exit
+            if [ "$current" = success ] || [ "$current" = pending ]; then exit 0; fi
+            exit 1
           fi
           # Latest review per user, kept when APPROVED on the head commit by the repository owner.
           reviews=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" --jq '.[]' | jq -s .)
@@ -89,14 +92,25 @@ jobs:
             | map(select(.state == "APPROVED" and .commit_id == $sha and .author_association == "OWNER"))
             | map(.user.login) | join(",")' <<<"$reviews")
           if [ -n "$approved" ]; then status success "approved on $short by $approved"; exit 0; fi
-          if [ "$EVENT" != pull_request ]; then waiting "no owner approval"; fi
+          if [ "$EVENT" != pull_request ]; then
+            # No owner approval: restore the AI verdict of the head SHA, the newest `verdict` status this workflow posted
+            # that is not an approval (statuses are listed newest first). None yet: waiting.
+            prev=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses?per_page=100" --jq '[.[] | select(.context == "verdict"
+              and .creator.login == "github-actions[bot]" and ((.description // "") | startswith("approved on ") | not))][0]
+              | select(. != null) | "\(.state)\t\(.description // "")"')
+            prev_state=${prev%%$'\t'*}; prev_text=${prev#*$'\t'}
+            if [ "$prev_state" = failure ]; then red "$prev_text"; fi
+            if [ "$prev_state" = success ] || [ "$prev_state" = pending ]; then status "$prev_state" "$prev_text"; exit 0; fi
+            waiting "no owner approval"
+          fi
           if [ "$AUTHOR" = "dependabot[bot]" ]; then waiting "Dependabot PR, no AI review"; fi
           if [ "$REVIEW" = skipped ]; then waiting "AI review did not run"; fi
           if [ "$REVIEW" != success ]; then red "AI review $REVIEW and no owner approval of $short"; fi
           labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name')
-          # Reasons from the AI review of the head commit ("**Verdict:** a; b." in its body).
-          why=$(jq -r --arg sha "$HEAD_SHA" '[.[] | select(.commit_id == $sha) | .body // ""
-            | capture("\\*\\*Verdict:\\*\\* (?<r>[^\\n]*)") | .r | rtrimstr(".")] | last // ""' <<<"$reviews")
+          # Reasons from the AI review of the head commit ("**Verdict:** a; b." in its body), control characters removed.
+          why=$(jq -r --arg sha "$HEAD_SHA" '[.[] | select(.commit_id == $sha and .user.login == "github-actions[bot]")
+            | .body // "" | capture("\\*\\*Verdict:\\*\\* (?<r>[^\\n]*)") | .r | rtrimstr(".")] | last // ""' <<<"$reviews" \
+            | tr -d '[:cntrl:]')
           if grep -qx 'ai-review: merge' <<<"$labels"; then status success "ai-review: merge on $short"; exit 0; fi
           if grep -qx 'ai-review: human-review' <<<"$labels"; then waiting "${why:-human-review}"; fi
           if grep -qx 'ai-review: changes-requested' <<<"$labels"; then red "changes requested on $short: ${why:-see the AI review}"; fi
