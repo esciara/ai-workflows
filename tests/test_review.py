@@ -209,8 +209,8 @@ def test_changed_names_and_cap():
     assert review.capped([("a", "x" * 10), ("b", "y" * 5)], cap=15) == ("<a>\nxxxxxxxxxx\n</a>\n\n<b>\nyyyyy\n</b>", False)
 
 
-def gather_facts(tmp_path, body, diff="diff --git a/a.py b/a.py\n"):
-    answers = {"pulls/1": {"title": "t", "body": body, "additions": 1, "deletions": 0}, "files": [[]], "graphql": {
+def gather_facts(tmp_path, body, diff="diff --git a/a.py b/a.py\n", files=None):
+    answers = {"pulls/1": {"title": "t", "body": body, "additions": 1, "deletions": 0}, "files": files or [[]], "graphql": {
         "data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": []}}}}}}
 
     def gh(args):
@@ -227,6 +227,14 @@ def test_gather_records_truncation_in_the_facts(tmp_path):
     assert gather_facts(tmp_path, "x" * (review.CONTEXT_CAP + 1))["truncated"] is True
     assert gather_facts(tmp_path, "small", diff="d" * (review.CONTEXT_CAP + 1))["truncated"] is True
     assert gather_facts(tmp_path, "small")["truncated"] is False
+
+
+def test_gather_counts_a_file_of_200kb_or_more_as_truncated(tmp_path):
+    (tmp_path / "big.txt").write_text("x" * 200_000)
+    (tmp_path / "ok.txt").write_text("x")
+    files = lambda names: [[{"filename": n, "status": "modified"} for n in names]]  # noqa: E731
+    assert gather_facts(tmp_path, "small", files=files(["ok.txt"]))["truncated"] is False
+    assert gather_facts(tmp_path, "small", files=files(["ok.txt", "big.txt"]))["truncated"] is True
 
 
 LOCK_DIFF = ("diff --git a/package-lock.json b/package-lock.json\n+++ b/package-lock.json\n@@ -1 +1 @@\n-old\n+new\n"
