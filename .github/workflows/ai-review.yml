@@ -47,7 +47,7 @@ jobs:
 
   # Required check (ADR-0053, states ADR-0055). It also publishes a commit status `verdict` with the same name; GitHub
   # may not require both, and the status shows the state in the merge box: success on `ai-review: merge` or on the
-  # owner's approval of the head commit; pending (job still red until the playground check of ADR-0055 Decision 2) while
+  # owner's approval of the head commit; pending status (text only, does not gate) and job red while
   # waiting for that approval (`human-review`, review not run, Dependabot); failure (job red) on `changes-requested` or a
   # failed review. Drafts are skipped (ready_for_review runs it). A comment review keeps a green answer only. On other pull_request_review events the labels may belong to an
   # older head commit, so only approvals of the head SHA count there; without one the step restores the AI verdict of the
@@ -80,8 +80,8 @@ jobs:
             echo "verdict: $1, $2" | tee -a "$GITHUB_STEP_SUMMARY"
           }
           red() { status failure "$1"; echo "::error title=verdict::$1"; exit 1; }
-          # Waiting keeps the job red too (ADR-0055 fallback) until the playground shows the ruleset honours the pending
-          # status over a green `verdict` check run of the same name; the pending status still names the reason.
+          # Waiting keeps the job red (ADR-0055 playground result: a pending status does not gate a required check pinned to
+          # the Actions integration); the pending status still names the reason in the merge box.
           hold() { status pending "$1"; echo "::error title=waiting for maintainer approval::$1"; exit 1; }
           waiting() { hold "waiting for maintainer approval of $short ($1)"; }
           if [ "$EVENT" = pull_request_review ] && [ "$REVIEW_STATE" = commented ]; then
