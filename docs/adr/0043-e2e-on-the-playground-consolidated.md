@@ -6,6 +6,7 @@
 - Alias: `D43`
 - Supersedes: [ADR-0026](archive/0026-e2e-isolation-base-branch-per-wp-and-one-e2e-slot.md), [ADR-0028](archive/0028-fixed-e2e-caller-on-the-playground.md), [ADR-0029](archive/0029-e2e-pr-routing-by-branch-prefix.md)
 - Amends: [ADR-0004](0004-config-read-from-default-branch-only.md)
+- Amended by: [ADR-0056](0056-three-fixed-e2e-slots-on-the-playground.md) (three fixed slots replace the single slot)
 
 ## Context
 
