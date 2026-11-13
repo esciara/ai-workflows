@@ -1,3 +1,7 @@
+import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -211,10 +215,6 @@ def test_verdict_job_is_read_only_and_reruns_on_reviews():
 
 
 def _run_verdict(tmp_path, event, review, reviews, labels):
-    import json
-    import os
-    import subprocess
-
     step = _doc(".github/workflows/ai-review.yml")["jobs"]["verdict"]["steps"][0]
     fake = tmp_path / "gh"
     fake.write_text(
@@ -242,7 +242,7 @@ def _rv(state="APPROVED", sha="new", user="m", assoc="OWNER"):
         ("pull_request", "failure", [], ["ai-review: merge"], False),
         ("pull_request", "skipped", [_rv()], ["ai-review: human-review"], True),  # Dependabot: approval alone
         ("pull_request_review", "skipped", [_rv()], ["ai-review: changes-requested"], True),
-        ("pull_request_review", "skipped", [], ["ai-review: merge"], True),
+        ("pull_request_review", "skipped", [], ["ai-review: merge"], False),  # label may be from an older head
         ("pull_request_review", "skipped", [], ["ai-review: human-review"], False),
         ("pull_request_review", "skipped", [_rv(sha="old")], ["ai-review: human-review"], False),  # new push
         ("pull_request_review", "skipped", [_rv(), _rv("CHANGES_REQUESTED")], [], False),  # later review wins
@@ -252,8 +252,6 @@ def _rv(state="APPROVED", sha="new", user="m", assoc="OWNER"):
     ],
 )
 def test_verdict_rule(tmp_path, event, review, reviews, labels, ok):
-    import shutil
-
     if not shutil.which("jq"):
         pytest.skip("jq missing")
     assert (_run_verdict(tmp_path, event, review, reviews, labels) == 0) is ok
