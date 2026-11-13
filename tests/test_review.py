@@ -5,6 +5,7 @@ import pytest
 
 from aiwf import publish_review as pr
 from aiwf import review
+from ghfake import RecordingGh
 
 FACTS = {"sha": "a" * 40, "tier": "low", "ci": "green", "changed_lines": 10, "human_review_lines": 400, "linked_issues": [1],
          "truncated": False}
@@ -374,19 +375,17 @@ def test_clean_neutralises_mentions_html_markers_and_pipes():
     assert "@esciara" not in out and "<" not in out and "\n" not in out and "a\\|b" in out
 
 
-class FakeGh:
+class FakeGh(RecordingGh):
     """GitHub for the publisher: issue comments, reviews (with inline comments) and dismissals."""
 
     def __init__(self, comments=(), reviews=(), refuse=()):
+        super().__init__()
         self.comments = list(comments)
         self.reviews = list(reviews)  # {"id", "user", "state", "event", "comments"}
         self.refuse = list(refuse)  # error messages for the next review POSTs
-        self.calls = []
 
-    def __call__(self, args):
-        self.calls.append(args)
-        method = args[args.index("-X") + 1] if "-X" in args else "GET"
-        url = next(a for a in args[1:] if a.startswith("repos/"))
+    def respond(self, args):
+        method, url = self.method(args), self.url(args)
         if url.endswith("/reviews") and method == "POST":
             if self.refuse:
                 raise RuntimeError(self.refuse.pop(0))

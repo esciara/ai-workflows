@@ -38,15 +38,6 @@ def test_invalid_output_rejected(raw):
         publish.validate("extractor", raw)
 
 
-class FakeGh:
-    def __init__(self):
-        self.calls = []
-
-    def __call__(self, args):
-        self.calls.append(args)
-        return "{}"
-
-
 @pytest.fixture
 def extractor_publisher(monkeypatch):
     got = []
@@ -54,21 +45,18 @@ def extractor_publisher(monkeypatch):
     return got
 
 
-def test_publish_valid_calls_the_publisher_only(extractor_publisher):
-    gh = FakeGh()
+def test_publish_valid_calls_the_publisher_only(extractor_publisher, gh):
     assert publish.publish("extractor", json.dumps(VALID), "o/r", 7, "https://run", gh)
     assert extractor_publisher == [VALID] and gh.calls == []
 
 
-def test_publish_invalid_labels_error_and_posts_nothing(extractor_publisher):
-    gh = FakeGh()
+def test_publish_invalid_labels_error_and_posts_nothing(extractor_publisher, gh):
     assert not publish.publish("extractor", "{}", "o/r", 7, "", gh)
     assert extractor_publisher == []
     assert gh.calls == [["api", "-X", "POST", "repos/o/r/issues/7/labels", "-f", "labels[]=ai: error"]]
 
 
-def test_cli_publish_exit_codes(monkeypatch):
-    gh = FakeGh()
+def test_cli_publish_exit_codes(monkeypatch, gh):
     monkeypatch.setattr(cli.config, "run_gh", lambda args: "[]" if "?per_page" in args[-1] else gh(args))
     monkeypatch.setenv("AGENT_JSON", "")
     assert cli.main(["publish", "--kind", "classifier", "--repo", "o/r", "--issue", "3"]) == 1

@@ -5,6 +5,7 @@ import pytest
 
 from aiwf import cli, review_gate
 from aiwf.review_gate import Gate
+from ghfake import RecordingGh
 
 REPO = "acme/app"
 CFG = {"maintainers": ["Alice"], "fork_prs": "on-command", "command": ""}
@@ -16,19 +17,20 @@ def pr(number=7, sha="a" * 40, head_repo=REPO, draft=False, state="open"):
             "head": {"sha": sha, "repo": {"full_name": head_repo} if head_repo else None}}
 
 
-def fake_gh(permission="write", pull=None):
-    calls = []
+class GateGh(RecordingGh):
+    def __init__(self, permission="write", pull=None):
+        super().__init__()
+        self.permission, self.pull = permission, pull
 
-    def gh(args):
-        calls.append(args)
+    def respond(self, args):
         if "/collaborators/" in args[1]:
-            return permission
+            return self.permission
         if "/pulls/" in args[1]:
-            return json.dumps(pull or pr())
+            return json.dumps(self.pull or pr())
         raise AssertionError(args)
 
-    gh.calls = calls
-    return gh
+
+fake_gh = GateGh
 
 
 def comment_event(body="/review", login="alice", on_pr=True):
