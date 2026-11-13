@@ -170,4 +170,4 @@ def test_cli_dependabot_sets_human_review_only(monkeypatch):
     deletes = [c for c in calls if c not in posts]
     assert all("DELETE" in c for c in deletes)
     assert {c[-1] for c in deletes} == {f"repos/{REPO}/issues/7/labels/{quote(label, safe='')}" for label in (
-        "ai-review: pending", "ai-review: merge", "ai-review: changes-requested")}
+        "ai-review: pending", "ai-review: merge", "ai-review: changes-requested", "ai: error")}

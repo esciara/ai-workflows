@@ -96,9 +96,11 @@ def cmd_review_gate(args: argparse.Namespace) -> int:
 
 def cmd_review_dependabot(args: argparse.Namespace) -> int:
     """The verdict of a Dependabot PR without a review: `ai-review: human-review` (GITHUB_TOKEN only, no model)."""
-    from aiwf import publish_review
+    from aiwf import publish, publish_review
+    from aiwf.ghapi import remove_label
 
     publish_review.set_verdict_label(config.run_gh, args.repo, args.pr, HUMAN_REVIEW)
+    remove_label(config.run_gh, args.repo, args.pr, publish.ERROR_LABEL)  # a stale error from an earlier run
     print(f"PR #{args.pr}: Dependabot, not reviewed (no secrets in its runs): {HUMAN_REVIEW}")
     return 0
 
