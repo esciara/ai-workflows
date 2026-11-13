@@ -47,6 +47,7 @@
       }
     },
     "notify": {"enum": ["none", "slack", "telegram"], "default": "none"},
+    "linked_issue": {"enum": ["issue", "issue-or-plan-ref"], "default": "issue", "description": "issue-or-plan-ref: a WP id or docs/plan.md reference in the PR text also counts as a linked issue, and a WP PR (branch wp<N>-...) needs e2e run IDs in its description (ADR-0053)."},
     "fork_prs": {"enum": ["on-command", "off"], "default": "on-command"},
     "workflows": {
       "type": "object",

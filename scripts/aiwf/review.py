@@ -38,6 +38,10 @@ TAG_RE = re.compile(r"<(\s*/?\s*(?:" + "|".join(CONTEXT_TAGS) + r")\b)", re.IGNO
 # check's name: a repo's own `release / publish` stays CI. Reading runs needs `actions: read` on the `context` job.
 OWN_WORKFLOWS_PREFIX = "esciara/ai-workflows/.github/workflows/"
 RUN_URL_RE = re.compile(r"/actions/runs/(\d+)(?:/|\Z)")
+# `linked_issue: issue-or-plan-ref` (ADR-0053): a WP id or a plan reference in the PR text counts as a linked issue.
+PLAN_REF_RE = re.compile(r"\bWP\d+[a-z]?\b|docs/plan\.md")
+WP_BRANCH_RE = re.compile(r"wp\d+[a-z]?-", re.IGNORECASE)  # CLAUDE.md: branch `wp<N>-<slug>`
+RUN_ID_RE = re.compile(r"/actions/runs/\d+|\brun[ _-]?ids?\b\W{0,12}\d{6,}", re.IGNORECASE)  # e2e evidence, not verified
 
 
 def glob_re(pattern: str) -> re.Pattern[str]:
@@ -131,7 +135,8 @@ def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str,
             f"{blocking} blocking finding(s)" if blocking else "", "a CI check is red" if facts["ci"] == "red" else "") if r]
     reasons = [r for r in (
         "risk tier high" if facts["tier"] == "high" else "",
-        "no linked issue" if not facts["linked_issues"] else "",
+        "no linked issue" if not facts["linked_issues"] and not facts.get("plan_ref") else "",
+        "WP PR without e2e run IDs in its description" if facts.get("wp_no_run_ids") else "",
         f"{facts['changed_lines']} changed lines (> {facts['human_review_lines']})"
         if facts["changed_lines"] > facts["human_review_lines"] else "",
         f"CI still running after {CI_BUDGET // 60} min" if facts["ci"] == "timeout" else "",
@@ -220,6 +225,8 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
     context, truncated = capped([("pr_description", pr_text), ("linked_issues", issue_text), ("diff", fence(diff)),
                                  ("touched_files", "\n".join(touched)),
                                  ("callers", fence(callers(changed_names(diff), workdir)))])
+    plan_mode = cfg.get("linked_issue", "issue") == "issue-or-plan-ref"
+    branch = (pr.get("head") or {}).get("ref") or ""
     facts = {
         "sha": sha,
         "tier": risk_tier(paths, cfg["risk_paths"]),
@@ -228,6 +235,8 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
         "changed_lines": pr["additions"] + pr["deletions"],
         "human_review_lines": cfg["limits"]["human_review_lines"],
         "linked_issues": [i["number"] for i in issues],
+        "plan_ref": plan_mode and bool(PLAN_REF_RE.search(f"{pr['title']}\n{pr.get('body') or ''}")),
+        "wp_no_run_ids": plan_mode and bool(WP_BRANCH_RE.match(branch)) and not RUN_ID_RE.search(pr.get("body") or ""),
         "truncated": truncated,  # the agents saw part of the context only: they lack context to judge (spec)
     }
     return context, facts

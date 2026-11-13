@@ -22,6 +22,15 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Priority: P2, before slice 4.
 - ADR: [ADR-0052](adr/0052-playground-caller-pins-the-release-metrics-in-a-run-artifact.md) (context); the decision is still open.
 
+### `verdict` approval rule assumes a personal repo
+
+- Date: 2026-11-13
+- What: the `verdict` approval rule (PR #90, draft) identifies the maintainer by the review's `author_association == OWNER`. That works for personal repos, not org-owned ones, where a CODEOWNERS lookup would be needed.
+- Why it matters: on an org-owned repo a maintainer's approval would not turn `verdict` green.
+- Current mitigation: this repo is personal; none needed yet.
+- Priority: P3, before an org-owned repo adopts the rule.
+- ADR: the merge-gate ADR (D53, ADR number 53; no link while it is not on this stack branch)
+
 ## Accepted risks
 
 ### Unreviewed code on `e2e-target` runs with playground secrets

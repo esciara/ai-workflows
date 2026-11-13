@@ -34,6 +34,7 @@ def test_minimal_config_gets_all_defaults():
         "risk_paths": {"high": [], "medium": []},
         "limits": {"human_review_lines": 400, "fix_rounds": 3, "info_requests": 2},
         "reporter_silence_days": {"ping": 4, "stale": 14, "close": 21},
+        "linked_issue": "issue",
         "notify": "none",
         "fork_prs": "on-command",
         "workflows": {"review": True, "triage": False},
