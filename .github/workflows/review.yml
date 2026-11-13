@@ -80,6 +80,7 @@ jobs:
       pull-requests: read
       issues: read
       checks: read
+      actions: read  # which workflow run a check belongs to: ours or the repo's CI (orchestrator only)
     outputs:
       facts: ${{ steps.ctx.outputs.facts }}
     steps:

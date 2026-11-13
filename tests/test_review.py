@@ -28,9 +28,29 @@ def test_glob_star_stays_in_one_segment():
     assert review.glob_re("**/*.lock").match("a/b/c.lock") and review.glob_re("**/*.lock").match("c.lock")
 
 
-def run(name, status="completed", conclusion="success", run_id=1):
+def run(name, status="completed", conclusion="success", run_id=1, app="github-actions"):
     url = f"https://github.com/o/r/actions/runs/{run_id}/job/9"
-    return {"name": name, "status": status, "conclusion": conclusion, "html_url": url, "details_url": url}
+    return {"name": name, "status": status, "conclusion": conclusion, "html_url": url, "details_url": url,
+            "app": {"slug": app}}
+
+
+OURS = {"referenced_workflows": [{"path": "esciara/ai-workflows/.github/workflows/review.yml@main"},
+                                 {"path": "esciara/ai-workflows/.github/workflows/config.yml@main"}]}
+THEIRS = {"referenced_workflows": [{"path": "o/r/.github/workflows/build.yml@main"}]}
+
+
+def fake_gh(runs_by_id, checks=None, calls=None):
+    """gh stub: the check-runs page, and each workflow run by id (a missing id fails like run_gh does)."""
+    def gh(args):
+        if calls is not None:
+            calls.append(args[-1])
+        if "/check-runs" in args[-1]:
+            return json.dumps([{"check_runs": checks or []}])
+        rid = args[-1].rsplit("/", 1)[1]
+        if rid not in runs_by_id:
+            raise RuntimeError("HTTP 403: Resource not accessible by integration")
+        return json.dumps(runs_by_id[rid])
+    return gh
 
 
 def test_ci_state_excludes_our_own_run():
@@ -39,33 +59,40 @@ def test_ci_state_excludes_our_own_run():
 
 
 @pytest.mark.parametrize("name", ["review / pass (security)", "review / context", "ai / failed", "triage / classify",
-                                  "config / load", "verdict"])
-def test_ci_state_ignores_our_jobs_from_earlier_runs(name):
-    # An earlier `ai: error` run on the same head left failed check runs; they are ours, not the repo's CI.
-    assert review.ci_state([run("test"), run(name, conclusion="failure", run_id=3)], "7", None) == "green"
-    assert review.ci_state([run(name, conclusion="failure", run_id=3)], "7", None) == "none"
+                                  "review / metrics", "verdict"])
+def test_ci_ignores_checks_of_earlier_runs_that_call_our_workflows(name):
+    # An earlier `ai: error` run on the same head (or this repo's `verdict` job) left failed check runs: ours, not CI.
+    checks = [run("test"), run(name, conclusion="failure", run_id=3)]
+    assert review.wait_ci(fake_gh({"1": THEIRS, "3": OURS}, checks), "o/r", "s", "7", None, sleep=lambda s: None) == "green"
 
 
-@pytest.mark.parametrize("name", ["context", "pass", "test / pass-through", "lint / publishing", "verdicts",
-                                  "ci / verdict"])
-def test_ci_state_keeps_checks_that_only_look_like_ours(name):
-    assert review.ci_state([run(name, conclusion="failure", run_id=3)], "7", None) == "red"
+@pytest.mark.parametrize("name", ["release / publish", "ci / verify", "review / context", "verdict", "context"])
+def test_ci_red_check_of_a_run_not_calling_our_workflows_stays_red(name):
+    # Named like one of our jobs (by chance or forged), but its run does not call our reusable workflows: real CI.
+    checks = [run("test"), run(name, conclusion="failure", run_id=3)]
+    assert review.wait_ci(fake_gh({"1": THEIRS, "3": THEIRS}, checks), "o/r", "s", "7", None, sleep=lambda s: None) == "red"
 
 
-def test_own_jobs_match_our_reusable_workflows():
-    import yaml
-    jobs = set()
-    for wf in Path(__file__).parent.parent.joinpath(".github/workflows").glob("*.yml"):
-        doc = yaml.safe_load(wf.read_text())
-        if "workflow_call" in (doc.get(True) or doc.get("on") or {}):
-            jobs |= set(doc["jobs"])
-    assert jobs == review.OWN_JOBS
+def test_ci_unreadable_run_counts_as_ci():
+    # Fail safe: a failed check whose run cannot be read stays red (changes-requested, never merge).
+    gh = fake_gh({"1": THEIRS}, [run("test"), run("review / context", conclusion="failure", run_id=3)])
+    assert review.wait_ci(gh, "o/r", "s", "7", None, sleep=lambda s: None) == "red"
 
 
-def test_own_checks_are_our_caller_jobs():
-    import yaml
-    doc = yaml.safe_load(Path(__file__).parent.parent.joinpath(".github/workflows/ai-review.yml").read_text())
-    assert review.OWN_CHECKS <= set(doc["jobs"])
+def test_ci_check_of_another_app_is_never_ours():
+    calls = []
+    gh = fake_gh({}, [run("review / verify", conclusion="failure", run_id=3, app="circleci")], calls)
+    assert review.wait_ci(gh, "o/r", "s", "7", None, sleep=lambda s: None) == "red"
+    assert not [c for c in calls if "/actions/runs/" in c]  # nothing to look up
+
+
+def test_own_runs_caches_answers_across_polls():
+    calls, known = [], {}
+    gh = fake_gh({"3": OURS, "4": THEIRS}, calls=calls)
+    checks = [run("a", run_id=3), run("b", run_id=4), run("c", run_id=3)]
+    assert review.own_runs(gh, "o/r", checks, known) == {"3"}
+    assert review.own_runs(gh, "o/r", checks, known) == {"3"}
+    assert sorted(calls) == ["repos/o/r/actions/runs/3", "repos/o/r/actions/runs/4"]
 
 
 @pytest.mark.parametrize("runs,state", [
@@ -85,11 +112,11 @@ def test_ci_state_required_checks():
 
 def fake_checks(*pages):
     calls = iter(pages)
-    return lambda args: json.dumps([{"check_runs": next(calls)}])
+    return lambda args: json.dumps([{"check_runs": next(calls)}] if "/check-runs" in args[-1] else THEIRS)
 
 
 def test_wait_ci_times_out_as_timeout():
-    gh = lambda args: json.dumps([{"check_runs": [run("test", "in_progress", None)]}])
+    gh = fake_gh({"1": THEIRS}, [run("test", "in_progress", None)])
     assert review.wait_ci(gh, "o/r", "s", "7", None, budget=60, poll=20, sleep=lambda s: None) == "timeout"
 
 
