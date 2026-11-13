@@ -108,6 +108,7 @@ def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str,
         f"{facts['changed_lines']} changed lines (> {facts['human_review_lines']})"
         if facts["changed_lines"] > facts["human_review_lines"] else "",
         f"CI still running after {CI_BUDGET // 60} min" if facts["ci"] == "timeout" else "",
+        f"context cut at {CONTEXT_CAP} characters: the review saw part of the change" if facts.get("truncated") else "",
     ) if r]
     if reasons:
         return "ai-review: human-review", reasons
@@ -151,14 +152,15 @@ def callers(names: list[str], workdir: Path, limit: int = 15) -> str:
     return "\n\n".join(out)
 
 
-def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> str:
-    out, left = [], cap
+def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, bool]:
+    """(tagged context, whether any part was cut at the cap)."""
+    out, left, truncated = [], cap, False
     for tag, text in parts:
         if len(text) > left:
-            text = text[: max(left, 0)] + f"\n[... truncated: context cap of {cap} characters reached]"
+            text, truncated = text[: max(left, 0)] + f"\n[... truncated: context cap of {cap} characters reached]", True
         left -= len(text)
         out.append(f"<{tag}>\n{text}\n</{tag}>")
-    return "\n\n".join(out)
+    return "\n\n".join(out), truncated
 
 
 def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -180,7 +182,7 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
             touched.append(f'<file path="{f["filename"]}">\n{p.read_text(errors="replace")}\n</file>')
     pr_text = f"Title: {pr['title']}\n\n{pr.get('body') or ''}"
     issue_text = "\n\n".join(f"Issue #{i['number']}: {i['title']}\n\n{i.get('body') or ''}" for i in issues) or "(none)"
-    context = capped([("pr_description", pr_text), ("linked_issues", issue_text), ("diff", diff),
+    context, truncated = capped([("pr_description", pr_text), ("linked_issues", issue_text), ("diff", diff),
                       ("touched_files", "\n".join(touched)), ("callers", callers(changed_names(diff), workdir))])
     facts = {
         "sha": sha,
@@ -190,6 +192,7 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
         "changed_lines": pr["additions"] + pr["deletions"],
         "human_review_lines": cfg["limits"]["human_review_lines"],
         "linked_issues": [i["number"] for i in issues],
+        "truncated": truncated,  # the agents saw part of the context only: they lack context to judge (spec)
     }
     return context, facts
 
