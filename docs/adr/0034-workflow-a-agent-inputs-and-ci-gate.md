@@ -4,6 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D34`
+- Amended by: [ADR-0054](0054-own-check-runs-known-by-their-workflow-run.md) (own check runs known by their workflow run; `actions: read` on the `context` job; replaces the "needs only `checks: read`" rule and the "earlier runs not excluded" consequence)
 
 ## Context
 
