@@ -70,11 +70,11 @@ jobs:
             | map(select(.state == "APPROVED" and .commit_id == $sha and .author_association == "OWNER"))
             | map(.user.login) | join(",")')
           if [ -n "$approved" ]; then echo "approved on $HEAD_SHA by: $approved"; exit 0; fi
-          if [ "$EVENT" = pull_request ] && [ "$REVIEW" != success ]; then
-            echo "review did not succeed ($REVIEW) and no owner approval of $HEAD_SHA"; exit 1
-          fi
           if [ "$EVENT" != pull_request ]; then
             echo "no owner approval of $HEAD_SHA (labels are not trusted outside a pull_request run)"; exit 1
+          fi
+          if [ "$REVIEW" != success ]; then
+            echo "review did not succeed ($REVIEW) and no owner approval of $HEAD_SHA"; exit 1
           fi
           labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name')
           echo "$labels"
