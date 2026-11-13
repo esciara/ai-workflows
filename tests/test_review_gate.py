@@ -55,6 +55,31 @@ def test_fork_pr_event_is_never_reviewed(head_repo):
     assert gh.calls == []
 
 
+@pytest.mark.parametrize("payload", [
+    {"pull_request": {**pr(), "user": {"login": "dependabot[bot]"}}},
+    {"pull_request": {**pr(), "user": {"login": "Dependabot[bot]"}}},
+    {"pull_request": {**pr(), "user": {"login": "alice"}}, "sender": {"login": "dependabot[bot]"}},
+])
+def test_dependabot_pr_event_is_skipped_cleanly(payload):
+    """No secrets in a Dependabot run: skip at the gate, so no job fails and no `ai: error` label (checkpoint item 1)."""
+    gh = fake_gh()
+    gate = review_gate.decide("pull_request", payload, CFG, REPO, gh)
+    assert not gate.run and not gate.fork and "Dependabot" in gate.reason
+    assert gh.calls == []
+
+
+def test_dependabot_lookalike_login_is_reviewed():
+    payload = {"pull_request": {**pr(), "user": {"login": "dependabot"}}, "sender": {"login": "alice"}}
+    assert review_gate.decide("pull_request", payload, CFG, REPO, fake_gh()).run
+
+
+def test_review_command_still_reviews_a_dependabot_pr():
+    """A maintainer's `/review` runs with the caller's secrets, so it reviews a Dependabot PR."""
+    gh = fake_gh(pull={**pr(), "user": {"login": "dependabot[bot]"}})
+    gate = review_gate.decide("issue_comment", {**comment_event(), "sender": {"login": "alice"}}, REVIEW, REPO, gh)
+    assert gate == Gate(True, "/review", 7, "a" * 40, False)
+
+
 def test_fork_detection_ignores_case():
     assert not review_gate.is_fork(pr(head_repo="ACME/App"), REPO)
 
