@@ -4,16 +4,6 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 
 ## Design issues
 
-### Single e2e slot for all WP tests
-
-- Date: 2026-10-31
-- What: e2e runs on the playground go through one fixed caller that runs `esciara/ai-workflows/...@e2e-target`, and there is a single `e2e-target` pointer. Root cause: `uses: owner/repo/.github/workflows/x.yml@ref` is static, so all e2e runs share one mutable global target and WP tests cannot be isolated from each other.
-- Why it matters: issue/comment e2e tests queue behind one slot, and a stale or wrong pointer would make a test run another WP's code. The maintainer called this unsatisfactory; it must be fixed sooner rather than later.
-- Current mitigation: exactly one slot, held under the e2e file lock (ADR-0043), so no test silently runs another WP's code; only items routed to the e2e caller (label `e2e-target`, or same-repo PRs from `e2e/` branches) use it.
-- Fix decided: three fixed slots, [ADR-0056](adr/0056-three-fixed-e2e-slots-on-the-playground.md), built as WP16 (`docs/plan.md`); this entry goes when its implementation merges.
-- Priority: P1 (was aiwf-6k3).
-- ADR: [ADR-0043](adr/0043-e2e-on-the-playground-consolidated.md)
-
 ### Workflow B cannot open PRs with "Allow GitHub Actions to create and approve pull requests" off
 
 - Date: 2026-11-12
@@ -34,12 +24,12 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 
 ## Accepted risks
 
-### Unreviewed code on `e2e-target` runs with playground secrets
+### Unreviewed code on `e2e-target-<n>` runs with playground secrets
 
 - Date: 2026-10-31
-- What: code pushed to `e2e-target` is unreviewed (review happens at PR time, after e2e), yet it runs in playground Actions with the playground's `CLAUDE_CODE_OAUTH_TOKEN` (the maintainer's Claude subscription) and `GITHUB_TOKEN`.
+- What: code pushed to the e2e slot refs `e2e-target-1`, `-2`, `-3` ([ADR-0056](adr/0056-three-fixed-e2e-slots-on-the-playground.md)) is unreviewed (review happens at PR time, after e2e), yet it runs in playground Actions with the playground's `CLAUDE_CODE_OAUTH_TOKEN` (the maintainer's Claude subscription) and `GITHUB_TOKEN`.
 - Why it matters: a bad WP branch could leak the token (e.g. transformed so log masking misses it, in public logs) or misuse the playground's write rights, by mistake or through prompt injection.
-- Current mitigation: only ai-workflows pushers (the maintainer and agents) can put code on `e2e-target`; GitHub damage is limited to the playground; worst case is rotating the Claude token. Accepted by the maintainer on 2026-10-31.
+- Current mitigation: only ai-workflows pushers (the maintainer and agents) can put code on the `e2e-target-<n>` refs; GitHub damage is limited to the playground; worst case is rotating the Claude token. Accepted by the maintainer on 2026-10-31.
 - Tracking: was aiwf-71q.
 - ADR: [ADR-0043](adr/0043-e2e-on-the-playground-consolidated.md)
 

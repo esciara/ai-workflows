@@ -21,7 +21,7 @@ import pytest
 
 import playground as pg
 
-E2E_WORKFLOW = "AI workflows notify (e2e)"  # name of the playground's notify-e2e.yml (dispatch-only)
+E2E_WORKFLOW = pg.E2E_NOTIFY_WORKFLOW  # the held slot's notify-e2e-<n>.yml (dispatch-only, ADR-0056)
 NOTIFY_JOB = "notify-test / send"
 RESULT_PREFIX = "AIWF_NOTIFY_RESULT "
 CHANNELS = {"slack", "telegram"}

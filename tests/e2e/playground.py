@@ -15,18 +15,40 @@ from typing import Any, Callable, Iterator, TypeVar
 
 import pytest
 
+from aiwf import e2eslot
+
 ROOT = Path(__file__).resolve().parents[2]
 REPO = os.environ.get("AIWF_E2E_REPO", "esciara/ai-workflows-playground")
 FORK = os.environ.get("AIWF_E2E_FORK", "opinionated-digital-center/ai-workflows-playground")  # outsider fork (WP4)
 WORKFLOW = "AI workflows"  # name of the caller workflow in the target repo
-E2E_WORKFLOW = "AI workflows (e2e)"  # name of the playground's caller-e2e.yml (items labelled `e2e-target`)
 BOT = "github-actions[bot]"
 FIXTURE_LABEL = "test-fixture"
-E2E_LABEL = "e2e-target"  # routes an item to the playground's caller-e2e.yml (@e2e-target) instead of the normal one
 RUN_TIMEOUT = int(os.environ.get("AIWF_E2E_TIMEOUT", "600"))
 POLL_INTERVAL = int(os.environ.get("AIWF_E2E_POLL", "5"))
 
 T = TypeVar("T")
+
+
+def held_slot() -> int:
+    """The e2e slot this run holds (ADR-0056); fails the test without one."""
+    try:
+        return e2eslot.held()[0]
+    except e2eslot.NoSlot as e:
+        pytest.fail(str(e), pytrace=False)
+
+
+def __getattr__(name: str) -> str:
+    """Names of the held slot, read when used (the controller takes the slot after this module is imported):
+    E2E_WORKFLOW (its caller-e2e-<n>.yml), E2E_NOTIFY_WORKFLOW (its notify-e2e-<n>.yml), E2E_LABEL (`e2e-target-<n>`,
+    routes an item to that caller). Without a slot, placeholders that match no workflow or label."""
+    names = {"E2E_WORKFLOW": e2eslot.workflow_name, "E2E_NOTIFY_WORKFLOW": e2eslot.notify_workflow_name,
+             "E2E_LABEL": e2eslot.label}
+    if name not in names:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    try:
+        return names[name](e2eslot.held()[0])
+    except e2eslot.NoSlot:
+        return f"{name} (no e2e slot held)"
 
 
 def gh(args: list[str], as_tester: bool = False, as_agent: bool = False, as_maintainer: bool = False,
@@ -114,19 +136,27 @@ def jobs(run_id: int) -> dict[str, str]:
     return {j["name"]: j["conclusion"] for j in data["jobs"]}
 
 
-def ensure_label(name: str = E2E_LABEL, color: str = "5319e7", description: str = "e2e: runs ai-workflows@e2e-target") -> None:
+def ensure_label(name: str | None = None, color: str = "5319e7", description: str | None = None) -> None:
+    """Create the label if missing; default: the held slot's `e2e-target-<n>`."""
+    if name is None:
+        n = held_slot()
+        name, description = e2eslot.label(n), f"e2e: runs ai-workflows@e2e-target-{n}"
+    description = description or ""
     if not any(lb["name"] == name for lb in api(f"repos/{REPO}/labels?per_page=100")):
         api(f"repos/{REPO}/labels", f"name={name}", f"color={color}", f"description={description}", method="POST")
 
 
-def _labels(e2e: bool) -> list[str]:
-    if e2e:
-        ensure_label()
-    return [FIXTURE_LABEL, E2E_LABEL] if e2e else [FIXTURE_LABEL]
+def _labels(e2e: bool, n: int | None = None) -> list[str]:
+    """`test-fixture`, plus slot `n`'s label (default: the held slot) when e2e."""
+    if not e2e:
+        return [FIXTURE_LABEL]
+    n = n or held_slot()
+    ensure_label(e2eslot.label(n), description=f"e2e: runs ai-workflows@e2e-target-{n}")
+    return [FIXTURE_LABEL, e2eslot.label(n)]
 
 
 def open_issue(title: str, body: str, *, e2e: bool, as_tester: bool = False) -> dict[str, Any]:
-    """New issue, labels set at creation (so the `opened` event already carries `e2e-target` when `e2e`)."""
+    """New issue, labels set at creation (so the `opened` event already carries `e2e-target-<n>` when `e2e`)."""
     want = _labels(e2e)
     issue = api(f"repos/{REPO}/issues", f"title={title}", f"body={body}", *[f"labels[]={lb}" for lb in want],
                 method="POST", as_tester=as_tester)
@@ -145,27 +175,28 @@ def reusable_issue(title: str, body: str, *, e2e: bool) -> dict[str, Any]:
     return open_issue(title, body, e2e=e2e)
 
 
-def pr_branch(*, e2e: bool, wp: str = "", slug: str = "") -> str:
-    """Unique head branch for a test PR. e2e PRs use `e2e/<wp>-<slug>-<ns>`: the playground routes PRs whose head ref
-    starts with `e2e/` to caller-e2e.yml from the first `opened` event on (labels cannot be set at creation)."""
+def pr_branch(*, e2e: bool, wp: str = "", slug: str = "", slot: int | None = None) -> str:
+    """Unique head branch for a test PR. e2e PRs use `e2e/<n>/<wp>-<slug>-<ns>` for slot `n` (default: the held
+    slot): the playground routes PRs whose head ref starts with `e2e/<n>/` to caller-e2e-<n>.yml from the first
+    `opened` event on (labels cannot be set at creation)."""
     if not e2e:
         return f"test-pr-{time.time_ns()}"  # never `e2e/`: the normal caller handles it
     if not re.fullmatch(r"wp\d+", wp) or not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", slug):
         raise ValueError(f"e2e PR branch needs wp like 'wp2' and a lowercase slug, got {wp!r}, {slug!r}")
-    return f"e2e/{wp}-{slug}-{time.time_ns()}"
+    return f"{e2eslot.branch_prefix(slot or held_slot())}{wp}-{slug}-{time.time_ns()}"
 
 
 @contextlib.contextmanager
 def throwaway_pr(title: str, *, e2e: bool, wp: str = "", slug: str = "", base: str | None = None,
-                 draft: bool = False) -> Iterator[dict[str, Any]]:
+                 draft: bool = False, slot: int | None = None) -> Iterator[dict[str, Any]]:
     """A test-fixture PR on its own branch from `base` (default branch if None); branch deleted, PR closed on exit.
 
-    e2e PRs come from an `e2e/<wp>-<slug>-…` branch, so every PR event routes to the e2e caller, `opened` included.
-    Labels (`test-fixture`, plus `e2e-target` when e2e) are added right after creation, since the pulls API cannot
+    e2e PRs come from an `e2e/<n>/<wp>-<slug>-…` branch (slot `n`: `slot`, default the held one), so every PR event
+    routes to slot n's caller, `opened` included. Labels (`test-fixture`, plus `e2e-target-<n>` when e2e) are added right after creation, since the pulls API cannot
     set them; comment events on the PR carry no head ref and route by that label. A `draft` PR's events start no
     review (only a maintainer's `/review` does).
     """
-    branch = pr_branch(e2e=e2e, wp=wp, slug=slug)
+    branch = pr_branch(e2e=e2e, wp=wp, slug=slug, slot=slot)
     base = base or api(f"repos/{REPO}")["default_branch"]
     sha = api(f"repos/{REPO}/git/ref/heads/{base}")["object"]["sha"]
     api(f"repos/{REPO}/git/refs", f"ref=refs/heads/{branch}", f"sha={sha}", method="POST")
@@ -178,7 +209,8 @@ def throwaway_pr(title: str, *, e2e: bool, wp: str = "", slug: str = "", base: s
                             "-f", f"base={base}", "-f",
                             "body=Throwaway e2e PR from esciara/ai-workflows tests; closed by its teardown.",
                             "-F", f"draft={str(draft).lower()}"], as_agent=True))
-        api(f"repos/{REPO}/issues/{pr['number']}/labels", *[f"labels[]={lb}" for lb in _labels(e2e)], method="POST")
+        api(f"repos/{REPO}/issues/{pr['number']}/labels", *[f"labels[]={lb}" for lb in _labels(e2e, slot)],
+            method="POST")
         yield {"number": pr["number"], "title": title, "branch": branch}
     finally:
         api(f"repos/{REPO}/git/refs/heads/{branch}", method="DELETE")
@@ -192,8 +224,8 @@ def fork_pr(title: str, files: list[tuple[str, str]], *, wp: str, slug: str) -> 
     deleted and PR closed on exit. `files` are (path, text) pairs, one commit each, pushed before the PR is opened.
 
     The branch starts from the fork's default branch and is not named `e2e/`: fork PRs never route by prefix, so the
-    `opened` event goes to the normal caller; `e2e-target` is labelled right after creation (as the agent App), and
-    later events on the PR route to caller-e2e.yml. The fork needs the tester App installed with contents write.
+    `opened` event goes to the normal caller; the held slot's `e2e-target-<n>` is labelled right after creation (as the
+    agent App), and later events on the PR route to caller-e2e-<n>.yml. The fork needs the tester App installed with contents write.
     """
     base = api(f"repos/{REPO}")["default_branch"]
     fork_base = api(f"repos/{FORK}")["default_branch"]
