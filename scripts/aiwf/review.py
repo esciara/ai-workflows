@@ -209,7 +209,7 @@ def without_generated(diff: str) -> str:
 
 def fence(text: str) -> str:
     """Untrusted text with every opening or closing context tag defused (`<diff>` -> `&lt;diff>`), so it cannot close
-    or fake the tags that frame it. Same escape as triage.neutral (ADR-0018), but only before our tag names: the
+    or fake the tags that frame it. Same escape as triage.neutral (ADR-0039), but only before our tag names: the
     agents quote code from the context in suggested fixes, so the rest of it must stay as written."""
     return TAG_RE.sub(r"&lt;\1", text)
 

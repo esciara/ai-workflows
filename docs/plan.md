@@ -62,12 +62,7 @@ Slice `base` marks shared runtime built before the slices. Rows with a letter (W
 
 Open items (hand-edited like the Status column):
 
-- Dev env: add pytest-xdist to dev deps; fresh worktrees lack .venv (verify-wp/tests jsonschema import) [was aiwf-e8d].
-- guard-bash false positive on `git worktree add` [was aiwf-2gp] (slice 0).
-- ADR-0031: amend in place — worktree commits use App identity (as CLAUDE.md says) [was aiwf-zyh].
-- Update code/test comments citing superseded (now archived) ADRs [was aiwf-8xt].
-- WP14: install guide keeps 'Allow GitHub Actions to create and approve pull requests' off [was aiwf-wp14.1].
-- WP14: pin callers to a tag or SHA instead of @main [was aiwf-wp14.2] (slice 1).
+- Dev env: fresh worktrees lack .venv (verify-wp/tests jsonschema import) [was aiwf-e8d].
 - WP16: single e2e slot (known issue, P1) → three slots per ADR-0056; gate PR merged (#105), build PR open; its e2e waits for the maintainer-merged playground PR (callers, labels; content in the build PR description), which must merge with it; the maintainer deletes the old `e2e-target` ref after.
 
 **WP11 maintainer setup (chat alerts).** Before WP11 can pass, the maintainer sets these repository secrets on the test repo (and later on each target repo that wants alerts): Slack, create an Incoming Webhook for a channel and store it as `SLACK_WEBHOOK_URL`; Telegram, create a bot with @BotFather, get your chat ID, and store them as `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
@@ -79,7 +74,7 @@ Open items (hand-edited like the Status column):
 
 | Slice | Contents | Done when |
 | --- | --- | --- |
-| 0 · Cleanup | Process simplification (#61, done). Workflow simplification (#62): test hooks out of the product, budgets → time/turn limits (ADR-0050), shared setup action. MED batch: one command parse and drop `/ping`; config settings not used yet marked "not used yet, WPx" in `templates/ai-workflows.example.yml`; one shared `gh` helper module; diagrams in the PR description instead of required per-WP diagrams, and drop the docs-consistency ceremony; B2 for trusted authors only, plus `/reproduce` for outsiders, written into the spec as v1. LOW batch: dev tools moved out of the shipped `scripts/aiwf` package; guard-bash false positive on `git worktree add` fixed | Merged, e2e green |
+| 0 · Cleanup | Process simplification (#61, done). Workflow simplification (#62): test hooks out of the product, budgets → time/turn limits (ADR-0050), shared setup action. MED batch: one command parse and drop `/ping`; config settings not used yet marked "not used yet, WPx" in `templates/ai-workflows.example.yml`; one shared `gh` helper module; diagrams in the PR description instead of required per-WP diagrams, and drop the docs-consistency ceremony (not done: `tests/test_docs_consistency.py` and `docs/diagrams.md` remain); B2 for trusted authors only, plus `/reproduce` for outsiders, written into the spec as v1. LOW batch: dev tools moved out of the shipped `scripts/aiwf` package (not done: `devguard.py`, `e2eslot.py` and `acceptance_review.py` still live there); guard-bash false positive on `git worktree add` fixed | Merged, e2e green |
 | 1 · Review in use | WP15 per-run metrics (one JSON line per run, moved from slice 0), then WP14 onboarding kit (install guide, rights checklist, templates; callers pinned to a release tag or SHA, not `@main`; first release tag); metrics used to settle the "Usage limits" open point | Workflow A runs on `esciara/pyteleinfo`, set up from the guide alone in under 30 minutes, and the first usage numbers are recorded |
 | 2 · Triage in use | B1 (WP5, built) enabled on `esciara/pyteleinfo`, plus its "new issue triaged" notification (part of WP11b) | New issues there get classified and the maintainer gets a chat alert |
 | 3 · Bugs reproduced and analysed | Starts when checkpoint items CP8 (aiwf-vpq, shared `aiwf-agent` action) and CP9 (aiwf-5it, rebase #79/WP6, private-repo tarball pattern) are done. WP6 (paused branch `wp6-reproduce`), WP7, WP8, plus their notifications (WP11b) | A real bug on `esciara/pyteleinfo` is reproduced, analysed, and the maintainer is asked `/fix` |

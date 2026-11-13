@@ -1,4 +1,4 @@
-"""Independent acceptance-test review (ADR-0014): does tests/e2e/test_wp<N>.py enforce the WP's Done-when?"""
+"""Independent acceptance-test review (ADR-0042): does tests/e2e/test_wp<N>.py enforce the WP's Done-when?"""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_PATH = ROOT / "schema" / "verifier.json"
-PROMPT_PATH = ROOT / "prompts" / "verifier.md"
+SCHEMA_PATH = ROOT / "schema" / "acceptance-test-review.json"
+PROMPT_PATH = ROOT / "prompts" / "acceptance-test-review.md"
 E2E_DIR = ROOT / "tests" / "e2e"
 
 
@@ -49,13 +49,13 @@ def parse_verdict(raw: str) -> dict[str, Any]:
     try:
         envelope = json.loads(raw)
     except json.JSONDecodeError:
-        raise VerifyError("verifier output is not JSON") from None
+        raise VerifyError("reviewer output is not JSON") from None
     verdict = envelope.get("structured_output") if isinstance(envelope, dict) else None
     if verdict is None and isinstance(envelope, dict) and isinstance(envelope.get("result"), str):
         try:
             verdict = json.loads(envelope["result"])
         except json.JSONDecodeError:
-            raise VerifyError("verifier result is not JSON") from None
+            raise VerifyError("reviewer result is not JSON") from None
     if verdict is None:
         verdict = envelope
     errors = sorted(Draft202012Validator(json.loads(SCHEMA_PATH.read_text())).iter_errors(verdict), key=str)
@@ -69,7 +69,7 @@ def parse_verdict(raw: str) -> dict[str, Any]:
 def test_files(wp: str) -> list[Path]:
     """The WP's acceptance test followed by its helpers (every other non-test module in tests/e2e).
 
-    A split WP (WP2a) uses its own test_wp2a.py, else its WP's test_wp2.py (ADR-0046).
+    A split WP (WP2a) uses its own test_wp2a.py, else its WP's test_wp2.py (ADR-0042).
     """
     test = E2E_DIR / f"test_{wp.lower()}.py"
     if not test.is_file() and wp[-1:].isalpha():
@@ -98,7 +98,7 @@ def ask_model(pack: str) -> str:
         "claude", "-p", "--model", "sonnet", "--tools", "", "--safe-mode", "--no-session-persistence",
         "--output-format", "json", "--json-schema", schema, "--system-prompt", PROMPT_PATH.read_text(),
     ]
-    with tempfile.TemporaryDirectory() as empty:  # no repo files in the verifier's cwd
+    with tempfile.TemporaryDirectory() as empty:  # no repo files in the reviewer's cwd
         return run(cmd, stdin=pack, cwd=empty)
 
 

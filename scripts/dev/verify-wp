@@ -5,4 +5,4 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 py="$root/.venv/bin/python"
 [ -x "$py" ] || py=python3
-PYTHONPATH="$root/scripts${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -c 'import sys; from aiwf.verifier import main; sys.exit(main(sys.argv[1:]))' "$@"
+PYTHONPATH="$root/scripts${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -c 'import sys; from aiwf.acceptance_review import main; sys.exit(main(sys.argv[1:]))' "$@"

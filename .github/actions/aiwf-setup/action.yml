@@ -1,5 +1,5 @@
 # Python 3.12 and the aiwf CLI on PATH, for the reusable workflows' orchestrator jobs. Use it right after checking out
-# ai-workflows at job.workflow_sha into .ai-workflows (ADR-0019): `uses: ./.ai-workflows/.github/actions/aiwf-setup`.
+# ai-workflows at job.workflow_sha into .ai-workflows (ADR-0040): `uses: ./.ai-workflows/.github/actions/aiwf-setup`.
 # A local path, so it runs from that same commit; `owner/repo/...@ref` would take a fixed ref, not the caller's.
 # These jobs hold write tokens, so third-party packages come only from requirements.lock, pinned with hashes
 # (`pip install --require-hashes`, wheels only); aiwf itself is then installed with no index, no deps and no build
