@@ -18,6 +18,9 @@ from aiwf.callers_match import compare, jobs_of
 
 TEMPLATE = (pg.ROOT / "templates" / "caller.yml").read_text()
 E2E_REQUIRED = {"config", "review", "review-fork-push", "triage"}
+# Known, accepted gap: caller-e2e.yml's triage job has contents/pull-requests write for the unreleased WP6 e2e tests,
+# the template has read. Drop this when WP6 lands and the template catches up.
+ALLOWED_DRIFT = ("job 'triage' permissions differ",)
 
 
 def playground_file(name: str) -> str:
@@ -34,5 +37,6 @@ def test_e2e_caller_matches_template():
     text = playground_file("caller-e2e.yml")
     missing = E2E_REQUIRED - jobs_of(text)
     assert not missing, f"caller-e2e.yml lacks jobs {sorted(missing)}"
-    problems = compare(TEMPLATE, text, ("ai-workflows-e2e-", "ai-workflows-"))
+    problems = [p for p in compare(TEMPLATE, text, ("ai-workflows-e2e-", "ai-workflows-"))
+                if not p.startswith(ALLOWED_DRIFT)]
     assert not problems, "\n".join(problems)
