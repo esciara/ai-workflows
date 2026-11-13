@@ -242,6 +242,7 @@ jobs:
 
 | Event | Message sent |
 | --- | --- |
+| New issue triaged (B1) | #n triaged as bug, feature or question, plus duplicate of #k or needs a person when so; links to the issue |
 | B4 analysis posted | Bug #n analysed: root cause in one line; reply `/fix` or `/no-fix` on GitHub |
 | Reporter silent 4 days (B2) | #n: no reply from the reporter; worth pursuing? |
 | `fix: needs-maintainer` (B5) | #n: fix failed after 3 rounds; draft PR #m |
