@@ -53,6 +53,10 @@ def fake_gh(runs_by_id, checks=None, calls=None):
     return gh
 
 
+def ci_of(gh):
+    return review.wait_ci(gh, "o/r", "s", "7", None, sleep=lambda s: None)
+
+
 def test_ci_state_excludes_our_own_run():
     assert review.ci_state([run("test"), run("review / context", "in_progress", None, run_id=7)], "7", None) == "green"
     assert review.ci_state([run("review / context", "in_progress", None, run_id=7)], "7", None) == "none"
@@ -63,26 +67,34 @@ def test_ci_state_excludes_our_own_run():
 def test_ci_ignores_checks_of_earlier_runs_that_call_our_workflows(name):
     # An earlier `ai: error` run on the same head (or this repo's `verdict` job) left failed check runs: ours, not CI.
     checks = [run("test"), run(name, conclusion="failure", run_id=3)]
-    assert review.wait_ci(fake_gh({"1": THEIRS, "3": OURS}, checks), "o/r", "s", "7", None, sleep=lambda s: None) == "green"
+    assert ci_of(fake_gh({"1": THEIRS, "3": OURS}, checks)) == "green"
 
 
 @pytest.mark.parametrize("name", ["release / publish", "ci / verify", "review / context", "verdict", "context"])
 def test_ci_red_check_of_a_run_not_calling_our_workflows_stays_red(name):
     # Named like one of our jobs (by chance or forged), but its run does not call our reusable workflows: real CI.
     checks = [run("test"), run(name, conclusion="failure", run_id=3)]
-    assert review.wait_ci(fake_gh({"1": THEIRS, "3": THEIRS}, checks), "o/r", "s", "7", None, sleep=lambda s: None) == "red"
+    assert ci_of(fake_gh({"1": THEIRS, "3": THEIRS}, checks)) == "red"
 
 
 def test_ci_unreadable_run_counts_as_ci():
     # Fail safe: a failed check whose run cannot be read stays red (changes-requested, never merge).
     gh = fake_gh({"1": THEIRS}, [run("test"), run("review / context", conclusion="failure", run_id=3)])
-    assert review.wait_ci(gh, "o/r", "s", "7", None, sleep=lambda s: None) == "red"
+    assert ci_of(gh) == "red"
+
+
+def test_own_runs_does_not_cache_an_unreadable_run(capsys):
+    checks = [run("review / context", conclusion="failure", run_id=3)]
+    known = {}
+    assert review.own_runs(fake_gh({}), "o/r", checks, known) == set()
+    assert "3" not in known and "::warning::" in capsys.readouterr().out
+    assert review.own_runs(fake_gh({"3": OURS}), "o/r", checks, known) == {"3"}  # retried and now picked up
 
 
 def test_ci_check_of_another_app_is_never_ours():
     calls = []
     gh = fake_gh({}, [run("review / verify", conclusion="failure", run_id=3, app="circleci")], calls)
-    assert review.wait_ci(gh, "o/r", "s", "7", None, sleep=lambda s: None) == "red"
+    assert ci_of(gh) == "red"
     assert not [c for c in calls if "/actions/runs/" in c]  # nothing to look up
 
 
