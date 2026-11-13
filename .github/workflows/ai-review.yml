@@ -45,14 +45,13 @@ jobs:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-  # Required check (ADR-0053, states ADR-0055). It also publishes a commit status `verdict` with the same name; GitHub
-  # may not require both, and the status shows the state in the merge box: success on `ai-review: merge` or on the
-  # owner's approval of the head commit; pending status (text only, does not gate) and job red while
-  # waiting for that approval (`human-review`, review not run, Dependabot); failure (job red) on `changes-requested` or a
-  # failed review. Drafts are skipped (ready_for_review runs it). A comment review keeps a green answer only. On other pull_request_review events the labels may belong to an
-  # older head commit, so only approvals of the head SHA count there; without one the step restores the AI verdict of the
-  # head SHA from its newest non-approval `verdict` status (a failure stays red; a later owner changes-requested or a
-  # dismissal revokes an approval). Never approves anything.
+  # Required check (ADR-0053, states ADR-0055). Green on `ai-review: merge` or on the owner's approval of the head
+  # commit. Red, with an explained ::error and step summary, while waiting for that approval (`human-review`, review
+  # not run, Dependabot), on `changes-requested` and on a failed review. It also posts a commit status `verdict` for
+  # the text in the merge box; that status does not gate (ADR-0055, playground result). Drafts are skipped
+  # (ready_for_review runs it). On pull_request_review events the labels may belong to an older head commit: a comment
+  # review keeps a green answer only, and other states count only an owner approval of the head SHA, else restore
+  # the AI verdict from the newest non-approval `verdict` status. Never approves anything.
   verdict:
     needs: review
     if: always() && !github.event.pull_request.draft && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review')
@@ -85,7 +84,7 @@ jobs:
           hold() { status pending "$1"; echo "::error title=waiting for maintainer approval::$1"; exit 1; }
           waiting() { hold "waiting for maintainer approval of $short ($1)"; }
           if [ "$EVENT" = pull_request_review ] && [ "$REVIEW_STATE" = commented ]; then
-            current=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses?per_page=100" --jq '[.[] | select(.context == "verdict")][0].state // "none"')
+            current=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses?per_page=100" --jq '[.[] | select(.context == "verdict" and .creator.login == "github-actions[bot]")][0].state // "none"')
             echo "review state $REVIEW_STATE ignored; verdict status of $short stays $current"
             if [ "$current" = success ]; then exit 0; fi
             exit 1
