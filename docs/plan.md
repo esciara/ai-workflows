@@ -24,7 +24,7 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 
 ## Work packages
 
-| **TL;DR** — 16 packages, kept with their IDs for history; the Slice column says which slice each belongs to. Each has a check you can run on the test repo; a package is done only when its check passes and the evidence (run links, screenshots of labels and comments) is in its PR. |
+| **TL;DR** — 17 packages, kept with their IDs for history; the Slice column says which slice each belongs to. Each has a check you can run on the test repo; a package is done only when its check passes and the evidence (run links, screenshots of labels and comments) is in its PR. |
 | --- |
 
 | ID | Slice | Package | Depends on | Delivers | Done when | Status |
@@ -51,6 +51,7 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 | WP13 | 5 | Contributor mode | WP3, WP8 | Fork caller guide (level 1); local Claude Code plugin with review and analyse skills (level 0) | Review runs on a branch locally and in a fork, with nothing posted upstream | todo |
 | WP14 | 1 | Onboarding kit | WP3, WP15 | Install guide (`docs/install.md`), rights checklist, caller + config templates; first release tag, callers pinned to it (ADR-0040) | A second repo is set up from the guide alone in under 30 minutes (`tests/e2e/test_wp14.py`, plus its manual checklist) | in progress |
 | WP15 | 1 | Per-run usage metrics | WP2 | One JSON line of usage metrics per Workflow A run (spec: Usage per run) | A reviewed PR's run records exactly one metrics line with the run, the PR and each agent's turns, duration and tokens (`tests/e2e/test_wp15.py`) | done |
+| WP16 | base | Three e2e slots | WP1 | Per ADR-0056: slots 1–3, each with ref and label `e2e-target-<n>`, caller `caller-e2e-<n>.yml`, branch prefix `e2e/<n>/`; `AIWF_E2E_SLOT=1\|2\|3\|any`; one `flock` per slot (`aiwf-e2e-<n>.lock`); drift guard over the three callers; playground callers and labels in a maintainer-merged playground PR | Three e2e runs execute in parallel on slots 1–3 and the drift test covers the three callers (`tests/e2e/test_wp16.py`, `tests/e2e/test_callers_match.py`) | in progress |
 
 Slice `base` marks shared runtime built before the slices. Rows with a letter (WP2a, WP2b, …) split the WP above them into PRs; the WP's own row keeps the full Done when, and each split's Done when is what its PR proves. Status is one of done, in progress, todo or paused; it is hand-edited, by each WP's own PR.
 
@@ -62,6 +63,7 @@ Open items (hand-edited like the Status column):
 - Update code/test comments citing superseded (now archived) ADRs [was aiwf-8xt].
 - WP14: install guide keeps 'Allow GitHub Actions to create and approve pull requests' off [was aiwf-wp14.1].
 - WP14: pin callers to a tag or SHA instead of @main [was aiwf-wp14.2] (slice 1).
+- WP16: single e2e slot (known issue, P1) → three slots per ADR-0056; build waits for the gate PR and the maintainer-merged playground PR (callers, labels); the maintainer deletes the old `e2e-target` ref after.
 
 **WP11 maintainer setup (chat alerts).** Before WP11 can pass, the maintainer sets these repository secrets on the test repo (and later on each target repo that wants alerts): Slack, create an Incoming Webhook for a channel and store it as `SLACK_WEBHOOK_URL`; Telegram, create a bot with @BotFather, get your chat ID, and store them as `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 

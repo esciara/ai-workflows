@@ -14,6 +14,7 @@ import base64
 import pytest
 
 import playground as pg
+from aiwf import e2eslot, policy
 from aiwf.callers_match import compare, jobs_of
 
 TEMPLATE = (pg.ROOT / "templates" / "caller.yml").read_text()
@@ -41,3 +42,47 @@ def test_e2e_caller_matches_template():
     problems = [p for p in compare(TEMPLATE, text, ("ai-workflows-e2e-", "ai-workflows-"))
                 if p not in ALLOWED_DRIFT]
     assert not problems, "\n".join(problems)
+
+
+# WP16 (ADR-0056): three slot callers replace caller-e2e.yml. Expected red until the playground PR (callers
+# caller-e2e-<n>.yml, notify-e2e-<n>.yml, labels e2e-target-<n>) and the build PR (aiwf.e2eslot names) merge; the
+# build PR drops these markers and test_e2e_caller_matches_template above.
+WP16 = pytest.mark.xfail(strict=True, reason="WP16: three e2e slots not built yet (ADR-0056)")
+
+
+def _gate(text: str, job: str = "config") -> str:
+    """The job's `if:` with `${{ }}` stripped and whitespace collapsed."""
+    raw = str(policy.load_workflow(text)["jobs"][job].get("if", "")).strip()
+    raw = raw.removeprefix("${{").removesuffix("}}") if raw.startswith("${{") else raw
+    return " ".join(raw.split())
+
+
+@WP16
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_slot_caller_matches_template(n):
+    text = playground_file(e2eslot.caller_file(n))
+    missing = E2E_REQUIRED - jobs_of(text)
+    assert not missing, f"{e2eslot.caller_file(n)} lacks jobs {sorted(missing)}"
+    problems = [p for p in compare(TEMPLATE, text, (e2eslot.group_prefix(n), "ai-workflows-")) if p not in ALLOWED_DRIFT]
+    assert not problems, "\n".join(problems)
+    assert _gate(text) == e2eslot.gate(n)
+
+
+@WP16
+def test_slot_callers_are_identical_after_slot_substitution():
+    for name in (e2eslot.caller_file, e2eslot.notify_file):
+        texts = {n: e2eslot.unslot(playground_file(name(n)), n) for n in e2eslot.SLOTS}
+        assert texts[1] == texts[2] == texts[3], f"{name(1)}, {name(2)}, {name(3)} differ beyond the slot number"
+
+
+@WP16
+def test_normal_caller_gate_is_the_negation_of_the_slot_gates():
+    assert _gate(playground_file("ai-workflows.yml")) == e2eslot.normal_gate()
+
+
+@WP16
+def test_slot_labels_exist_and_the_single_slot_is_gone():
+    names = {lb["name"] for lb in pg.api(f"repos/{pg.REPO}/labels?per_page=100")}
+    assert {e2eslot.label(n) for n in e2eslot.SLOTS} <= names
+    files = {f["name"] for f in pg.api(f"repos/{pg.REPO}/contents/.github/workflows")}
+    assert not {"caller-e2e.yml", "notify-e2e.yml"} & files
