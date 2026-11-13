@@ -29,7 +29,7 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Why it matters: on an org-owned repo a maintainer's approval would not turn `verdict` green.
 - Current mitigation: this repo is personal; none needed yet.
 - Priority: P3, before an org-owned repo adopts the rule.
-- ADR: the merge-gate ADR (D53, ADR number 53; no link while it is not on this stack branch)
+- ADR: [ADR-0053](adr/0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md)
 
 ## Accepted risks
 
