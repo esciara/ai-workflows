@@ -32,16 +32,12 @@ DEF_RE = re.compile(r"\b(?:def|function|func|fn|class)\s+([A-Za-z_][A-Za-z0-9_]{
 CONTEXT_TAGS = ("pr_description", "linked_issues", "diff", "touched_files", "callers", "file", "candidates",
                 "previous_findings")
 TAG_RE = re.compile(r"<(\s*/?\s*(?:" + "|".join(CONTEXT_TAGS) + r")\b)", re.IGNORECASE)
-# Job ids of our reusable workflows; must match .github/workflows (test_review checks it). A caller's check run for one
-# of them is named `<caller job> / <job id>[ (<matrix>)]`. Earlier runs of ours on the same head (an `ai: error` run, a
-# `/review` re-run) are not the repo's CI, so they never make it red (checkpoint item 2).
-OWN_JOBS = frozenset({"gate", "start", "context", "pass", "verify", "publish", "failed",  # review.yml
-                      "extract", "candidates", "classify",  # triage.yml (context, publish, failed above)
-                      "load", "sync", "send", "unreview"})  # config, labels, notify, review-fork-push
-OWN_CHECK_RE = re.compile(r".+ / (" + "|".join(sorted(OWN_JOBS)) + r")(?: \(.*\))?\Z")
-# This repo's own caller job (.github/workflows/ai-review.yml, ADR-0051): a bare name, so matched exactly. An earlier
-# run's failed `verdict` on the same head (a reopen) is our verdict, not CI.
-OWN_CHECKS = frozenset({"verdict"})
+# A check run is ours when GitHub Actions ran it in a workflow run that calls one of our reusable workflows (the run's
+# `referenced_workflows`): earlier runs of ours on the same head (an `ai: error` run, a `/review` re-run, this repo's
+# `verdict` job) are not the repo's CI, so they never make it red (checkpoint item 2). Known by the run, never by the
+# check's name: a repo's own `release / publish` stays CI. Reading runs needs `actions: read` on the `context` job.
+OWN_WORKFLOWS_PREFIX = "esciara/ai-workflows/.github/workflows/"
+RUN_URL_RE = re.compile(r"/actions/runs/(\d+)(?:/|\Z)")
 
 
 def glob_re(pattern: str) -> re.Pattern[str]:
@@ -69,12 +65,37 @@ def risk_tier(paths: list[str], risk_paths: dict[str, list[str]]) -> str:
     return "low"
 
 
-def ci_state(check_runs: list[dict[str, Any]], own_run_id: str, required: list[str] | None) -> str:
+def run_id_of(check_run: dict[str, Any]) -> str | None:
+    """The workflow run id of a GitHub Actions check run, else None (another app's check is never ours)."""
+    if (check_run.get("app") or {}).get("slug") != "github-actions":
+        return None
+    for url in (check_run.get("details_url") or "", check_run.get("html_url") or ""):
+        if m := RUN_URL_RE.search(url):
+            return m.group(1)
+    return None
+
+
+def calls_our_workflows(run: dict[str, Any]) -> bool:
+    return any((w.get("path") or "").startswith(OWN_WORKFLOWS_PREFIX) for w in run.get("referenced_workflows") or [])
+
+
+def own_runs(gh: GhRunner, repo: str, check_runs: list[dict[str, Any]], known: dict[str, bool]) -> set[str]:
+    """Ids of the workflow runs behind `check_runs` that call our reusable workflows. `known` caches answers across
+    polls. A run that cannot be read is not cached and counts as not ours: its failed checks stay red CI (fail safe)."""
+    for rid in {i for r in check_runs if (i := run_id_of(r))} - set(known):
+        try:
+            known[rid] = calls_our_workflows(json.loads(gh(["api", f"repos/{repo}/actions/runs/{rid}"])))
+        except (RuntimeError, ValueError) as e:
+            print(f"::warning::cannot read workflow run {rid} ({type(e).__name__}); its checks count as CI")
+    return {rid for rid, ours in known.items() if ours}
+
+
+def ci_state(check_runs: list[dict[str, Any]], own_run_id: str, required: list[str] | None,
+             own: set[str] = frozenset()) -> str:
     """`pending`, `green`, `red` or `none` for the head SHA's check runs, ours excluded (ADR-0007, ADR-0034): this run's
-    and any check run of one of our jobs (`OWN_JOBS`), from earlier runs too."""
-    own = f"/actions/runs/{own_run_id}/"
-    runs = [r for r in check_runs if own not in (r.get("html_url") or "") and own not in (r.get("details_url") or "")
-            and not OWN_CHECK_RE.match(r["name"]) and r["name"] not in OWN_CHECKS]
+    and those of the workflow runs in `own` (runs that call our reusable workflows, from `own_runs`)."""
+    skip = set(own) | {own_run_id}
+    runs = [r for r in check_runs if run_id_of(r) not in skip]
     if required:
         runs = [r for r in runs if r["name"] in required]
         if {r["name"] for r in runs} != set(required):
@@ -89,10 +110,11 @@ def ci_state(check_runs: list[dict[str, Any]], own_run_id: str, required: list[s
 def wait_ci(gh: GhRunner, repo: str, sha: str, own_run_id: str, required: list[str] | None,
             budget: float = CI_BUDGET, poll: float = CI_POLL, sleep: Callable[[float], None] = time.sleep) -> str:
     """Final CI state, or `timeout` when checks are still running after `budget` seconds."""
-    waited = 0.0
+    waited, known = 0.0, {}
     while True:
-        runs = json.loads(gh(["api", "--paginate", "--slurp", f"repos/{repo}/commits/{sha}/check-runs?per_page=100"]))
-        state = ci_state([r for page in runs for r in page["check_runs"]], own_run_id, required)
+        pages = json.loads(gh(["api", "--paginate", "--slurp", f"repos/{repo}/commits/{sha}/check-runs?per_page=100"]))
+        checks = [r for page in pages for r in page["check_runs"]]
+        state = ci_state(checks, own_run_id, required, own_runs(gh, repo, checks, known))
         if state in ("green", "red") or (state == "none" and waited >= CI_GRACE):
             return state
         if waited >= budget:
