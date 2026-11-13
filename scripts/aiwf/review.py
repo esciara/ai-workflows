@@ -21,6 +21,11 @@ GhRunner = Callable[[list[str]], str]
 CI_BUDGET = 20 * 60  # seconds; then the verdict is human-review (ADR-0034); a config key comes with WP12 budgets
 CI_POLL = 20
 CI_GRACE = 90  # with no check run at all, wait this long for CI to register before calling it "none"
+LOCKFILES = {"package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock", "poetry.lock",
+             "uv.lock", "pdm.lock", "Pipfile.lock", "Cargo.lock", "Gemfile.lock", "composer.lock", "go.sum", "Podfile.lock",
+             "packages.lock.json", "gradle.lockfile", "mix.lock", "pubspec.lock", "flake.lock"}
+GENERATED_RE = re.compile(r"(\.min\.(js|css)|\.map|_pb2(_grpc)?\.pyi?|\.pb\.go|\.generated\.\w+)$")
+MAX_GENERATED = 20  # names kept in the facts and shown in the summary
 CONTEXT_CAP = 120_000  # characters of diff + files + callers handed to an agent
 GREEN = {"success", "neutral", "skipped"}
 PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; must match the matrix in review.yml
@@ -184,6 +189,24 @@ def callers(names: list[str], workdir: Path, limit: int = 15) -> str:
     return "\n\n".join(out)
 
 
+def is_generated(path: str) -> bool:
+    """Lockfiles and generated files: nobody reviews them by hand, so they are not sent to the model nor counted as
+    human-review lines (spec: "Not reviewed: generated files, lockfiles")."""
+    return path.rsplit("/", 1)[-1] in LOCKFILES or bool(GENERATED_RE.search(path))
+
+
+def without_generated(diff: str) -> str:
+    """`diff` (git format) minus the file sections of lockfiles and generated files."""
+    sections = re.split(r"(?m)^(?=diff --git )", diff)
+    keep = []
+    for sec in sections:
+        m = re.match(r"diff --git a/(.*?) b/(.*)", sec)
+        if m and (is_generated(m.group(1)) or is_generated(m.group(2))):
+            continue
+        keep.append(sec)
+    return "".join(keep)
+
+
 def fence(text: str) -> str:
     """Untrusted text with every opening or closing context tag defused (`<diff>` -> `&lt;diff>`), so it cannot close
     or fake the tags that frame it. Same escape as triage.neutral (ADR-0018), but only before our tag names: the
@@ -209,6 +232,9 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
     files = [f for page in files for f in page]
     paths = sorted({f["filename"] for f in files} | {f["previous_filename"] for f in files if f.get("previous_filename")})
     diff = gh(["api", f"repos/{repo}/pulls/{number}", "-H", "Accept: application/vnd.github.diff"])
+    skipped = [f for f in files if is_generated(f["filename"]) and (not f.get("previous_filename") or is_generated(f["previous_filename"]))]
+    diff = without_generated(diff)
+    files = [f for f in files if f not in skipped]
     owner, name = repo.split("/")
     q = ("query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){"
          "closingIssuesReferences(first:5){nodes{number title body}}}}}")
@@ -232,7 +258,8 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
         "tier": risk_tier(paths, cfg["risk_paths"]),
         "high_paths": [p for p in paths if risk_tier([p], cfg["risk_paths"]) == "high"][:MAX_COMMENTABLE],  # inline even for nits (WP3)
         "commentable": commentable(diff),
-        "changed_lines": pr["additions"] + pr["deletions"],
+        "changed_lines": pr["additions"] + pr["deletions"] - sum(f.get("additions", 0) + f.get("deletions", 0) for f in skipped),
+        "generated": sorted(f["filename"] for f in skipped)[:MAX_GENERATED],  # skipped: lockfiles and generated files
         "human_review_lines": cfg["limits"]["human_review_lines"],
         "linked_issues": [i["number"] for i in issues],
         "plan_ref": plan_mode and bool(PLAN_REF_RE.search(f"{pr['title']}\n{pr.get('body') or ''}")),
