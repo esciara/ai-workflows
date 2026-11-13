@@ -64,8 +64,9 @@ def test_dependabot_pr_event_is_skipped_cleanly(payload):
     """No secrets in a Dependabot run: skip at the gate, so no job fails and no `ai: error` label (checkpoint item 1)."""
     gh = fake_gh()
     gate = review_gate.decide("pull_request", payload, CFG, REPO, gh)
-    assert not gate.run and not gate.fork and "Dependabot" in gate.reason
+    assert gate == Gate(False, gate.reason, 7, "a" * 40, dependabot=True) and "Dependabot" in gate.reason
     assert gh.calls == []
+    assert gate.outputs()["run"] == "false" and gate.outputs()["dependabot"] == "true"
 
 
 def test_dependabot_lookalike_login_is_reviewed():
@@ -141,7 +142,7 @@ def test_cli_reads_the_event_file_and_writes_outputs(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
     monkeypatch.setenv("AIWF_CONFIG", json.dumps(CFG))
     assert cli.main(["review-gate", "--repo", REPO, "--github-output", str(out)]) == 0
-    assert out.read_text().splitlines() == ["run=true", "pr=7", f"sha={'a' * 40}", "fork=false"]
+    assert out.read_text().splitlines() == ["run=true", "pr=7", f"sha={'a' * 40}", "fork=false", "dependabot=false"]
 
 
 def test_cli_skip_outputs(tmp_path, monkeypatch):
@@ -151,4 +152,18 @@ def test_cli_skip_outputs(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
     monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
     assert cli.main(["review-gate", "--repo", REPO, "--github-output", str(out)]) == 0
-    assert out.read_text().splitlines() == ["run=false", "pr=", "sha=", "fork=true"]
+    assert out.read_text().splitlines() == ["run=false", "pr=", "sha=", "fork=true", "dependabot=false"]
+
+
+def test_cli_dependabot_sets_human_review_only(monkeypatch):
+    calls = []
+
+    def gh(args):
+        calls.append(args)
+        return ""
+
+    monkeypatch.setattr(review_gate.config, "run_gh", gh)
+    assert cli.main(["review-dependabot", "--repo", REPO, "--pr", "7"]) == 0
+    posts = [c for c in calls if "POST" in c]
+    assert posts == [["api", "-X", "POST", f"repos/{REPO}/issues/7/labels", "-f", "labels[]=ai-review: human-review"]]
+    assert all("DELETE" in c for c in calls if c not in posts)  # pending and the other verdicts removed
