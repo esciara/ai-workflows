@@ -1,7 +1,11 @@
 """ADR-0025 seams: per-module commands, per-workflow publishers, the e2e helpers (slots: tests/test_e2eslot.py)."""
 
+import contextlib
+import importlib.util
+import os
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -102,3 +106,43 @@ def test_throwaway_e2e_pr_uses_prefix_then_labels_and_cleans_up(monkeypatch):
     assert i_pr < i_lb and set(calls[i_lb][2]) == {f"labels[]={pg.FIXTURE_LABEL}", "labels[]=e2e-target-2"}
     assert ("DELETE", f"repos/{pg.REPO}/git/refs/heads/{pr['branch']}", ()) in calls
     assert ("PATCH", f"repos/{pg.REPO}/pulls/5", ("state=closed",)) in calls
+
+
+def _e2e_conftest():
+    spec = importlib.util.spec_from_file_location("e2e_conftest", Path(__file__).parent / "e2e" / "conftest.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_controller_takes_the_slot_and_exports_it_to_workers(monkeypatch):
+    from aiwf import e2eslot
+    conftest, cleanups, seen = _e2e_conftest(), [], []
+
+    @contextlib.contextmanager
+    def hold(slot):
+        seen.append(slot)
+        yield 3
+
+    monkeypatch.setattr(e2eslot, "hold", hold)
+    monkeypatch.setattr(e2eslot, "push_target", lambda n, remote: f"sha-of-{n}-on-{remote}")
+    for var in ("AIWF_E2E_SLOT_HELD", "AIWF_E2E_TARGET_SHA", "AIWF_E2E_REMOTE"):
+        monkeypatch.setenv(var, "")  # recorded, so the values the configure hook sets are undone after the test
+        monkeypatch.delenv(var)
+    monkeypatch.setenv("AIWF_E2E", "1")
+    config = types.SimpleNamespace(add_cleanup=cleanups.append)
+
+    monkeypatch.setenv("AIWF_E2E_SLOT", "4")
+    with pytest.raises(pytest.UsageError, match=r"1\|2\|3\|any"):
+        conftest.pytest_configure(config)
+    monkeypatch.setenv("AIWF_E2E_SLOT", "")
+    conftest.pytest_configure(config)
+    assert seen == [] and "AIWF_E2E_SLOT_HELD" not in os.environ
+    monkeypatch.setenv("AIWF_E2E_SLOT", "any")
+    conftest.pytest_configure(config)
+    assert seen == ["any"] and len(cleanups) == 1
+    assert (os.environ["AIWF_E2E_SLOT_HELD"], os.environ["AIWF_E2E_TARGET_SHA"]) == ("3", "sha-of-3-on-origin")
+    assert conftest.e2e_target.__wrapped__() == "sha-of-3-on-origin"
+    monkeypatch.delenv("AIWF_E2E_SLOT_HELD")
+    with pytest.raises(pytest.fail.Exception, match="AIWF_E2E_SLOT=1"):
+        conftest.e2e_target.__wrapped__()
