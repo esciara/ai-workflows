@@ -191,3 +191,69 @@ def test_every_agent_step_has_a_time_and_turn_limit():
                 minutes = step.get("timeout-minutes")
                 assert isinstance(minutes, int) and 0 < minutes < job["timeout-minutes"], where  # a step timeout fails
     assert seen >= 4  # extract, classify, review pass, verify
+
+
+# --- verdict check (ADR-0053): green on `ai-review: merge` or on the owner's approval of the head commit ------------
+
+
+def test_verdict_job_is_read_only_and_reruns_on_reviews():
+    doc = _doc(".github/workflows/ai-review.yml")
+    assert doc[True]["pull_request_review"] == {"types": ["submitted", "dismissed"]}
+    job = doc["jobs"]["verdict"]
+    assert job["permissions"] == {"pull-requests": "read"}
+    assert "pull_request_review" in job["if"] and "always()" in job["if"]
+    assert "secrets" not in job and all("uses" not in s for s in job["steps"])
+    assert "pull_request_review" in doc["jobs"]["config"]["if"], "no config/review job on review events"
+    assert "pull_request'" in doc["jobs"]["review"]["if"] and "pull_request_review" not in doc["jobs"]["review"]["if"]
+    for step in job["steps"]:
+        assert "${{" not in step["run"], "event fields go through env, never into run:"
+        assert "approve" not in step["run"].lower().replace("approved", ""), "verdict never approves"
+
+
+def _run_verdict(tmp_path, event, review, reviews, labels):
+    import json
+    import os
+    import subprocess
+
+    step = _doc(".github/workflows/ai-review.yml")["jobs"]["verdict"]["steps"][0]
+    fake = tmp_path / "gh"
+    fake.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in\n'
+        f"  *pulls/*/reviews*) echo '{json.dumps(reviews)}' | jq -c '.[]' ;;\n"
+        f"  *issues/*/labels*) printf '%s\\n' {' '.join(repr(x) for x in labels)} ;;\n"
+        "esac\n"
+    )
+    fake.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "REPO": "o/r", "PR": "1",
+           "HEAD_SHA": "new", "EVENT": event, "REVIEW": review}
+    return subprocess.run(["bash", "-c", step["run"]], env=env, capture_output=True, text=True).returncode
+
+
+def _rv(state="APPROVED", sha="new", user="m", assoc="OWNER"):
+    return {"state": state, "commit_id": sha, "user": {"login": user}, "author_association": assoc}
+
+
+@pytest.mark.parametrize(
+    "event, review, reviews, labels, ok",
+    [
+        ("pull_request", "success", [], ["ai-review: merge"], True),
+        ("pull_request", "success", [], ["ai-review: human-review"], False),
+        ("pull_request", "failure", [], ["ai-review: merge"], False),
+        ("pull_request", "skipped", [_rv()], ["ai-review: human-review"], True),  # Dependabot: approval alone
+        ("pull_request_review", "skipped", [_rv()], ["ai-review: changes-requested"], True),
+        ("pull_request_review", "skipped", [], ["ai-review: merge"], True),
+        ("pull_request_review", "skipped", [], ["ai-review: human-review"], False),
+        ("pull_request_review", "skipped", [_rv(sha="old")], ["ai-review: human-review"], False),  # new push
+        ("pull_request_review", "skipped", [_rv(), _rv("CHANGES_REQUESTED")], [], False),  # later review wins
+        ("pull_request_review", "skipped", [_rv(), _rv("COMMENTED", sha="new")], [], True),
+        ("pull_request_review", "skipped", [_rv(assoc="CONTRIBUTOR")], [], False),  # not the owner
+        ("pull_request_review", "skipped", [_rv("DISMISSED")], [], False),
+    ],
+)
+def test_verdict_rule(tmp_path, event, review, reviews, labels, ok):
+    import shutil
+
+    if not shutil.which("jq"):
+        pytest.skip("jq missing")
+    assert (_run_verdict(tmp_path, event, review, reviews, labels) == 0) is ok
