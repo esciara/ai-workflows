@@ -4,30 +4,26 @@ import pytest
 
 from aiwf import cli, config, ghapi, guard
 from aiwf import publish_review as pr
+from ghfake import RecordingGh
 
 BOT = ghapi.BOT
 
 
-class FakeGh:
+class FakeGh(RecordingGh):
     """Item labels and issue comments; records every call."""
 
     def __init__(self, labels=(), comments=()):
+        super().__init__()
         self.labels = list(labels)
         self.comments = list(comments)
-        self.calls = []
 
-    def __call__(self, args):
-        self.calls.append(args)
-        method = args[args.index("-X") + 1] if "-X" in args else "GET"
-        url = next(a for a in args[1:] if a.startswith("repos/"))
+    def respond(self, args):
+        method, url = self.method(args), self.url(args)
         if method == "GET" and "/labels" in url:
             return json.dumps([{"name": n} for n in self.labels])
         if method == "GET" and url.endswith("/comments?per_page=100"):
             return "\n".join(json.dumps(c) for c in self.comments)
         return "{}"
-
-    def writes(self):
-        return [c for c in self.calls if "-X" in c and c[c.index("-X") + 1] != "GET"]
 
 
 def test_event_labels_from_issue_or_pr():

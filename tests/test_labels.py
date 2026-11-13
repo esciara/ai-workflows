@@ -2,6 +2,7 @@ import json
 import re
 
 from aiwf import labels
+from ghfake import RecordingGh
 
 ROOT = labels.LABELS_PATH.parents[1]
 
@@ -51,12 +52,12 @@ def test_diff_detects_colour_and_description_changes():
     assert [u["name"] for u in update] == ["type: bug", "ai: error"]
 
 
-class FakeGh:
+class FakeGh(RecordingGh):
     def __init__(self, existing):
-        self.existing, self.calls = existing, []
+        super().__init__()
+        self.existing = existing
 
-    def __call__(self, args):
-        self.calls.append(args)
+    def respond(self, args):
         if "--paginate" in args:
             return "\n".join(json.dumps(e) for e in self.existing) + "\n"
         return "{}"
