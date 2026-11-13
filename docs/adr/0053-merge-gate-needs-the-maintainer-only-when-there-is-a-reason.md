@@ -5,6 +5,7 @@
 - Deciders: maintainer
 - Alias: `D53`
 - Amends: [ADR-0051](0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (the `verdict` check, the ruleset's last-push rule, the "falls back to the maintainer" path)
+- Amended by: [ADR-0055](0055-verdict-check-states-before-a-review-exists.md) (`verdict` skipped on drafts, pending while waiting for the maintainer, comment-only reviews ignored)
 
 ## Context
 
