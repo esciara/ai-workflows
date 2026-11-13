@@ -19,5 +19,6 @@ fork_prs: on-command            # on-command (review fork PRs only after /review
 workflows:
   review: true                  # Workflow A
   triage: false                 # Workflow B (enable after M2)
+# linked_issue: issue            # issue (a PR needs a linked issue, e.g. `Fixes #N`, else ai-review: human-review) | issue-or-plan-ref (a WP id or docs/plan.md in the PR text also counts; WP branches then need e2e run IDs, ADR-0053)
 # model: claude-sonnet-4-5      # optional model override for agent runs
 # required_checks: [test]       # optional; default: CI gate waits on all checks on the head SHA except ours

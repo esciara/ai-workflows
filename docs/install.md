@@ -33,7 +33,7 @@ In Settings → Actions → General → Workflow permissions:
 
 Copy `templates/caller.yml` from esciara/ai-workflows to `.github/workflows/ai-workflows.yml` in the target repo.
 
-The caller pins every reusable workflow of esciara/ai-workflows to one release: a full 40-character commit SHA, with the release tag in a comment on the same line, for example `uses: esciara/ai-workflows/.github/workflows/review.yml@<40-hex SHA> # v0.1.0`. Keep it that way: never point it at a branch. The template already holds the latest release; check it against the release list at https://github.com/esciara/ai-workflows/releases (the tag's commit SHA must match).
+The caller pins every reusable workflow of esciara/ai-workflows to one release: a full 40-character commit SHA, with the release tag in a comment on the same line, for example `uses: esciara/ai-workflows/.github/workflows/review.yml@<40-hex SHA> # v0.1.0`. Keep it that way: never point it at a branch. The template already holds the latest release; check it against the release list at https://github.com/esciara/ai-workflows/releases (the tag's commit SHA must match). Copy the template from the release tag you pin (or from main, then pin the SHA of the release you want): a copy taken from an older tag, such as v0.1.0, holds that tag's older pins, so check its SHAs against the releases list before you commit it.
 
 Review only (recommended to start): delete the `triage` job from the copied file. Keep `notify` only if you set a chat secret.
 
@@ -46,12 +46,13 @@ Copy `templates/ai-workflows.example.yml` to `.github/ai-workflows.yml` in the t
 - `risk_paths`: paths whose changes need a human (`high`) or a closer look (`medium`).
 - `workflows.review: true`, `workflows.triage: false` for review only.
 - `notify`: `none`, `slack` or `telegram`.
+- `linked_issue`: leave it out (default `issue`) unless your PRs reference work by plan id; see "Linked issues" below.
 
-The config is read from the default branch only, so commit both files to it (a PR is fine; its own review starts once the files are on the default branch).
+The config is read from the default branch only, so commit both files to it (a PR is fine; its own review starts once the files are on the default branch). Merge that files PR before the first run: its config/load check fails until the config is on the default branch.
 
 ## 6. Run the workflow once by hand
 
-In the Actions tab, open "AI workflows", click "Run workflow" on the default branch (a `workflow_dispatch` run). This creates the labels (`ai-review: merge`, `ai-review: changes-requested`, `ai-review: human-review`, `ai-review: pending` and the triage labels). With a chat channel set, it also sends one test message. A daily scheduled run keeps the labels in sync.
+In the Actions tab, open "AI workflows", click "Run workflow" on the default branch (a `workflow_dispatch` run). This creates the labels (`ai-review: merge`, `ai-review: changes-requested`, `ai-review: human-review`, `ai-review: pending` and the triage labels). With a chat channel set, it also sends one test message. A daily scheduled run keeps the labels in sync. The labels run needs `actions: write`: start it from the Actions tab, or as the repo admin with `gh workflow run`.
 
 ## 7. Block merges on Request changes (optional)
 
@@ -66,6 +67,12 @@ Open a small test PR from a branch of the target repo. Within about 10 minutes:
 - the run's log has an `aiwf-metrics` line, and the run has an `ai-workflows-metrics` artifact.
 
 Fork PRs are reviewed only when a maintainer comments `/review` on them.
+
+## Linked issues
+
+By default (`linked_issue: issue`) a PR needs a linked GitHub issue: put a closing keyword in the PR body (for example `Fixes #12`) or link the issue in the PR sidebar. Workflow A reads the issues GitHub reports as closed by the PR. A PR with none gets `ai-review: human-review` with the reason "no linked issue": the reviewer has no acceptance criteria to judge against, so a maintainer decides. That is a request for a human look, not a failure.
+
+Set `linked_issue: issue-or-plan-ref` if your PRs reference a work package or plan row instead (ADR-0053): a WP id such as `WP14` or `docs/plan.md` in the PR title or body then also counts. In that mode a PR from a branch named `wp<N>-...` also needs a GitHub Actions run ID or run URL in its description, else it gets `ai-review: human-review` ("WP PR without e2e run IDs"). A `human-review` verdict shows the verdict check as waiting for the maintainer's approval (ADR-0055).
 
 ## Upgrading
 
