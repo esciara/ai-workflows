@@ -358,7 +358,7 @@ jobs:
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
   # The reason names the failed jobs only.
   failed:
-    needs: [gate, start, context, pass, verify, publish]
+    needs: [gate, dependabot, start, context, pass, verify, publish]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
