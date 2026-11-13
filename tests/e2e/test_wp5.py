@@ -17,7 +17,7 @@ import pytest
 
 import playground as pg
 
-E2E_WORKFLOW = "AI workflows (e2e)"  # name of the playground's caller-e2e.yml
+E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 TRIAGE_MARKER = "<!-- ai-workflows:triage -->"
 TYPE_LABELS = {"type: bug", "type: feature", "type: question"}
 DUPLICATE = "triage: duplicate"

@@ -20,7 +20,7 @@ import time
 
 import playground as pg
 
-E2E_WORKFLOW = "AI workflows (e2e)"  # the playground's caller-e2e.yml
+E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 MARKER = "<!-- ai-review:summary v1 -->"
 STATE_RE = re.compile(r"<!-- ai-review:state (\{.*?\}) -->", re.S)
 VERDICTS = {"ai-review: merge", "ai-review: changes-requested", "ai-review: human-review"}

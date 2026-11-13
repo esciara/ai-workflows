@@ -23,8 +23,6 @@ import pytest
 
 from aiwf import e2eslot
 
-pytestmark = pytest.mark.xfail(strict=True, reason="WP16: three e2e slots, built in the build PR (ADR-0056)")
-
 HOLDER = "import sys, time; from aiwf import e2eslot\n" \
          "with e2eslot.hold(sys.argv[1] if sys.argv[1] == 'any' else int(sys.argv[1])) as n:\n" \
          "    print(f'held {n}', flush=True); time.sleep(60)\n"

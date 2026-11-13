@@ -25,7 +25,7 @@ import pytest
 
 import playground as pg
 
-E2E_WORKFLOW = "AI workflows (e2e)"  # the playground's caller-e2e.yml
+E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 OFF = "ai: off"
 ERROR = "ai: error"
 CRASH = "e2e-crash"

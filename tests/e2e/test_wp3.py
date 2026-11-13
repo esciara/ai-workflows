@@ -22,7 +22,7 @@ from typing import Any, Iterator
 
 import playground as pg
 
-E2E_WORKFLOW = "AI workflows (e2e)"  # the playground's caller-e2e.yml
+E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 MARKER = "<!-- ai-review:summary v1 -->"  # the spec's hidden marker (review comment template)
 STATE_RE = re.compile(r"<!-- ai-review:state (\{.*?\}) -->", re.S)
 DETAILS_RE = re.compile(r"<details>(.*?)</details>", re.S)  # summary-only nits are collapsed (spec: placement table)

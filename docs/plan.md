@@ -68,7 +68,7 @@ Open items (hand-edited like the Status column):
 - Update code/test comments citing superseded (now archived) ADRs [was aiwf-8xt].
 - WP14: install guide keeps 'Allow GitHub Actions to create and approve pull requests' off [was aiwf-wp14.1].
 - WP14: pin callers to a tag or SHA instead of @main [was aiwf-wp14.2] (slice 1).
-- WP16: single e2e slot (known issue, P1) → three slots per ADR-0056; build waits for the gate PR and the maintainer-merged playground PR (callers, labels); the maintainer deletes the old `e2e-target` ref after.
+- WP16: single e2e slot (known issue, P1) → three slots per ADR-0056; gate PR merged (#105), build PR open; its e2e waits for the maintainer-merged playground PR (callers, labels; content in the build PR description), which must merge with it; the maintainer deletes the old `e2e-target` ref after.
 
 **WP11 maintainer setup (chat alerts).** Before WP11 can pass, the maintainer sets these repository secrets on the test repo (and later on each target repo that wants alerts): Slack, create an Incoming Webhook for a channel and store it as `SLACK_WEBHOOK_URL`; Telegram, create a bot with @BotFather, get your chat ID, and store them as `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 
