@@ -34,6 +34,9 @@ OWN_JOBS = frozenset({"gate", "start", "context", "pass", "verify", "publish", "
                       "extract", "candidates", "classify",  # triage.yml (context, publish, failed above)
                       "load", "sync", "send", "unreview"})  # config, labels, notify, review-fork-push
 OWN_CHECK_RE = re.compile(r".+ / (" + "|".join(sorted(OWN_JOBS)) + r")(?: \(.*\))?\Z")
+# This repo's own caller job (.github/workflows/ai-review.yml, ADR-0051): a bare name, so matched exactly. An earlier
+# run's failed `verdict` on the same head (a reopen) is our verdict, not CI.
+OWN_CHECKS = frozenset({"verdict"})
 
 
 def glob_re(pattern: str) -> re.Pattern[str]:
@@ -66,7 +69,7 @@ def ci_state(check_runs: list[dict[str, Any]], own_run_id: str, required: list[s
     and any check run of one of our jobs (`OWN_JOBS`), from earlier runs too."""
     own = f"/actions/runs/{own_run_id}/"
     runs = [r for r in check_runs if own not in (r.get("html_url") or "") and own not in (r.get("details_url") or "")
-            and not OWN_CHECK_RE.match(r["name"])]
+            and not OWN_CHECK_RE.match(r["name"]) and r["name"] not in OWN_CHECKS]
     if required:
         runs = [r for r in runs if r["name"] in required]
         if {r["name"] for r in runs} != set(required):
