@@ -19,7 +19,9 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - run: pip install -e '.[test]'
+      # Hashed lock only (scripts/dev/lock-deps); aiwf itself installs offline, without build isolation.
+      - run: 'pip install --require-hashes --only-binary :all: -r requirements-test.lock'
+      - run: pip install --no-index --no-deps --no-build-isolation -e .
       - run: pytest -q
 
   # Secret scan of the full git history with gitleaks' default rules.

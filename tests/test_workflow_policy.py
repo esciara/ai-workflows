@@ -273,7 +273,7 @@ def _pip_installs(run: str) -> list[str]:
 
 def _hashed_or_offline(cmd: str) -> bool:
     if "--require-hashes" in cmd:
-        return "-r ./.ai-workflows/requirements.lock" in cmd or "-r requirements.lock" in cmd
+        return "-r ./.ai-workflows/requirements.lock" in cmd or "-r requirements.lock" in cmd or "-r requirements-test.lock" in cmd
     return all(flag in cmd for flag in ("--no-index", "--no-deps", "--no-build-isolation"))
 
 
@@ -304,6 +304,13 @@ def test_write_token_jobs_install_python_deps_only_from_the_hashed_lock():
     assert seen >= 2  # via aiwf-setup: the locked deps, then aiwf itself offline
 
 
+def test_ci_test_job_installs_only_from_the_hashed_test_lock():
+    steps = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())["jobs"]["test"]["steps"]
+    cmds = [c for s in steps for c in _pip_installs(s.get("run", ""))]
+    assert len(cmds) == 2 and all(_hashed_or_offline(c) for c in cmds), cmds
+    assert any("-r requirements-test.lock" in c and "--only-binary :all:" in c for c in cmds), cmds
+
+
 def test_setup_action_installs_from_the_lock_and_caches_on_it():
     text = SETUP_ACTION.read_text()
     cmds = [c for s in yaml.safe_load(text)["runs"]["steps"] for c in _pip_installs(s.get("run", ""))]
@@ -330,3 +337,12 @@ def test_lock_pins_every_dependency_with_hashes():
     wanted = [*project["project"]["dependencies"], *project["build-system"]["requires"]]
     for req in wanted:
         assert re.match(r"[A-Za-z0-9._-]+", req).group(0).lower() in pinned, f"{req} not in requirements.lock"
+
+
+def test_test_lock_pins_the_test_extra_with_hashes():
+    text = (ROOT / "requirements-test.lock").read_text()
+    pinned = set(re.findall(r"(?m)^([a-z0-9][a-z0-9._-]*)==", text))
+    assert text.count("--hash=sha256:") >= len(pinned)
+    for req in tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["optional-dependencies"]["test"]:
+        assert re.match(r"[A-Za-z0-9._-]+", req).group(0).lower() in pinned, f"{req} not in requirements-test.lock"
+    assert pinned >= set(re.findall(r"(?m)^([a-z0-9][a-z0-9._-]*)==", LOCK.read_text()))
