@@ -2,7 +2,7 @@
 # Events in, one call per reusable workflow out. Secrets are passed explicitly (never `inherit`).
 # Each job grants the most its called workflow needs; the called jobs narrow it with their own `permissions:`.
 # Every `uses:` of esciara/ai-workflows is pinned to one release commit SHA with its tag in a comment (ADR-0040); scripts
-# load from the same commit (ADR-0019). To upgrade, replace the SHA and the tag on every line together (docs/install.md).
+# load from the same commit (ADR-0040). To upgrade, replace the SHA and the tag on every line together (docs/install.md).
 # Review only: delete the `triage` job and set `workflows.triage: false` in .github/ai-workflows.yml.
 name: AI workflows
 on:
@@ -32,7 +32,7 @@ concurrency:
   group: ai-workflows-${{ github.event_name == 'pull_request_target' && 'fork-push-' || '' }}${{ github.event_name == 'issue_comment' && !startsWith(github.event.comment.body, '/') && !contains(github.event.comment.body, ' /') && !contains(github.event.comment.body, fromJSON('"\n/"')) && format('comment-{0}-', github.run_id) || '' }}${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: false
 
-# Least privilege by default (ADR-0017); every job below grants what its called workflow needs.
+# Least privilege by default (ADR-0038); every job below grants what its called workflow needs.
 permissions: {}
 
 jobs:

@@ -5,7 +5,7 @@ reported version, a few search phrases, the file paths it names. This module the
 duplicates from GitHub issue search over every issue (open and closed, any age), and possible fixes from the commits
 and merged PRs between the reported version's tag and the default branch (subjects, titles, "fixes #N" references,
 changed file paths; never code). Pass 2 (`classifier`) reads the issue and the candidates. Issue text, titles and
-subjects are untrusted: they reach the agents inline and escaped (ADR-0018).
+subjects are untrusted: they reach the agents inline and escaped (ADR-0039).
 """
 
 from __future__ import annotations

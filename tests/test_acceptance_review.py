@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from aiwf import verifier
+from aiwf import acceptance_review as verifier
 
 PLAN = """| ID | Package | Depends on | Delivers | Done when |
 | --- | --- | --- | --- | --- |

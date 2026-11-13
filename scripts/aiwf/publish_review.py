@@ -1,6 +1,6 @@
 """Workflow A, write side (steps 6-9): the verifier's decisions applied to the 4 passes' findings, the verdict, the one
 summary comment found by its marker (with the last run's findings marked resolved or still open), the run's one GitHub
-review carrying the new inline comments (never Approve; ADR-0016), the verdict label.
+review carrying the new inline comments (never Approve; ADR-0041), the verdict label.
 
 Workflow A publishes with `aiwf review-publish` rather than a `publish --kind` publisher, because the comment needs the
 context job's facts (tier, CI, SHA) as well as the agent's JSON. Agent text is untrusted: every string is cleaned
@@ -240,7 +240,7 @@ def post_review(gh: publish.GhRunner, repo: str, number: int, payload: dict[str,
 
 def send_review(gh: publish.GhRunner, repo: str, number: int, facts: dict[str, Any], label: str, findings: list[dict[str, Any]],
                 summary_url: str) -> list[str]:
-    """At most one GitHub review for this run (ADR-0016): Request changes for `changes-requested`, else Comment, with
+    """At most one GitHub review for this run (ADR-0041): Request changes for `changes-requested`, else Comment, with
     the new inline comments; none when there is nothing new and the review state would not change. Our earlier
     Request changes reviews are dismissed once the verdict leaves `changes-requested`. Sets `thread` on findings
     commented inline; returns notes for the summary."""

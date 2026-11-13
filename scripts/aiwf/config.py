@@ -12,7 +12,7 @@ from typing import Any, Callable
 import yaml
 from jsonschema import Draft202012Validator
 
-ROOT = Path(__file__).resolve().parents[2]  # the ai-workflows checkout (at job.workflow_sha in CI, ADR-0019)
+ROOT = Path(__file__).resolve().parents[2]  # the ai-workflows checkout (at job.workflow_sha in CI, ADR-0040)
 SCHEMA_PATH = ROOT / "schema" / "ai-workflows.schema.json"
 DEFAULT_CONFIG_PATH = ".github/ai-workflows.yml"
 

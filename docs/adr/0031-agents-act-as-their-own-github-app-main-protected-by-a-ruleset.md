@@ -87,7 +87,7 @@ After step 9, agents open every PR through `scripts/dev/as-agent gh pr create â€
 
 - Agent PRs, comments and pushes are authored by `esciara-ai-workflows-agent[bot]`; the maintainer approves and merges every PR to `main`, including the orchestrator's sync PRs (one more click per PR).
 - A rebase pushed by the orchestrator after the maintainer approved needs a fresh approval (most-recent-push rule). Under ADR-0015 the maintainer merges in the orchestrator's order, so approve right before merging.
-- Commit authorship is unchanged (git `user.name`/`user.email`); only the pusher and PR author change.
+- Commit authorship is unchanged (git `user.name`/`user.email`); only the pusher and PR author change. Note (2026-11-14): superseded in practice for worktree commits: they use the App identity (`esciara-ai-workflows-agent[bot]`), as CLAUDE.md, Tooling, says.
 - Follow-up code, as its own PR: `scripts/dev/as-agent` (shipped with this ADR, not yet used) wired into CLAUDE.md, `scripts/dev/as-maintainer`, the `PreToolUse` Bash hook in `.claude/settings.json` (shared path, orchestrator's go needed), and the e2e harness.
 - Agents keep a narrow path to the maintainer's credentials through `scripts/dev/as-maintainer` (comments and reviews on the playground), and the maintainer's `gh` token stays on the same machine, so the hook is not a hard boundary; the ruleset is.
 - Pushes to the fork `opinionated-digital-center/ai-workflows-playground` are out of scope; they stay as today.

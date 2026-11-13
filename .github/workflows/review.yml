@@ -2,7 +2,7 @@
 # verdict label (WP2), one GitHub review per run with the inline comments, never Approve (WP3). The gate (WP4,
 # ADR-0044) starts a review for same-repo PR events and for a maintainer's `/review`; fork PRs only on `/review`.
 # PR text and code are untrusted: they reach scripts through env vars or files, and the agent as inline context
-# (ADR-0034). The agent jobs hold no GitHub token scope and no secret but the OAuth token (ADR-0012, ADR-0018); they
+# (ADR-0034). The agent jobs hold no GitHub token scope and no secret but the OAuth token (ADR-0039); they
 # pass their answers on as same-run artifacts, which only the publish job reads, after schema validation.
 name: ai-workflows review
 on:
@@ -16,7 +16,7 @@ on:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
 
-# Least privilege by default (ADR-0017); each job grants what it needs.
+# Least privilege by default (ADR-0038); each job grants what it needs.
 permissions: {}
 
 env:
@@ -177,7 +177,7 @@ jobs:
           AIWF_SHA: ${{ job.workflow_sha }}
           PASS: ${{ matrix.pass }}
         run: |
-          # Prompts and schema come from the commit this workflow file came from (ADR-0019), fetched without credentials.
+          # Prompts and schema come from the commit this workflow file came from (ADR-0040), fetched without credentials.
           git init --quiet .ai-workflows
           git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
           git -C .ai-workflows checkout --quiet FETCH_HEAD

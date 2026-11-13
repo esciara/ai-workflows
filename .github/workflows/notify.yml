@@ -27,7 +27,7 @@ on:
       TELEGRAM_CHAT_ID:
         required: false
 
-# Least privilege by default (ADR-0017); each job grants what it needs.
+# Least privilege by default (ADR-0038); each job grants what it needs.
 permissions: {}
 
 jobs:

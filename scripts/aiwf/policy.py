@@ -121,7 +121,7 @@ def check_text(text: str, *, own_main: bool = False) -> list[str]:
         return []
     errors = pin_errors(text, own_main=own_main)
 
-    # Top level: `permissions: {}`, so a job without its own block gets nothing (ADR-0017).
+    # Top level: `permissions: {}`, so a job without its own block gets nothing (ADR-0038).
     top = doc.get("permissions")
     if top is None:
         errors.append("permissions: no top-level permissions (needs `permissions: {}`)")
@@ -147,7 +147,7 @@ def check_text(text: str, *, own_main: bool = False) -> list[str]:
                 errors.append(f"agent-secrets: agent job '{name}' references GITHUB_TOKEN / github.token")
             for secret in sorted(set(SECRET_RE.findall(body)) - {ALLOWED_AGENT_SECRET}):
                 errors.append(f"agent-secrets: agent job '{name}' references secrets.{secret}")
-            if perms is not None and perms != {}:  # agent jobs get no token scope at all (ADR-0018)
+            if perms is not None and perms != {}:  # agent jobs get no token scope at all (ADR-0039)
                 errors.append(f"agent-permissions: agent job '{name}' must have `permissions: {{}}`")
 
     if "pull_request_target" in triggers(doc) and PR_HEAD_RE.search(json.dumps(doc)):
