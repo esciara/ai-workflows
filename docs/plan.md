@@ -50,7 +50,7 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 | WP12b | base | Guardrails: injection, budgets | WP1 | Budgets, injection reporting | An injected instruction is reported, not obeyed | done |
 | WP13 | 5 | Contributor mode | WP3, WP8 | Fork caller guide (level 1); local Claude Code plugin with review and analyse skills (level 0) | Review runs on a branch locally and in a fork, with nothing posted upstream | todo |
 | WP14 | 1 | Onboarding kit | WP3, WP15 | Install guide (`docs/install.md`), rights checklist, caller + config templates; first release tag, callers pinned to it (ADR-0040) | A second repo is set up from the guide alone in under 30 minutes (`tests/e2e/test_wp14.py`, plus its manual checklist) | in progress |
-| WP15 | 1 | Per-run usage metrics | WP2 | One JSON line of usage metrics per Workflow A run (spec: Usage per run) | A reviewed PR's run records exactly one metrics line with the run, the PR and each agent's turns, duration and tokens (`tests/e2e/test_wp15.py`) | todo |
+| WP15 | 1 | Per-run usage metrics | WP2 | One JSON line of usage metrics per Workflow A run (spec: Usage per run) | A reviewed PR's run records exactly one metrics line with the run, the PR and each agent's turns, duration and tokens (`tests/e2e/test_wp15.py`) | done |
 
 Slice `base` marks shared runtime built before the slices. Rows with a letter (WP2a, WP2b, …) split the WP above them into PRs; the WP's own row keeps the full Done when, and each split's Done when is what its PR proves. Status is one of done, in progress, todo or paused; it is hand-edited, by each WP's own PR.
 

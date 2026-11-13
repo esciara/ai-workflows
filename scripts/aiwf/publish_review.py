@@ -347,6 +347,9 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
         data["notes"] = notes
         upsert(comment_id)  # now with links to the new inline threads, and any notes
     set_verdict_label(gh, repo, number, label)
+    if os.environ.get("GITHUB_OUTPUT"):  # for the metrics line (spec: Usage per run)
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+            fh.write(f"verdict={label}\n")
     print(f"{repo}#{number}: {label} ({'; '.join(reasons)}); verification {json.dumps(counts)}")
     print("placement: " + json.dumps({p: sum(f["place"] == p for f in findings)
                                       for p in (placement.INLINE, placement.COLLAPSED, placement.GENERAL)}))
