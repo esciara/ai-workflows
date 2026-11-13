@@ -24,8 +24,8 @@ PREFIXES = {"command", "exec", "env", "sudo", "time", "nohup", "xargs", "builtin
 
 # Blocked anywhere in the command text, wrapped or not.
 ALWAYS = [
-    (re.compile(r"\bgh\b.*\bpr\s+merge\b"), "agents never merge (the maintainer does)"),
-    (re.compile(r"\bgh\b.*\bapi\b.*/(pulls/[^/\s]+/merge|merges)\b"), "agents never merge (the maintainer does)"),
+    (re.compile(r"\bgh\b.*\bpr\s+merge\b"), "agents never merge directly; the App may only enable auto-merge (ADR-0051)"),
+    (re.compile(r"\bgh\b.*\bapi\b.*/(pulls/[^/\s]+/merge|merges)\b"), "agents never merge directly; the App may only enable auto-merge (ADR-0051)"),
     (re.compile(r"\bgh\b.*\bauth\s+token\b|--show-token\b"), "never print a token"),
     (re.compile(r"\bgh\b.*\bapi\b.*\bDELETE\b.*(esciara/ai-workflows|\{owner\}/\{repo\})/"), "no remote deletes on this repo"),
 ]
