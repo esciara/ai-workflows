@@ -6,3 +6,6 @@ __pycache__/
 .beads/
 .beads.gate.lock
 docs/specs
+# e2e slot locks (ADR-0056) live in the git common dir; never in the working tree
+aiwf-e2e-*.lock
+/any
