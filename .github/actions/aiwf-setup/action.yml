@@ -4,8 +4,8 @@
 # These jobs hold write tokens, so third-party packages come only from requirements.lock, pinned with hashes
 # (`pip install --require-hashes`, wheels only); aiwf itself is then installed with no index, no deps and no build
 # isolation, so nothing unpinned is fetched. Regenerate the lock with scripts/dev/lock-deps.
-# Cached venv, keyed on the lock; aiwf itself is an editable install, so its code always comes from the checkout,
-# never from the cache.
+# Cached venv, keyed on the lock and pyproject.toml (entry points, package metadata); aiwf itself is an editable
+# install, so its code always comes from the checkout, never from the cache.
 name: aiwf setup
 description: Set up Python and the aiwf CLI from the .ai-workflows checkout
 runs:
@@ -19,7 +19,7 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.aiwf-venv
-        key: aiwf-venv-v2-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/requirements.lock') }}
+        key: aiwf-venv-v2-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/requirements.lock', '.ai-workflows/pyproject.toml') }}
     - if: steps.venv.outputs.cache-hit != 'true'
       shell: bash
       run: |
