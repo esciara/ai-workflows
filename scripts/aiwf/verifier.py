@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -35,7 +36,7 @@ def done_when(plan_text: str, wp: str) -> str:
     for line in plan_text.splitlines():
         if not line.startswith("|"):
             continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]  # `\|` is a pipe in a cell
         if "Done when" in cells:
             col = cells.index("Done when")
         elif col is not None and cells[0] == wp and len(cells) > col:

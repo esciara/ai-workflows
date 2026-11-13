@@ -20,6 +20,11 @@ def test_done_when_from_real_plan():
     assert "green run" in verifier.done_when(text, "WP0")
 
 
+def test_done_when_keeps_escaped_pipes_in_cells():
+    plan = "| ID | Delivers | Done when |\n| --- | --- | --- |\n| WP16 | `1\\|2` | runs in parallel |\n"
+    assert verifier.done_when(plan, "WP16") == "runs in parallel"
+
+
 def test_done_when_unknown_wp():
     with pytest.raises(verifier.VerifyError):
         verifier.done_when(PLAN, "WP99")
