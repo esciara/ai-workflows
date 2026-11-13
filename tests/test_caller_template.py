@@ -94,3 +94,32 @@ def test_every_parsed_command_stays_in_the_item_group(body):
     """Never a false negative: what commands.parse accepts is never put in a unique group."""
     if commands.parse(body) is not None:
         assert group("issue_comment", comment(body)) == "ai-workflows-7"
+
+
+def _job_runs(job: str, event: str, payload: dict, outputs: dict) -> bool:
+    """The template job's `if:` on a sample event, with the given `needs.config.outputs`."""
+    doc = policy.load_workflow((ROOT / "templates" / "caller.yml").read_text())
+    ctx = {"github": {"event_name": event, "event": payload, "run_id": RUN_ID},
+           "needs": {"config": {"outputs": outputs}}}
+    return bool(_expr(doc["jobs"][job]["if"], ctx))
+
+
+TRIAGE_ON = {"triage": "true", "enabled": "true"}
+
+
+@pytest.mark.parametrize("event,payload", [
+    ("issues", {"issue": {"number": 7}}),
+    ("issue_comment", comment("/retriage", on_pr=False)),
+])
+def test_triage_job_runs_on_issue_events(event, payload):
+    assert _job_runs("triage", event, payload, TRIAGE_ON)
+
+
+@pytest.mark.parametrize("event,payload", [
+    ("schedule", {}),  # checkpoint item 6b: every triage.yml job skips it, so the call only adds an empty run
+    ("workflow_dispatch", {}),
+    ("pull_request", PR),
+    ("issue_comment", comment("/fix")),  # a comment on a PR
+])
+def test_triage_job_skips_events_triage_yml_does_not_handle(event, payload):
+    assert not _job_runs("triage", event, payload, TRIAGE_ON)

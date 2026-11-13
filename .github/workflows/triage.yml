@@ -16,12 +16,6 @@ on:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
-      SLACK_WEBHOOK_URL:
-        required: false
-      TELEGRAM_BOT_TOKEN:
-        required: false
-      TELEGRAM_CHAT_ID:
-        required: false
 
 # Least privilege by default (ADR-0017); each job grants what it needs.
 permissions: {}
