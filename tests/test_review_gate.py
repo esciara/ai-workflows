@@ -1,4 +1,5 @@
 import json
+from urllib.parse import quote
 
 import pytest
 
@@ -166,4 +167,7 @@ def test_cli_dependabot_sets_human_review_only(monkeypatch):
     assert cli.main(["review-dependabot", "--repo", REPO, "--pr", "7"]) == 0
     posts = [c for c in calls if "POST" in c]
     assert posts == [["api", "-X", "POST", f"repos/{REPO}/issues/7/labels", "-f", "labels[]=ai-review: human-review"]]
-    assert all("DELETE" in c for c in calls if c not in posts)  # pending and the other verdicts removed
+    deletes = [c for c in calls if c not in posts]
+    assert all("DELETE" in c for c in deletes)
+    assert {c[-1] for c in deletes} == {f"repos/{REPO}/issues/7/labels/{quote(label, safe='')}" for label in (
+        "ai-review: pending", "ai-review: merge", "ai-review: changes-requested")}
