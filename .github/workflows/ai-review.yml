@@ -10,8 +10,10 @@ on:
     types: [submitted, dismissed]
   workflow_dispatch: {}   # once after install: create the label set
 
+# A review event gets its own group: with cancel-in-progress false only one run waits per group, so a verdict-only run
+# sharing the PR group could replace the queued review of a new push.
 concurrency:
-  group: ai-review-${{ github.event.pull_request.number || github.run_id }}
+  group: ai-review-${{ github.event_name == 'pull_request_review' && 'verdict-' || '' }}${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
 
 permissions: {}
