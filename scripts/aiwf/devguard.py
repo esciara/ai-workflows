@@ -22,8 +22,9 @@ WRAPPERS = {"as-agent", "as-tester", "as-maintainer"}
 SHELLS = {"bash", "sh", "zsh"}
 PREFIXES = {"command", "exec", "env", "sudo", "time", "nohup", "xargs", "builtin"}
 
-# Blocked anywhere in the command text, wrapped or not.
 NO_MERGE = "agents never merge directly; the App may only enable auto-merge (ADR-0051)"
+
+# Blocked anywhere in the command text, wrapped or not.
 ALWAYS = [
     (re.compile(r"\bgh\b.*\bpr\s+merge\b"), NO_MERGE),
     (re.compile(r"\bgh\b.*\bapi\b.*/(pulls/[^/\s]+/merge|merges)\b"), NO_MERGE),
