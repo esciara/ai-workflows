@@ -1,10 +1,13 @@
 import json
 import os
+import re
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 
 from aiwf import policy
 
@@ -255,3 +258,75 @@ def test_verdict_rule(tmp_path, event, review, reviews, labels, ok):
     if not shutil.which("jq"):
         pytest.skip("jq missing")
     assert (_run_verdict(tmp_path, event, review, reviews, labels) == 0) is ok
+
+
+# --- supply chain: jobs holding a write token install third-party Python packages only from the hashed lock ----------
+
+LOCK = ROOT / "requirements.lock"
+SETUP_ACTION = ROOT / ".github" / "actions" / "aiwf-setup" / "action.yml"
+PIP_INSTALL = re.compile(r"\b(?:uv )?pip3? install\b[^\n;&|]*")
+
+
+def _pip_installs(run: str) -> list[str]:
+    return PIP_INSTALL.findall(run.replace("\\\n", " "))
+
+
+def _hashed_or_offline(cmd: str) -> bool:
+    if "--require-hashes" in cmd:
+        return "-r ./.ai-workflows/requirements.lock" in cmd or "-r requirements.lock" in cmd
+    return all(flag in cmd for flag in ("--no-index", "--no-deps", "--no-build-isolation"))
+
+
+def _has_write(perms) -> bool:
+    return perms == "write-all" or (isinstance(perms, dict) and "write" in perms.values())
+
+
+def _local_action_runs(uses: str) -> list[str]:
+    prefix = "./.ai-workflows/"
+    if not uses.startswith(prefix):
+        return []
+    action = yaml.safe_load((ROOT / uses.removeprefix(prefix) / "action.yml").read_text())
+    return [s.get("run", "") for s in action["runs"].get("steps", [])]
+
+
+def test_write_token_jobs_install_python_deps_only_from_the_hashed_lock():
+    seen = 0
+    for path in REAL:
+        doc = policy.load_workflow(path.read_text())
+        for name, job in (doc or {}).get("jobs", {}).items():
+            if not _has_write(job.get("permissions")):
+                continue
+            for step in job.get("steps", []):
+                runs = [step.get("run", ""), *_local_action_runs(str(step.get("uses", "")))]
+                for cmd in (c for run in runs for c in _pip_installs(run)):
+                    seen += 1
+                    assert _hashed_or_offline(cmd), f"{path.relative_to(ROOT)}:{name}: {cmd}"
+    assert seen >= 2  # via aiwf-setup: the locked deps, then aiwf itself offline
+
+
+def test_setup_action_installs_from_the_lock_and_caches_on_it():
+    text = SETUP_ACTION.read_text()
+    cmds = [c for s in yaml.safe_load(text)["runs"]["steps"] for c in _pip_installs(s.get("run", ""))]
+    assert cmds and all(_hashed_or_offline(c) for c in cmds), cmds
+    assert any("--require-hashes" in c and "--only-binary :all:" in c for c in cmds), cmds
+    assert "hashFiles('.ai-workflows/requirements.lock')" in text
+
+
+def test_checks_reject_unhashed_installs():
+    assert not _hashed_or_offline("pip install -e ./.ai-workflows")
+    assert not _hashed_or_offline("pip install --require-hashes -r other.txt")
+    assert not _hashed_or_offline("pip install --no-deps -e .")
+    assert _pip_installs("python -m venv v && v/bin/pip install pyyaml && echo ok") == ["pip install pyyaml "]
+
+
+def test_lock_pins_every_dependency_with_hashes():
+    entries = re.split(r"\n(?=[a-z0-9])", re.sub(r"(?m)^\s*#.*\n?", "", LOCK.read_text()).strip())
+    pinned = {}
+    for entry in entries:
+        m = re.match(r"([a-z0-9][a-z0-9._-]*)==\S+", entry)
+        assert m and "--hash=sha256:" in entry, entry.splitlines()[0]
+        pinned[m.group(1)] = entry
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    wanted = [*project["project"]["dependencies"], *project["build-system"]["requires"]]
+    for req in wanted:
+        assert re.match(r"[A-Za-z0-9._-]+", req).group(0).lower() in pinned, f"{req} not in requirements.lock"
