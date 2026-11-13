@@ -46,10 +46,10 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   # Required check (ADR-0053, states ADR-0055). It also publishes a commit status `verdict` with the same name; GitHub
-  # requires both to pass, and the status shows the state in the merge box: success on `ai-review: merge` or on the
-  # owner's approval of the head commit; pending (job green) while waiting for that approval (`human-review`, review not
-  # run, Dependabot); failure (job red) on `changes-requested` or a failed review. Drafts are skipped (ready_for_review
-  # runs it). A comment review keeps the current answer. On other pull_request_review events the labels may belong to an
+  # may not require both, and the status shows the state in the merge box: success on `ai-review: merge` or on the
+  # owner's approval of the head commit; pending (job still red until the playground check of ADR-0055 Decision 2) while
+  # waiting for that approval (`human-review`, review not run, Dependabot); failure (job red) on `changes-requested` or a
+  # failed review. Drafts are skipped (ready_for_review runs it). A comment review keeps a green answer only. On other pull_request_review events the labels may belong to an
   # older head commit, so only approvals of the head SHA count there; without one the step restores the AI verdict of the
   # head SHA from its newest non-approval `verdict` status (a failure stays red; a later owner changes-requested or a
   # dismissal revokes an approval). Never approves anything.
@@ -73,16 +73,21 @@ jobs:
           REVIEW: ${{ needs.review.result }}
         run: |
           short=${HEAD_SHA:0:7}
-          status() {  # status <state> <text>: the `verdict` commit status, max 140 characters
-            gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" -f context=verdict -f state="$1" -f description="${2:0:140}" >/dev/null
+          status() {  # status <state> <text>: the `verdict` commit status, max 140 characters; the job result is the verdict
+            # Not fatal: Dependabot runs get a read-only token whatever `permissions:` says, so the POST may be refused.
+            gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" -f context=verdict -f state="$1" -f description="${2:0:140}" >/dev/null \
+              || echo "::warning title=verdict::could not post the verdict status (read-only token?)"
             echo "verdict: $1, $2" | tee -a "$GITHUB_STEP_SUMMARY"
           }
           red() { status failure "$1"; echo "::error title=verdict::$1"; exit 1; }
-          waiting() { status pending "waiting for maintainer approval of $short ($1)"; exit 0; }
+          # Waiting keeps the job red too (ADR-0055 fallback) until the playground shows the ruleset honours the pending
+          # status over a green `verdict` check run of the same name; the pending status still names the reason.
+          hold() { status pending "$1"; echo "::error title=waiting for maintainer approval::$1"; exit 1; }
+          waiting() { hold "waiting for maintainer approval of $short ($1)"; }
           if [ "$EVENT" = pull_request_review ] && [ "$REVIEW_STATE" = commented ]; then
             current=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses?per_page=100" --jq '[.[] | select(.context == "verdict")][0].state // "none"')
             echo "review state $REVIEW_STATE ignored; verdict status of $short stays $current"
-            if [ "$current" = success ] || [ "$current" = pending ]; then exit 0; fi
+            if [ "$current" = success ]; then exit 0; fi
             exit 1
           fi
           # Latest review per user, kept when APPROVED on the head commit by the repository owner.
@@ -100,7 +105,8 @@ jobs:
               | select(. != null) | "\(.state)\t\(.description // "")"')
             prev_state=${prev%%$'\t'*}; prev_text=${prev#*$'\t'}
             if [ "$prev_state" = failure ]; then red "$prev_text"; fi
-            if [ "$prev_state" = success ] || [ "$prev_state" = pending ]; then status "$prev_state" "$prev_text"; exit 0; fi
+            if [ "$prev_state" = success ]; then status success "$prev_text"; exit 0; fi
+            if [ "$prev_state" = pending ]; then hold "$prev_text"; fi
             waiting "no owner approval"
           fi
           if [ "$AUTHOR" = "dependabot[bot]" ]; then waiting "Dependabot PR, no AI review"; fi
