@@ -24,6 +24,8 @@ The longest chain runs through Workflow B: WP0 → WP1 → WP5 → WP6 → WP8 �
 
 ## Work packages
 
+Checkpoint items CP8-CP15 are tracked in beads (`bd`) with label `checkpoint`.
+
 | **TL;DR** — 17 packages, kept with their IDs for history; the Slice column says which slice each belongs to. Each has a check you can run on the test repo; a package is done only when its check passes and the evidence (run links, screenshots of labels and comments) is in its PR. |
 | --- |
 
@@ -80,7 +82,7 @@ Open items (hand-edited like the Status column):
 | 0 · Cleanup | Process simplification (#61, done). Workflow simplification (#62): test hooks out of the product, budgets → time/turn limits (ADR-0050), shared setup action. MED batch: one command parse and drop `/ping`; config settings not used yet marked "not used yet, WPx" in `templates/ai-workflows.example.yml`; one shared `gh` helper module; diagrams in the PR description instead of required per-WP diagrams, and drop the docs-consistency ceremony; B2 for trusted authors only, plus `/reproduce` for outsiders, written into the spec as v1. LOW batch: dev tools moved out of the shipped `scripts/aiwf` package; guard-bash false positive on `git worktree add` fixed | Merged, e2e green |
 | 1 · Review in use | WP15 per-run metrics (one JSON line per run, moved from slice 0), then WP14 onboarding kit (install guide, rights checklist, templates; callers pinned to a release tag or SHA, not `@main`; first release tag); metrics used to settle the "Usage limits" open point | Workflow A runs on `esciara/pyteleinfo`, set up from the guide alone in under 30 minutes, and the first usage numbers are recorded |
 | 2 · Triage in use | B1 (WP5, built) enabled on `esciara/pyteleinfo`, plus its "new issue triaged" notification (part of WP11b) | New issues there get classified and the maintainer gets a chat alert |
-| 3 · Bugs reproduced and analysed | WP6 (paused branch `wp6-reproduce`), WP7, WP8, plus their notifications (WP11b) | A real bug on `esciara/pyteleinfo` is reproduced, analysed, and the maintainer is asked `/fix` |
+| 3 · Bugs reproduced and analysed | Starts when checkpoint items CP8 (aiwf-vpq, shared `aiwf-agent` action) and CP9 (aiwf-5it, rebase #79/WP6, private-repo tarball pattern) are done. WP6 (paused branch `wp6-reproduce`), WP7, WP8, plus their notifications (WP11b) | A real bug on `esciara/pyteleinfo` is reproduced, analysed, and the maintainer is asked `/fix` |
 | 4 · Bugs fixed | WP9, WP10, plus the remaining notifications (WP11b) | `/fix` gives a reviewed PR with no other manual step |
 | 5 · Contributor mode | WP13 | WP13's Done when |
 
