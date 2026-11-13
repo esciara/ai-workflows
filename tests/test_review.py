@@ -110,6 +110,8 @@ def test_wait_ci_none_after_grace():
     ([], {"linked_issues": []}, "ai-review: human-review"),
     ([], {"changed_lines": 401}, "ai-review: human-review"),
     ([], {"ci": "timeout"}, "ai-review: human-review"),
+    ([], {"truncated": True}, "ai-review: human-review"),
+    ([dict(FINDING, severity="blocking")], {"truncated": True}, "ai-review: changes-requested"),
     ([FINDING, dict(FINDING, severity="nit")], {"tier": "medium", "ci": "none"}, "ai-review: merge"),
 ])
 def test_verdict_rubric_first_match_wins(findings, facts, label):
@@ -119,8 +121,15 @@ def test_verdict_rubric_first_match_wins(findings, facts, label):
 def test_changed_names_and_cap():
     diff = "@@ -1,3 +1,3 @@ def outer(a):\n-def helper(x):\n+def helper(x, y):\n context def ignored_ctx():\n"
     assert review.changed_names(diff) == ["outer", "helper"]
-    out = review.capped([("a", "x" * 10), ("b", "y" * 10)], cap=15)
-    assert "<a>\nxxxxxxxxxx\n</a>" in out and "yyyyy\n[... truncated" in out
+    out, truncated = review.capped([("a", "x" * 10), ("b", "y" * 10)], cap=15)
+    assert "<a>\nxxxxxxxxxx\n</a>" in out and "yyyyy\n[... truncated" in out and truncated
+    assert review.capped([("a", "x" * 10), ("b", "y" * 5)], cap=15) == ("<a>\nxxxxxxxxxx\n</a>\n\n<b>\nyyyyy\n</b>", False)
+
+
+def test_truncated_context_gives_human_review_with_a_reason():
+    label, reasons = review.verdict([], {**FACTS, "truncated": True})
+    assert label == "ai-review: human-review" and any("context cut" in r for r in reasons)
+    assert review.verdict([], {**FACTS, "truncated": False})[0] == "ai-review: merge"
 
 
 def test_clean_neutralises_mentions_html_markers_and_pipes():
