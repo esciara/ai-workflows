@@ -12,6 +12,7 @@ REAL = sorted([*(ROOT / ".github" / "workflows").glob("*.yml"), *(ROOT / "templa
 EXPECTED = {
     "unpinned-tag.yml": "unpinned:",
     "unpinned-no-version-comment.yml": "unpinned:",
+    "unpinned-own-ref.yml": "unpinned:",
     "job-without-permissions.yml": "permissions:",
     "job-write-all.yml": "permissions:",
     "top-level-write.yml": "permissions:",
@@ -71,8 +72,7 @@ def test_bare_on_key_parsed_as_true():
     assert policy.triggers({"on": ["push", "pull_request"]}) == {"push", "pull_request"}
 
 
-def test_exemptions():
-    text = """on: push
+OWN_MAIN = """on: push
 permissions: {}
 jobs:
   local:
@@ -82,7 +82,22 @@ jobs:
     uses: esciara/ai-workflows/.github/workflows/config.yml@main
     permissions: {contents: read}
 """
-    assert policy.check_text(text) == []
+
+
+def test_exemptions():
+    # Local refs only; own reusable workflows are pinned like any action (ADR-0040, WP14).
+    assert policy.is_exempt("./.github/workflows/x.yml")
+    assert not policy.is_exempt("esciara/ai-workflows/.github/workflows/review.yml@main")
+    assert [e for e in policy.check_text(OWN_MAIN) if "line 8" in e and e.startswith("unpinned:")]
+    assert not [e for e in policy.check_text(OWN_MAIN) if "line 5" in e]
+
+
+def test_own_main_only_in_this_repos_workflows():
+    # ADR-0051: this repo's Workflow A calls main's copy; templates and other repos must pin.
+    assert policy.check_text(OWN_MAIN, own_main=True) == []
+    assert policy.check_text(OWN_MAIN.replace("@main", "@v1"), own_main=True)
+    assert policy.check_file(ROOT / ".github" / "workflows" / "ai-review.yml") == []
+    assert policy.pin_errors((ROOT / ".github" / "workflows" / "ai-review.yml").read_text())
 
 
 def test_pull_request_target_without_head_checkout_is_allowed():
