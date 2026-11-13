@@ -27,6 +27,11 @@ PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; must
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 MAX_COMMENTABLE = 300  # files whose diff lines are passed on for inline comments; the others get general comments only
 DEF_RE = re.compile(r"\b(?:def|function|func|fn|class)\s+([A-Za-z_][A-Za-z0-9_]{2,})")
+# Tags that frame the agents' context (here and in review.yml's verifier prompt). Untrusted text that opens or closes
+# one of them could end `<diff>` early and forge e.g. `<previous_findings>` (checkpoint item 6).
+CONTEXT_TAGS = ("pr_description", "linked_issues", "diff", "touched_files", "callers", "file", "candidates",
+                "previous_findings")
+TAG_RE = re.compile(r"<(\s*/?\s*(?:" + "|".join(CONTEXT_TAGS) + r")\b)", re.IGNORECASE)
 # Job ids of our reusable workflows; must match .github/workflows (test_review checks it). A caller's check run for one
 # of them is named `<caller job> / <job id>[ (<matrix>)]`. Earlier runs of ours on the same head (an `ai: error` run, a
 # `/review` re-run) are not the repo's CI, so they never make it red (checkpoint item 2).
@@ -152,6 +157,13 @@ def callers(names: list[str], workdir: Path, limit: int = 15) -> str:
     return "\n\n".join(out)
 
 
+def fence(text: str) -> str:
+    """Untrusted text with every opening or closing context tag defused (`<diff>` -> `&lt;diff>`), so it cannot close
+    or fake the tags that frame it. Same escape as triage.neutral (ADR-0018), but only before our tag names: the
+    agents quote code from the context in suggested fixes, so the rest of it must stay as written."""
+    return TAG_RE.sub(r"&lt;\1", text)
+
+
 def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, bool]:
     """(tagged context, whether any part was cut at the cap)."""
     out, left, truncated = [], cap, False
@@ -159,7 +171,7 @@ def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, b
         if len(text) > left:
             text, truncated = text[: max(left, 0)] + f"\n[... truncated: context cap of {cap} characters reached]", True
         left -= len(text)
-        out.append(f"<{tag}>\n{text}\n</{tag}>")
+        out.append(f"<{tag}>\n{text}\n</{tag}>")  # text is fenced or built from fenced parts by the caller
     return "\n\n".join(out), truncated
 
 
@@ -179,11 +191,13 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
     for f in files:
         p = workdir / f["filename"]
         if f["status"] != "removed" and p.is_file() and p.stat().st_size < 200_000:
-            touched.append(f'<file path="{f["filename"]}">\n{p.read_text(errors="replace")}\n</file>')
-    pr_text = f"Title: {pr['title']}\n\n{pr.get('body') or ''}"
-    issue_text = "\n\n".join(f"Issue #{i['number']}: {i['title']}\n\n{i.get('body') or ''}" for i in issues) or "(none)"
-    context, truncated = capped([("pr_description", pr_text), ("linked_issues", issue_text), ("diff", diff),
-                                 ("touched_files", "\n".join(touched)), ("callers", callers(changed_names(diff), workdir))])
+            path = fence(f["filename"]).replace('"', "&quot;")
+            touched.append(f'<file path="{path}">\n{fence(p.read_text(errors="replace"))}\n</file>')
+    pr_text = fence(f"Title: {pr['title']}\n\n{pr.get('body') or ''}")
+    issue_text = fence("\n\n".join(f"Issue #{i['number']}: {i['title']}\n\n{i.get('body') or ''}" for i in issues)) or "(none)"
+    context, truncated = capped([("pr_description", pr_text), ("linked_issues", issue_text), ("diff", fence(diff)),
+                                 ("touched_files", "\n".join(touched)),
+                                 ("callers", fence(callers(changed_names(diff), workdir)))])
     facts = {
         "sha": sha,
         "tier": risk_tier(paths, cfg["risk_paths"]),
@@ -215,7 +229,9 @@ def cmd_review_context(args: argparse.Namespace) -> int:
     facts["ci"] = wait_ci(config.run_gh, args.repo, args.sha, os.environ.get("GITHUB_RUN_ID", ""), cfg.get("required_checks"))
     Path(args.out).write_text(context, encoding="utf-8")
     # Step 9: the last run's open findings, for the verifier to mark resolved or still open.
-    Path(args.previous).write_text(json.dumps(prev["open"] if prev else [], indent=1), encoding="utf-8")
+    # `<` as \u003c: same JSON, but agent-written titles cannot close `<previous_findings>` in the verifier's prompt.
+    previous = json.dumps(prev["open"] if prev else [], indent=1).replace("<", "\\u003c")
+    Path(args.previous).write_text(previous, encoding="utf-8")
     print(f"context: {len(context)} chars; facts: {json.dumps(facts)}")
     if os.environ.get("GITHUB_OUTPUT"):
         from aiwf.cli import write_outputs
