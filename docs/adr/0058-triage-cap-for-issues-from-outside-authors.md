@@ -1,6 +1,6 @@
 # ADR-0058 · Triage cap for issues from outside authors
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Deciders: maintainer
 - Alias: `D58`
