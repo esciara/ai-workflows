@@ -6,6 +6,7 @@ setup: pip install -e '.[test]'
 test: pytest -q
 risk_paths:
   high: [".github/**", "scripts/dev/**", "scripts/aiwf/devguard.py", "scripts/aiwf/policy.py", "scripts/aiwf/commands.py", "scripts/aiwf/review_gate.py"]
+linked_issue: issue-or-plan-ref  # ADR-0053
 required_checks: [test, gitleaks]
 workflows:
   review: true

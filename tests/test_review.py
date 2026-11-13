@@ -147,6 +147,8 @@ def test_wait_ci_none_after_grace():
     ([], {"ci": "red", "tier": "high"}, "ai-review: changes-requested"),
     ([], {"tier": "high"}, "ai-review: human-review"),
     ([], {"linked_issues": []}, "ai-review: human-review"),
+    ([], {"plan_ref": True, "linked_issues": []}, "ai-review: merge"),
+    ([], {"wp_no_run_ids": True}, "ai-review: human-review"),
     ([], {"changed_lines": 401}, "ai-review: human-review"),
     ([], {"ci": "timeout"}, "ai-review: human-review"),
     ([], {"truncated": True}, "ai-review: human-review"),
@@ -155,6 +157,48 @@ def test_wait_ci_none_after_grace():
 ])
 def test_verdict_rubric_first_match_wins(findings, facts, label):
     assert review.verdict(findings, {**FACTS, **facts})[0] == label
+
+
+def pr_facts(tmp_path, linked_issue, title, body, branch):
+    answers = {"pulls/1": {"title": title, "body": body, "additions": 1, "deletions": 1, "head": {"ref": branch}},
+               "files": [], "diff": "", "graphql": {"data": {"repository": {"pullRequest": {
+                   "closingIssuesReferences": {"nodes": []}}}}}}
+
+    def gh(args):
+        key = "graphql" if "graphql" in args else "diff" if any("diff" in a for a in args) else \
+            "files" if any("/files" in a for a in args) else "pulls/1"
+        return answers[key] if key == "diff" else json.dumps(answers[key])
+
+    cfg = {"risk_paths": {}, "limits": {"human_review_lines": 400}, "linked_issue": linked_issue}
+    return review.gather(gh, "o/r", 1, "s" * 40, tmp_path, cfg)[1]
+
+
+@pytest.mark.parametrize("mode,text,plan_ref", [
+    ("issue-or-plan-ref", "Implements WP14", True), ("issue-or-plan-ref", "Row in docs/plan.md", True),
+    ("issue-or-plan-ref", "WP2a split", True), ("issue-or-plan-ref", "NOWP14 and wp", False),
+    ("issue", "Implements WP14", False),
+])
+def test_linked_issue_key_decides_whether_a_plan_ref_counts(tmp_path, mode, text, plan_ref):
+    facts = pr_facts(tmp_path, mode, "feat", text, "feat-x")
+    assert facts["plan_ref"] is plan_ref
+    assert (review.verdict([], {**FACTS, **facts, "linked_issues": []})[0] == "ai-review: merge") is plan_ref
+
+
+@pytest.mark.parametrize("mode,branch,body,flagged", [
+    ("issue-or-plan-ref", "wp9-fix", "WP9. e2e run ID 12345678901", False),
+    ("issue-or-plan-ref", "wp9-fix", "WP9. https://github.com/o/r/actions/runs/12345678901", False),
+    ("issue-or-plan-ref", "wp9-fix", "WP9. e2e passed", True),
+    ("issue-or-plan-ref", "wp9-fix", "", True),
+    ("issue-or-plan-ref", "wp2a-split", "WP2a", True),
+    ("issue-or-plan-ref", "feat-x", "WP9. e2e passed", False),
+    ("issue", "wp9-fix", "e2e passed", False),
+])
+def test_wp_pr_without_e2e_run_ids_gets_human_review(tmp_path, mode, branch, body, flagged):
+    facts = pr_facts(tmp_path, mode, "WP", body, branch)
+    assert facts["wp_no_run_ids"] is flagged
+    label, reasons = review.verdict([], {**FACTS, **facts, "linked_issues": [1]})
+    assert (label == "ai-review: human-review") is flagged
+    assert ("WP PR without e2e run IDs in its description" in reasons) is flagged
 
 
 def test_changed_names_and_cap():
