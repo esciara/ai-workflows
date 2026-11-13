@@ -201,7 +201,7 @@ def without_generated(diff: str) -> str:
     keep = []
     for sec in sections:
         m = re.match(r"diff --git a/(.*?) b/(.*)", sec)
-        if m and (is_generated(m.group(1)) or is_generated(m.group(2))):
+        if m and is_generated(m.group(1)) and is_generated(m.group(2)):
             continue
         keep.append(sec)
     return "".join(keep)
