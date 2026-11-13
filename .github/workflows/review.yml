@@ -19,6 +19,14 @@ on:
 # Least privilege by default (ADR-0017); each job grants what it needs.
 permissions: {}
 
+env:
+  # Per-run metrics (spec: Usage per run, ADR-0052): an agent job keeps only the numbers of claude-code-action's last
+  # `result` message; the agent's text never leaves the job this way.
+  USAGE_JQ: >-
+    [[.[] | select(.type == "result")] | last | select(. != null)
+    | {type, duration_ms, num_turns, total_cost_usd, usage: ((.usage // {})
+    | {input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens})}]
+
 jobs:
   # Which PR head to review, if any (ADR-0044): PR events of same-repo non-draft PRs, or `/review` from a maintainer
   # (ADR-0005) on any open PR. Fork PR events never start a review; their code is only ever read as text.
@@ -34,7 +42,10 @@ jobs:
       run: ${{ steps.gate.outputs.run }}
       pr: ${{ steps.gate.outputs.pr }}
       sha: ${{ steps.gate.outputs.sha }}
+      started: ${{ steps.started.outputs.started }}
     steps:
+      - id: started  # the review's start, for the metrics line's duration
+        run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
@@ -169,6 +180,18 @@ jobs:
           name: review-pass-${{ matrix.pass }}
           path: out/
           retention-days: 7
+      - if: always()
+        env:
+          AGENT: ${{ matrix.pass }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: mkdir -p usage && { jq -c "$USAGE_JQ" "$EXECUTION_FILE" > "usage/$AGENT.json" || rm -f "usage/$AGENT.json"; }
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: review-usage-${{ matrix.pass }}
+          path: usage/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Step 6 (and the agent half of step 9): one fresh agent tries to refute each candidate and marks the last run's
   # findings resolved or still open. It sees candidates by id; the publisher joins its decisions back to them.
@@ -217,6 +240,17 @@ jobs:
             --tools StructuredOutput
             --json-schema '${{ env.SCHEMA }}'
             ${{ fromJSON(inputs.config).model && format('--model {0}', fromJSON(inputs.config).model) || '' }}
+      - if: always()
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: mkdir -p usage && { jq -c "$USAGE_JQ" "$EXECUTION_FILE" > usage/verify.json || rm -f usage/verify.json; }
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: review-usage-verify
+          path: usage/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Steps 6-9, orchestrator side: validate the 5 answers, keep confirmed findings, verdict, the one summary comment
   # (found by its marker), the verdict label. The passes' answers are read as data, after schema validation.
@@ -228,6 +262,8 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
+    outputs:
+      verdict: ${{ steps.publish.outputs.verdict }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -252,6 +288,46 @@ jobs:
           AIWF_SHA: ${{ job.workflow_sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: aiwf review-publish --repo "$REPO" --pr "$PR" --run-url "$RUN_URL" --passes-dir passes
+
+  # Per-run metrics (spec: Usage per run, ADR-0052): one JSON line, artifact `ai-workflows-metrics` (metrics.jsonl)
+  # and the log. Reads only the agents' usage numbers and the run's facts; writes nothing to GitHub.
+  metrics:
+    needs: [gate, start, context, pass, verify, publish]
+    if: always() && needs.start.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true  # no agent ran (e.g. the context job failed): the line lists no agents
+        with:
+          pattern: review-usage-*
+          merge-multiple: true
+          path: usage
+      - env:
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PR: ${{ needs.gate.outputs.pr }}
+          SHA: ${{ needs.gate.outputs.sha }}
+          STARTED: ${{ needs.gate.outputs.started }}
+          VERDICT: ${{ needs.publish.outputs.verdict }}
+          AIWF_SHA: ${{ job.workflow_sha }}
+        run: >-
+          aiwf review-metrics --repo "$REPO" --run-id "$RUN_ID" --run-attempt "$RUN_ATTEMPT" --pr "$PR" --sha "$SHA"
+          --started "$STARTED" --usage-dir usage --out metrics.jsonl
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ai-workflows-metrics
+          path: metrics.jsonl
 
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).

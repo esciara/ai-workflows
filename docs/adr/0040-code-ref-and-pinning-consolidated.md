@@ -4,6 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D40`
+- Amended by: [ADR-0052](0052-playground-caller-pins-the-release-metrics-in-a-run-artifact.md)
 - Supersedes: [ADR-0002](archive/0002-called-workflows-load-code-by-ai-workflows-ref.md), [ADR-0019](archive/0019-scripts-ref-follows-the-workflow-sha.md), [ADR-0022](archive/0022-own-reusable-workflow-refs-pinned-to-a-sha-from-wp14.md)
 
 ## Context

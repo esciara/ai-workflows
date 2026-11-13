@@ -1,6 +1,6 @@
 # ADR-0052 · Playground caller pins the release; per-run metrics in a run artifact
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Deciders: maintainer
 - Alias: `D52`
@@ -39,4 +39,4 @@ Why: a pinned playground caller is exactly what a target repo runs, so WP14's te
 - Each release bumps the playground's normal caller with the template (maintainer PR on the playground); until bumped, the normal caller runs the previous release.
 - Tests that use the playground's normal caller run the release, not `main`; WP tests keep using the e2e caller at `@e2e-target`.
 - Usage numbers older than the artifact retention are gone unless recorded; the first numbers go into `docs/plan.md` (Usage limits).
-- [ADR-0040](0040-code-ref-and-pinning-consolidated.md) gets `Amended by: ADR-0052` when this is accepted.
+- [ADR-0040](0040-code-ref-and-pinning-consolidated.md) carries `Amended by: ADR-0052`.
