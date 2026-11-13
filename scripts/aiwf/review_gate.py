@@ -1,6 +1,9 @@
 """Workflow A gate (WP4, ADR-0044): whether this event starts a review, and of which PR head.
 
 - `pull_request`: same-repo, non-draft PRs are reviewed; fork PRs never (`fork_prs: on-command`: only after `/review`).
+  Dependabot PRs neither: GitHub runs Dependabot-triggered workflows with no secrets and a read-only token, so a review
+  could only end in `ai: error`. Detected by login (PR author or event sender `dependabot[bot]`), not by a missing
+  secret: deterministic, and a misconfigured secret still fails loudly. A maintainer's `/review` still reviews them.
 - `issue_comment` on a PR: `/review` from a maintainer (ADR-0005; accepted by config.yml, read from the config's
   `command`) reviews the PR's current head, fork or not, unless
   `fork_prs: off` and the PR comes from a fork. Fork code is then read as text, never executed.
@@ -18,6 +21,8 @@ from typing import Any
 from aiwf import commands, config
 
 GhRunner = commands.GhRunner
+
+DEPENDABOT = "dependabot[bot]"
 
 
 @dataclass(frozen=True)
@@ -38,11 +43,19 @@ def is_fork(pr: dict[str, Any], repo: str) -> bool:
     return (head_repo.get("full_name") or "").lower() != repo.lower()
 
 
+def is_dependabot(pr: dict[str, Any], payload: dict[str, Any]) -> bool:
+    """A PR opened by Dependabot, or an event Dependabot triggered (e.g. its rebase push): no secrets in that run."""
+    logins = ((pr.get("user") or {}).get("login"), (payload.get("sender") or {}).get("login"))
+    return DEPENDABOT in {(login or "").lower() for login in logins}
+
+
 def decide(event: str, payload: dict[str, Any], cfg: dict[str, Any], repo: str, gh: GhRunner) -> Gate:
     if event == "pull_request":
         pr = payload.get("pull_request") or {}
         if pr.get("draft"):
             return Gate(False, "draft PR")
+        if is_dependabot(pr, payload):
+            return Gate(False, "Dependabot PR (run has no secrets): reviewed only after a maintainer's /review")
         if is_fork(pr, repo):
             return Gate(False, "fork PR: reviewed only after a maintainer's /review", fork=True)
         return Gate(True, "PR event", pr["number"], pr["head"]["sha"])
