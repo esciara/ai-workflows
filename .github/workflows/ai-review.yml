@@ -1,10 +1,12 @@
 # Workflow A on this repo (ADR-0051). Reviews every same-repo PR with the reusable workflow from main (never the PR's
-# own copy), then `verdict` passes only on `ai-review: merge`. `verdict` is a required check of the ruleset; it must be
+# own copy). `verdict` passes on `ai-review: merge` or on the maintainer's approval of the head commit (ADR-0053). `verdict` is a required check of the ruleset; it must be
 # a job of this run: labels added with GITHUB_TOKEN start no other workflow run.
 name: AI review
 on:
   pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
+  pull_request_review:   # re-evaluates `verdict` only (no new AI review): an approval or a dismissal changes the answer
+    types: [submitted, dismissed]
   workflow_dispatch: {}   # once after install: create the label set
 
 concurrency:
@@ -15,6 +17,7 @@ permissions: {}
 
 jobs:
   config:
+    if: github.event_name != 'pull_request_review'
     uses: esciara/ai-workflows/.github/workflows/config.yml@main
     permissions:
       contents: read
@@ -40,10 +43,12 @@ jobs:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
-  # Required check: green only when this run's review ended with the `ai-review: merge` label.
+  # Required check, green when this PR's label is `ai-review: merge` (set by this run's review) or when the owner has
+  # approved the head commit (ADR-0053). On pull_request_review the review job is skipped: only the label and the
+  # approvals are read. A new push changes the head SHA, so an old approval no longer counts. Never approves anything.
   verdict:
     needs: review
-    if: always() && github.event_name == 'pull_request'
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -53,9 +58,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT: ${{ github.event_name }}
           REVIEW: ${{ needs.review.result }}
         run: |
-          if [ "$REVIEW" != success ]; then echo "review did not succeed: $REVIEW"; exit 1; fi
+          # Latest review per user, kept when APPROVED on the head commit by the repository owner.
+          approved=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" --jq '.[]' | jq -rs --arg sha "$HEAD_SHA" '
+            map(select(.state != "COMMENTED" and .state != "PENDING")) | group_by(.user.login) | map(last)
+            | map(select(.state == "APPROVED" and .commit_id == $sha and .author_association == "OWNER"))
+            | map(.user.login) | join(",")')
+          if [ -n "$approved" ]; then echo "approved on $HEAD_SHA by: $approved"; exit 0; fi
+          if [ "$EVENT" = pull_request ] && [ "$REVIEW" != success ]; then
+            echo "review did not succeed ($REVIEW) and no owner approval of $HEAD_SHA"; exit 1
+          fi
           labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name')
           echo "$labels"
-          if ! grep -qx 'ai-review: merge' <<<"$labels"; then echo "verdict is not ai-review: merge"; exit 1; fi
+          if ! grep -qx 'ai-review: merge' <<<"$labels"; then
+            echo "verdict is not ai-review: merge and no owner approval of $HEAD_SHA"; exit 1
+          fi
