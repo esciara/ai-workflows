@@ -155,6 +155,9 @@ def render(data: dict[str, Any], facts: dict[str, Any], label: str, reasons: lis
     for note in data.get("notes", []):
         lines += ["", f"**Note:** {note}"]
     lines += ["", f"**Tests:** {clean(data['tests'], 400)}"]
+    if facts.get("generated"):
+        names = ", ".join(f"`{clean(n, 80)}`" for n in facts["generated"])
+        lines += ["", f"**Not reviewed:** generated files and lockfiles, skipped and not counted as changed lines: {names}."]
     checked = (f"**Verification:** {counts['candidates']} candidate finding(s) from {len(review.PASSES)} passes: "
                f"{counts['confirmed']} confirmed, {counts['refuted']} refuted, {counts['duplicate']} duplicate")
     lines += ["", checked + (f", {counts['unchecked']} not checked (dropped)." if counts["unchecked"] else ".")]
