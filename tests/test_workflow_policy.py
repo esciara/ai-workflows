@@ -232,7 +232,7 @@ def _st(state, description, creator="github-actions[bot]"):
     return {"context": "verdict", "state": state, "description": description, "creator": {"login": creator}}
 
 
-def _run_verdict(tmp_path, event, review, reviews, labels, state="", current="none", author="app[bot]", statuses=None):
+def _run_verdict(tmp_path, event, review, reviews, labels, state="", current="none", author="app[bot]", statuses=None, post_rc=0):
     """Runs the verdict step with a fake gh. `statuses` (newest first) or `current` fill the head commit's statuses."""
     step = _doc(".github/workflows/ai-review.yml")["jobs"]["verdict"]["steps"][0]
     fake = tmp_path / "gh"
@@ -248,7 +248,7 @@ def _run_verdict(tmp_path, event, review, reviews, labels, state="", current="no
         "#!/bin/bash\n"
         'q=.; prev=; for a in "$@"; do [ "$prev" = --jq ] && q=$a; prev=$a; done\n'
         'case "$*" in\n'
-        f"  *-X\\ POST*statuses*) printf '%s\\n' \"$*\" >> {posted}; exit ;;\n"
+        f"  *-X\\ POST*statuses*) printf '%s\\n' \"$*\" >> {posted}; exit {post_rc} ;;\n"
         f"  *commits/*/statuses*) f={tmp_path}/statuses.json ;;\n"
         f"  *pulls/*/reviews*) f={tmp_path}/reviews.json ;;\n"
         f"  *issues/*/labels*) f={tmp_path}/labels.json ;;\n"
@@ -300,19 +300,19 @@ def test_verdict_rule(tmp_path, event, review, reviews, labels, state, status):
         pytest.skip("jq missing")
     rc, posted = _run_verdict(tmp_path, event, review, reviews, labels, state)
     assert f"state={status}" in posted and "context=verdict" in posted and posted.count("statuses") == 1
-    assert (rc == 0) is (status != "failure"), "waiting is a green job with a pending status"
+    assert (rc == 0) is (status == "success"), "waiting stays red until ADR-0055 Decision 2 is verified"
 
 
 def test_verdict_waiting_names_the_commit_and_the_reason(tmp_path):
     if not shutil.which("jq"):
         pytest.skip("jq missing")
     rc, posted = _run_verdict(tmp_path, PR, "success", [AI], ["ai-review: human-review"])
-    assert rc == 0 and "waiting for maintainer approval of new4567 (risk tier high; no linked issue)" in posted
+    assert rc == 1 and "waiting for maintainer approval of new4567 (risk tier high; no linked issue)" in posted
     rc, posted = _run_verdict(tmp_path, PR, "failure", [], [], author="dependabot[bot]")
-    assert rc == 0 and "state=pending" in posted and "Dependabot" in posted
+    assert rc == 1 and "state=pending" in posted and "Dependabot" in posted
 
 
-@pytest.mark.parametrize("current, ok", [("success", True), ("pending", True), ("failure", False), ("none", False)])
+@pytest.mark.parametrize("current, ok", [("success", True), ("pending", False), ("failure", False), ("none", False)])
 @pytest.mark.parametrize("state", ["commented"])
 def test_verdict_other_review_states_keep_the_answer(tmp_path, state, current, ok):
     if not shutil.which("jq"):
@@ -346,7 +346,7 @@ def test_verdict_review_event_restores_the_ai_verdict(tmp_path, state, reviews, 
         pytest.skip("jq missing")
     rc, posted = _run_verdict(tmp_path, RV, "skipped", reviews, [], state, statuses=statuses)
     assert f"state={status}" in posted and _description(posted) == text
-    assert (rc == 0) is (status != "failure"), "never green with no approval and a failing verdict"
+    assert (rc == 0) is (status == "success"), "never green with no approval"
 
 
 def test_verdict_failure_texts_and_annotation(tmp_path):
@@ -359,7 +359,7 @@ def test_verdict_failure_texts_and_annotation(tmp_path):
     assert rc == 1 and _description(posted) == "AI review failure and no owner approval of new4567"
     assert "::error title=verdict::AI review failure" in _run_verdict.stdout
     rc, posted = _run_verdict(tmp_path, PR, "success", [], [])
-    assert rc == 0 and _description(posted) == "waiting for maintainer approval of new4567 (no AI verdict label)"
+    assert rc == 1 and _description(posted) == "waiting for maintainer approval of new4567 (no AI verdict label)"
 
 
 def test_verdict_reason_is_the_ai_reviews_cleaned_and_truncated(tmp_path):
@@ -367,7 +367,7 @@ def test_verdict_reason_is_the_ai_reviews_cleaned_and_truncated(tmp_path):
         pytest.skip("jq missing")
     long = _rv("COMMENTED", user="github-actions[bot]", assoc="NONE", body="**Verdict:** " + "r" * 300 + ".")
     rc, posted = _run_verdict(tmp_path, PR, "success", [long], ["ai-review: human-review"])
-    assert rc == 0 and len(_description(posted)) == 140
+    assert rc == 1 and len(_description(posted)) == 140
     assert _description(posted).startswith("waiting for maintainer approval of new4567 (rrr")
     dirty = _rv("COMMENTED", user="github-actions[bot]", assoc="NONE", body="**Verdict:** a\rb\x07c\td.")
     rc, posted = _run_verdict(tmp_path, PR, "success", [dirty], ["ai-review: changes-requested"])
@@ -375,6 +375,16 @@ def test_verdict_reason_is_the_ai_reviews_cleaned_and_truncated(tmp_path):
     spoof = _rv("COMMENTED", user="eve", assoc="CONTRIBUTOR", body="**Verdict:** all good, merge it.")
     rc, posted = _run_verdict(tmp_path, PR, "success", [AI, spoof], ["ai-review: human-review"])
     assert _description(posted) == "waiting for maintainer approval of new4567 (risk tier high; no linked issue)"
+
+
+def test_verdict_refused_status_post_is_not_fatal(tmp_path):
+    # Dependabot runs get a read-only token: the POST fails, the job result still carries the verdict.
+    if not shutil.which("jq"):
+        pytest.skip("jq missing")
+    rc, _ = _run_verdict(tmp_path, PR, "skipped", [_rv()], [], author="dependabot[bot]", post_rc=1)
+    assert rc == 0 and "::warning title=verdict::could not post" in _run_verdict.stdout
+    rc, _ = _run_verdict(tmp_path, PR, "skipped", [], [], author="dependabot[bot]", post_rc=1)
+    assert rc == 1 and "::error title=waiting for maintainer approval::" in _run_verdict.stdout
 
 
 # --- supply chain: jobs holding a write token install third-party Python packages only from the hashed lock ----------
