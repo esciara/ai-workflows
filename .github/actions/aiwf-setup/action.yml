@@ -1,8 +1,11 @@
 # Python 3.12 and the aiwf CLI on PATH, for the reusable workflows' orchestrator jobs. Use it right after checking out
 # ai-workflows at job.workflow_sha into .ai-workflows (ADR-0019): `uses: ./.ai-workflows/.github/actions/aiwf-setup`.
 # A local path, so it runs from that same commit; `owner/repo/...@ref` would take a fixed ref, not the caller's.
-# Cached venv, keyed on the dependency file; aiwf itself is an editable install, so its code always comes from the
-# checkout, never from the cache.
+# These jobs hold write tokens, so third-party packages come only from requirements.lock, pinned with hashes
+# (`pip install --require-hashes`, wheels only); aiwf itself is then installed with no index, no deps and no build
+# isolation, so nothing unpinned is fetched. Regenerate the lock with scripts/dev/lock-deps.
+# Cached venv, keyed on the lock; aiwf itself is an editable install, so its code always comes from the checkout,
+# never from the cache.
 name: aiwf setup
 description: Set up Python and the aiwf CLI from the .ai-workflows checkout
 runs:
@@ -16,9 +19,12 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.aiwf-venv
-        key: aiwf-venv-v1-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/pyproject.toml') }}
+        key: aiwf-venv-v2-${{ runner.os }}-${{ runner.arch }}-py${{ steps.python.outputs.python-version }}-${{ hashFiles('.ai-workflows/requirements.lock') }}
     - if: steps.venv.outputs.cache-hit != 'true'
       shell: bash
-      run: python -m venv ~/.aiwf-venv && ~/.aiwf-venv/bin/pip install --quiet -e ./.ai-workflows
+      run: |
+        python -m venv ~/.aiwf-venv
+        ~/.aiwf-venv/bin/pip install --quiet --require-hashes --only-binary :all: -r ./.ai-workflows/requirements.lock
+        ~/.aiwf-venv/bin/pip install --quiet --no-index --no-deps --no-build-isolation -e ./.ai-workflows
     - shell: bash
       run: echo "$HOME/.aiwf-venv/bin" >> "$GITHUB_PATH"
