@@ -108,7 +108,7 @@ def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str,
         f"{facts['changed_lines']} changed lines (> {facts['human_review_lines']})"
         if facts["changed_lines"] > facts["human_review_lines"] else "",
         f"CI still running after {CI_BUDGET // 60} min" if facts["ci"] == "timeout" else "",
-        f"context cut at {CONTEXT_CAP} characters: the review saw part of the change" if facts.get("truncated") else "",
+        f"context cut at {CONTEXT_CAP} characters: the review saw part of the change" if facts["truncated"] else "",
     ) if r]
     if reasons:
         return "ai-review: human-review", reasons
@@ -183,7 +183,7 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
     pr_text = f"Title: {pr['title']}\n\n{pr.get('body') or ''}"
     issue_text = "\n\n".join(f"Issue #{i['number']}: {i['title']}\n\n{i.get('body') or ''}" for i in issues) or "(none)"
     context, truncated = capped([("pr_description", pr_text), ("linked_issues", issue_text), ("diff", diff),
-                      ("touched_files", "\n".join(touched)), ("callers", callers(changed_names(diff), workdir))])
+                                 ("touched_files", "\n".join(touched)), ("callers", callers(changed_names(diff), workdir))])
     facts = {
         "sha": sha,
         "tier": risk_tier(paths, cfg["risk_paths"]),

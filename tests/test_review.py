@@ -6,7 +6,8 @@ import pytest
 from aiwf import publish_review as pr
 from aiwf import review
 
-FACTS = {"sha": "a" * 40, "tier": "low", "ci": "green", "changed_lines": 10, "human_review_lines": 400, "linked_issues": [1]}
+FACTS = {"sha": "a" * 40, "tier": "low", "ci": "green", "changed_lines": 10, "human_review_lines": 400, "linked_issues": [1],
+         "truncated": False}
 FINDING = {"severity": "should-fix", "path": "src/x.py", "line": 3, "title": "Off by one", "detail": "Loop skips the last item."}
 
 
@@ -59,7 +60,6 @@ def test_own_jobs_match_our_reusable_workflows():
         if "workflow_call" in (doc.get(True) or doc.get("on") or {}):
             jobs |= set(doc["jobs"])
     assert jobs == review.OWN_JOBS
-
 
 
 def test_own_checks_are_our_caller_jobs():
@@ -124,6 +124,26 @@ def test_changed_names_and_cap():
     out, truncated = review.capped([("a", "x" * 10), ("b", "y" * 10)], cap=15)
     assert "<a>\nxxxxxxxxxx\n</a>" in out and "yyyyy\n[... truncated" in out and truncated
     assert review.capped([("a", "x" * 10), ("b", "y" * 5)], cap=15) == ("<a>\nxxxxxxxxxx\n</a>\n\n<b>\nyyyyy\n</b>", False)
+
+
+def gather_facts(tmp_path, body, diff="diff --git a/a.py b/a.py\n"):
+    answers = {"pulls/1": {"title": "t", "body": body, "additions": 1, "deletions": 0}, "files": [[]], "graphql": {
+        "data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": []}}}}}}
+
+    def gh(args):
+        if any("diff" in a for a in args):
+            return diff
+        key = "graphql" if "graphql" in args else "files" if any("/files" in a for a in args) else "pulls/1"
+        return json.dumps(answers[key])
+
+    cfg = {"risk_paths": {}, "limits": {"human_review_lines": 400}}
+    return review.gather(gh, "o/r", 1, "s" * 40, tmp_path, cfg)[1]
+
+
+def test_gather_records_truncation_in_the_facts(tmp_path):
+    assert gather_facts(tmp_path, "x" * (review.CONTEXT_CAP + 1))["truncated"] is True
+    assert gather_facts(tmp_path, "small", diff="d" * (review.CONTEXT_CAP + 1))["truncated"] is True
+    assert gather_facts(tmp_path, "small")["truncated"] is False
 
 
 def test_truncated_context_gives_human_review_with_a_reason():
