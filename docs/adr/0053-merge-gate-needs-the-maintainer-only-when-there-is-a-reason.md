@@ -1,6 +1,6 @@
 # ADR-0053 · Merge gate that only needs the maintainer when there is a reason
 
-- Status: Proposed
+- Status: Accepted (2026-11-12, maintainer)
 - Date: 2026-11-12
 - Deciders: maintainer
 - Alias: `D53`
