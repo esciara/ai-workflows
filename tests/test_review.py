@@ -37,6 +37,29 @@ def test_ci_state_excludes_our_own_run():
     assert review.ci_state([run("review / context", "in_progress", None, run_id=7)], "7", None) == "none"
 
 
+@pytest.mark.parametrize("name", ["review / pass (security)", "review / context", "ai / failed", "triage / classify",
+                                  "config / load"])
+def test_ci_state_ignores_our_jobs_from_earlier_runs(name):
+    # An earlier `ai: error` run on the same head left failed check runs; they are ours, not the repo's CI.
+    assert review.ci_state([run("test"), run(name, conclusion="failure", run_id=3)], "7", None) == "green"
+    assert review.ci_state([run(name, conclusion="failure", run_id=3)], "7", None) == "none"
+
+
+@pytest.mark.parametrize("name", ["context", "pass", "test / pass-through", "lint / publishing"])
+def test_ci_state_keeps_checks_that_only_look_like_ours(name):
+    assert review.ci_state([run(name, conclusion="failure", run_id=3)], "7", None) == "red"
+
+
+def test_own_jobs_match_our_reusable_workflows():
+    import yaml
+    jobs = set()
+    for wf in Path(__file__).parent.parent.joinpath(".github/workflows").glob("*.yml"):
+        doc = yaml.safe_load(wf.read_text())
+        if "workflow_call" in (doc.get(True) or doc.get("on") or {}):
+            jobs |= set(doc["jobs"])
+    assert jobs == review.OWN_JOBS
+
+
 @pytest.mark.parametrize("runs,state", [
     ([run("test"), run("lint", conclusion="skipped")], "green"),
     ([run("test"), run("lint", conclusion="failure")], "red"),

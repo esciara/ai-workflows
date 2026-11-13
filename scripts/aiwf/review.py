@@ -27,6 +27,13 @@ PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; must
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 MAX_COMMENTABLE = 300  # files whose diff lines are passed on for inline comments; the others get general comments only
 DEF_RE = re.compile(r"\b(?:def|function|func|fn|class)\s+([A-Za-z_][A-Za-z0-9_]{2,})")
+# Job ids of our reusable workflows; must match .github/workflows (test_review checks it). A caller's check run for one
+# of them is named `<caller job> / <job id>[ (<matrix>)]`. Earlier runs of ours on the same head (an `ai: error` run, a
+# `/review` re-run) are not the repo's CI, so they never make it red (checkpoint item 2).
+OWN_JOBS = frozenset({"gate", "start", "context", "pass", "verify", "publish", "failed",  # review.yml
+                      "extract", "candidates", "classify",  # triage.yml (context, publish, failed above)
+                      "load", "sync", "send", "unreview"})  # config, labels, notify, review-fork-push
+OWN_CHECK_RE = re.compile(r".+ / (" + "|".join(sorted(OWN_JOBS)) + r")(?: \(.*\))?\Z")
 
 
 def glob_re(pattern: str) -> re.Pattern[str]:
@@ -55,9 +62,11 @@ def risk_tier(paths: list[str], risk_paths: dict[str, list[str]]) -> str:
 
 
 def ci_state(check_runs: list[dict[str, Any]], own_run_id: str, required: list[str] | None) -> str:
-    """`pending`, `green`, `red` or `none` for the head SHA's check runs, ours excluded (ADR-0007, ADR-0034)."""
+    """`pending`, `green`, `red` or `none` for the head SHA's check runs, ours excluded (ADR-0007, ADR-0034): this run's
+    and any check run of one of our jobs (`OWN_JOBS`), from earlier runs too."""
     own = f"/actions/runs/{own_run_id}/"
-    runs = [r for r in check_runs if own not in (r.get("html_url") or "") and own not in (r.get("details_url") or "")]
+    runs = [r for r in check_runs if own not in (r.get("html_url") or "") and own not in (r.get("details_url") or "")
+            and not OWN_CHECK_RE.match(r["name"])]
     if required:
         runs = [r for r in runs if r["name"] in required]
         if {r["name"] for r in runs} != set(required):
