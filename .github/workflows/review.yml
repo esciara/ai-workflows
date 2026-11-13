@@ -43,6 +43,7 @@ jobs:
       pr: ${{ steps.gate.outputs.pr }}
       sha: ${{ steps.gate.outputs.sha }}
       started: ${{ steps.started.outputs.started }}
+      dependabot: ${{ steps.gate.outputs.dependabot }}
     steps:
       - id: started  # the review's start, for the metrics line's duration
         run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -60,6 +61,30 @@ jobs:
           REPO: ${{ github.repository }}
           AIWF_CONFIG: ${{ inputs.config }}
         run: aiwf review-gate --repo "$REPO"
+
+  # Dependabot PR events: their runs get no secrets, so no review; the verdict is `ai-review: human-review` (ADR-0053:
+  # the maintainer's approval clears it). GITHUB_TOKEN only, no model, no checkout of the PR.
+  dependabot:
+    needs: gate
+    if: needs.gate.outputs.dependabot == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write  # labelling a PR (403 with issues: write alone)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ needs.gate.outputs.pr }}
+        run: aiwf review-dependabot --repo "$REPO" --pr "$PR"
 
   # Step 1: mark in progress.
   start:

@@ -1,9 +1,10 @@
 """Workflow A gate (WP4, ADR-0044): whether this event starts a review, and of which PR head.
 
 - `pull_request`: same-repo, non-draft PRs are reviewed; fork PRs never (`fork_prs: on-command`: only after `/review`).
-  Dependabot PRs neither: GitHub runs Dependabot-triggered workflows with no secrets and a read-only token, so a review
-  could only end in `ai: error`. Detected by login (PR author or event sender `dependabot[bot]`), not by a missing
-  secret: deterministic, and a misconfigured secret still fails loudly. A maintainer's `/review` still reviews them.
+  Dependabot PRs neither: GitHub runs Dependabot-triggered workflows with no secrets, so a review could only end in
+  `ai: error`. They get `ai-review: human-review` instead, with no model call (ADR-0053: they wait for the
+  maintainer's approval). Detected by login (PR author or event sender `dependabot[bot]`), not by a missing secret:
+  deterministic, and a misconfigured secret still fails loudly. A maintainer's `/review` still reviews them.
 - `issue_comment` on a PR: `/review` from a maintainer (ADR-0005; accepted by config.yml, read from the config's
   `command`) reviews the PR's current head, fork or not, unless
   `fork_prs: off` and the PR comes from a fork. Fork code is then read as text, never executed.
@@ -23,6 +24,7 @@ from aiwf import commands, config
 GhRunner = commands.GhRunner
 
 DEPENDABOT = "dependabot[bot]"
+HUMAN_REVIEW = "ai-review: human-review"
 
 
 @dataclass(frozen=True)
@@ -32,9 +34,11 @@ class Gate:
     pr: int = 0
     sha: str = ""
     fork: bool = False
+    dependabot: bool = False
 
     def outputs(self) -> dict[str, str]:
-        return {"run": str(self.run).lower(), "pr": str(self.pr or ""), "sha": self.sha, "fork": str(self.fork).lower()}
+        return {"run": str(self.run).lower(), "pr": str(self.pr or ""), "sha": self.sha, "fork": str(self.fork).lower(),
+                "dependabot": str(self.dependabot).lower()}
 
 
 def is_fork(pr: dict[str, Any], repo: str) -> bool:
@@ -55,7 +59,8 @@ def decide(event: str, payload: dict[str, Any], cfg: dict[str, Any], repo: str, 
         if pr.get("draft"):
             return Gate(False, "draft PR")
         if is_dependabot(pr, payload):
-            return Gate(False, "Dependabot PR (run has no secrets): reviewed only after a maintainer's /review")
+            return Gate(False, "Dependabot PR (run has no secrets): human-review, no model call",
+                        pr["number"], pr["head"]["sha"], dependabot=True)
         if is_fork(pr, repo):
             return Gate(False, "fork PR: reviewed only after a maintainer's /review", fork=True)
         return Gate(True, "PR event", pr["number"], pr["head"]["sha"])
@@ -89,9 +94,22 @@ def cmd_review_gate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review_dependabot(args: argparse.Namespace) -> int:
+    """The verdict of a Dependabot PR without a review: `ai-review: human-review` (GITHUB_TOKEN only, no model)."""
+    from aiwf import publish_review
+
+    publish_review.set_verdict_label(config.run_gh, args.repo, args.pr, HUMAN_REVIEW)
+    print(f"PR #{args.pr}: Dependabot, not reviewed (no secrets in its runs): {HUMAN_REVIEW}")
+    return 0
+
+
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("review-gate", help="Workflow A: does this event start a review (env GITHUB_EVENT_PATH, "
                                            "GITHUB_EVENT_NAME, AIWF_CONFIG)")
     p.add_argument("--repo", required=True)
     p.add_argument("--github-output", default=None)
     p.set_defaults(func=cmd_review_gate)
+    p = sub.add_parser("review-dependabot", help="Workflow A: label a Dependabot PR `ai-review: human-review`")
+    p.add_argument("--repo", required=True)
+    p.add_argument("--pr", type=int, required=True)
+    p.set_defaults(func=cmd_review_dependabot)
