@@ -22,8 +22,12 @@ on:
         type: string
         default: ''
 
+# One group per item for pushes and commands: a new push waits for the running review, never runs beside it. A group keeps
+# only one pending run, so a comment that cannot be a command gets its own group (the run_id): it never replaces a
+# queued review. A command is `/` after at most 3 spaces on the first non-blank line (ADR-0005); any comment with `/`
+# at its start, after a space or after a newline stays in the item's group (a false positive only waits).
 concurrency:
-  group: ai-workflows-${{ github.event_name == 'pull_request_target' && 'fork-push-' || '' }}${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: ai-workflows-${{ github.event_name == 'pull_request_target' && 'fork-push-' || '' }}${{ github.event_name == 'issue_comment' && !startsWith(github.event.comment.body, '/') && !contains(github.event.comment.body, ' /') && !contains(github.event.comment.body, fromJSON('"\n/"')) && format('comment-{0}-', github.run_id) || '' }}${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: false
 
 # Least privilege by default (ADR-0017); every job below grants what its called workflow needs.
