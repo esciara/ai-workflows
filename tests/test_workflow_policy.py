@@ -277,10 +277,6 @@ def _hashed_or_offline(cmd: str) -> bool:
     return all(flag in cmd for flag in ("--no-index", "--no-deps", "--no-build-isolation"))
 
 
-def _has_write(perms) -> bool:
-    return perms == "write-all" or (isinstance(perms, dict) and "write" in perms.values())
-
-
 def _local_action_runs(uses: str) -> list[str]:
     prefix = "./.ai-workflows/"
     if not uses.startswith(prefix):
@@ -289,19 +285,21 @@ def _local_action_runs(uses: str) -> list[str]:
     return [s.get("run", "") for s in action["runs"].get("steps", [])]
 
 
-def test_write_token_jobs_install_python_deps_only_from_the_hashed_lock():
-    seen = 0
+def test_every_job_installs_python_deps_only_from_the_hashed_lock():
+    # Every job, whatever its permissions: write tokens can come from the top-level block or a calling workflow.
+    seen: dict[str, int] = {}
     for path in REAL:
         doc = policy.load_workflow(path.read_text())
         for name, job in (doc or {}).get("jobs", {}).items():
-            if not _has_write(job.get("permissions")):
-                continue
             for step in job.get("steps", []):
                 runs = [step.get("run", ""), *_local_action_runs(str(step.get("uses", "")))]
                 for cmd in (c for run in runs for c in _pip_installs(run)):
-                    seen += 1
+                    key = f"{path.name}:{name}"
+                    seen[key] = seen.get(key, 0) + 1
                     assert _hashed_or_offline(cmd), f"{path.relative_to(ROOT)}:{name}: {cmd}"
-    assert seen >= 2  # via aiwf-setup: the locked deps, then aiwf itself offline
+    # the write-token jobs were really scanned, each with the locked deps then aiwf itself offline
+    for key in ("ci.yml:test", "review.yml:publish", "triage.yml:publish", "labels.yml:sync", "notify.yml:send"):
+        assert seen.get(key) == 2, (key, seen)
 
 
 def test_ci_test_job_installs_only_from_the_hashed_test_lock():
@@ -316,7 +314,7 @@ def test_setup_action_installs_from_the_lock_and_caches_on_it():
     cmds = [c for s in yaml.safe_load(text)["runs"]["steps"] for c in _pip_installs(s.get("run", ""))]
     assert cmds and all(_hashed_or_offline(c) for c in cmds), cmds
     assert any("--require-hashes" in c and "--only-binary :all:" in c for c in cmds), cmds
-    assert "hashFiles('.ai-workflows/requirements.lock')" in text
+    assert "hashFiles('.ai-workflows/requirements.lock', '.ai-workflows/pyproject.toml')" in text
 
 
 def test_checks_reject_unhashed_installs():

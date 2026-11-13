@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Regenerates requirements.lock and requirements-test.lock (the latter adds the test extra; used only by ci.yml's `test` job): the hashed pins the aiwf-setup action installs with `pip install --require-hashes`
-# (supply-chain hardening for the jobs that hold write tokens). Run after changing pyproject.toml's dependencies or
-# build-system requires, or to take dependency updates; commit the result. Needs uv (https://docs.astral.sh/uv/).
+# Regenerates requirements.lock: the hashed pins the aiwf-setup action installs with `pip install --require-hashes`
+# (supply-chain hardening for the jobs that hold write tokens).
+# Also regenerates requirements-test.lock: the same plus the test extra, used only by ci.yml's `test` job.
+# Run after changing pyproject.toml's dependencies or build-system requires, or to take dependency updates; commit the result. Needs uv (https://docs.astral.sh/uv/).
 # setuptools is locked too: the action installs aiwf itself with --no-build-isolation, so no unpinned build backend.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
