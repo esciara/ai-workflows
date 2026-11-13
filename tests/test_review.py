@@ -235,7 +235,7 @@ LOCK_DIFF = ("diff --git a/package-lock.json b/package-lock.json\n+++ b/package-
 
 @pytest.mark.parametrize("path,generated", [
     ("package-lock.json", True), ("web/yarn.lock", True), ("uv.lock", True), ("go.sum", True), ("a/b/app.min.js", True),
-    ("api_pb2.py", True), ("x.pb.go", True), ("src/a.py", False), ("docs/lockfile.md", False), ("lock.py", False)])
+    ("api_pb2.py", True), ("a/app.js.map", True), ("a.min.css", True), ("svc_pb2_grpc.py", True), ("x.generated.ts", True), ("x.pb.go", True), ("src/a.py", False), ("docs/lockfile.md", False), ("lock.py", False)])
 def test_is_generated(path, generated):
     assert review.is_generated(path) is generated
 
@@ -244,6 +244,13 @@ def test_without_generated_drops_only_those_sections():
     out = review.without_generated(LOCK_DIFF)
     assert "package-lock" not in out and out.startswith("diff --git a/src/a.py") and "+y" in out
     assert review.without_generated("") == ""
+
+
+@pytest.mark.parametrize("old,new,dropped", [
+    ("src/a.py", "package-lock.json", False), ("package-lock.json", "src/a.py", False), ("yarn.lock", "yarn.lock", True)])
+def test_without_generated_keeps_renames_between_generated_and_normal_names(old, new, dropped):
+    diff = f"diff --git a/{old} b/{new}\nrename from {old}\nrename to {new}\n"
+    assert (review.without_generated(diff) == "") is dropped
 
 
 def gather_with_files(tmp_path, files, diff, additions, deletions):
@@ -278,9 +285,16 @@ def test_gather_lockfile_only_pr_has_no_generated_noise_in_facts_otherwise(tmp_p
 
 
 def test_gather_renamed_to_generated_name_is_still_reviewed(tmp_path):
+    diff = "diff --git a/src/a.py b/package-lock.json\nrename from src/a.py\nrename to package-lock.json\n"
     files = [{"filename": "package-lock.json", "previous_filename": "src/a.py", "status": "renamed", "additions": 1, "deletions": 1}]
-    _, facts = gather_with_files(tmp_path, files, LOCK_DIFF, 1, 1)
-    assert facts["generated"] == [] and facts["changed_lines"] == 2
+    context, facts = gather_with_files(tmp_path, files, diff, 1, 1)
+    assert facts["generated"] == [] and facts["changed_lines"] == 2 and "rename to package-lock.json" in context
+
+
+def test_gather_caps_the_listed_generated_names_but_counts_all_their_lines(tmp_path):
+    files = [{"filename": f"d{i:02}/yarn.lock", "status": "modified", "additions": 10, "deletions": 0} for i in range(25)]
+    _, facts = gather_with_files(tmp_path, files, "", 25 * 10 + 3, 0)
+    assert len(facts["generated"]) == review.MAX_GENERATED and facts["changed_lines"] == 3
 
 
 def test_forged_context_tags_in_untrusted_text_are_defused():
