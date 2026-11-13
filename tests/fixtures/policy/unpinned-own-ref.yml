@@ -1,0 +1,7 @@
+on: push
+permissions: {}
+jobs:
+  review:
+    uses: esciara/ai-workflows/.github/workflows/review.yml@main
+    permissions:
+      contents: read

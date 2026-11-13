@@ -21,10 +21,16 @@ CHECKOUT_ACTION = "actions/checkout"
 AGENT_ACTION = "anthropics/claude-code-action"
 ALLOWED_AGENT_SECRET = "CLAUDE_CODE_OAUTH_TOKEN"
 OWN_REUSABLE_PREFIX = "esciara/ai-workflows/"
+OWN_WORKFLOWS_DIR = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 
 
 def is_exempt(ref: str) -> bool:
-    return ref.startswith("./") or ref.startswith(OWN_REUSABLE_PREFIX)
+    """Local refs only. Own reusable workflows are pinned like any action (ADR-0040, WP14)."""
+    return ref.startswith("./")
+
+
+def is_own_main(ref: str) -> bool:
+    return ref.startswith(OWN_REUSABLE_PREFIX) and ref.endswith("@main")
 
 
 def load_workflow(text: str) -> dict[str, Any] | None:
@@ -85,14 +91,17 @@ def is_agent_job(job: dict[str, Any], raw: str) -> bool:
     return bool(AGENT_MARKER_RE.search(raw))
 
 
-def pin_errors(text: str) -> list[str]:
-    """Every external `uses:` is a full SHA with a version comment on the same line (workflows and composite actions)."""
+def pin_errors(text: str, *, own_main: bool = False) -> list[str]:
+    """Every external `uses:` is a full SHA with a version comment on the same line (workflows and composite actions).
+
+    `own_main`: this repo's own workflows may call its reusable workflows at `@main` (ADR-0051: Workflow A on this repo
+    reviews with main's copy, never the PR's). Templates and target repos never get it."""
     errors: list[str] = []
     for n, line in enumerate(text.splitlines(), 1):
         if line.lstrip().startswith("#"):
             continue
         m = USES_LINE_RE.match(line)
-        if not m or is_exempt(m.group(1)):
+        if not m or is_exempt(m.group(1)) or (own_main and is_own_main(m.group(1))):
             continue
         ref, rest = m.group(1), m.group(2)
         if ref.startswith("docker://"):
@@ -105,12 +114,12 @@ def pin_errors(text: str) -> list[str]:
     return errors
 
 
-def check_text(text: str) -> list[str]:
+def check_text(text: str, *, own_main: bool = False) -> list[str]:
     """Policy violations in one workflow file, as 'rule: detail' strings. [] for non-workflows."""
     doc = load_workflow(text)
     if doc is None:
         return []
-    errors = pin_errors(text)
+    errors = pin_errors(text, own_main=own_main)
 
     # Top level: `permissions: {}`, so a job without its own block gets nothing (ADR-0017).
     top = doc.get("permissions")
@@ -171,4 +180,5 @@ def pull_request_target_jobs(doc: dict[str, Any]) -> list[str]:
 
 
 def check_file(path: Path) -> list[str]:
-    return check_text(path.read_text())
+    own_main = path.resolve().parent == OWN_WORKFLOWS_DIR
+    return check_text(path.read_text(), own_main=own_main)

@@ -1,7 +1,9 @@
 # .github/workflows/ai-workflows.yml in a TARGET repo.
 # Events in, one call per reusable workflow out. Secrets are passed explicitly (never `inherit`).
 # Each job grants the most its called workflow needs; the called jobs narrow it with their own `permissions:`.
-# Replace @main with a branch or tag of esciara/ai-workflows if needed; scripts load from the same commit (ADR-0019).
+# Every `uses:` of esciara/ai-workflows is pinned to one release commit SHA with its tag in a comment (ADR-0040); scripts
+# load from the same commit (ADR-0019). To upgrade, replace the SHA and the tag on every line together (docs/install.md).
+# Review only: delete the `triage` job and set `workflows.triage: false` in .github/ai-workflows.yml.
 name: AI workflows
 on:
   pull_request:
@@ -36,7 +38,7 @@ permissions: {}
 jobs:
   # Also parses a comment's slash command once (ADR-0005); review and triage run only on the command they handle.
   config:
-    uses: esciara/ai-workflows/.github/workflows/config.yml@main
+    uses: esciara/ai-workflows/.github/workflows/config.yml@7ea3e4984a2100b0b9e949bd3bb419e2e840b860 # v0.1.0
     permissions:
       contents: read
     with:
@@ -46,7 +48,7 @@ jobs:
   labels:
     needs: config
     if: needs.config.outputs.enabled == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
-    uses: esciara/ai-workflows/.github/workflows/labels.yml@main
+    uses: esciara/ai-workflows/.github/workflows/labels.yml@7ea3e4984a2100b0b9e949bd3bb419e2e840b860 # v0.1.0
     permissions:
       issues: write
 
@@ -54,7 +56,7 @@ jobs:
   review:
     needs: config
     if: needs.config.outputs.review == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
-    uses: esciara/ai-workflows/.github/workflows/review.yml@main
+    uses: esciara/ai-workflows/.github/workflows/review.yml@7ea3e4984a2100b0b9e949bd3bb419e2e840b860 # v0.1.0
     permissions:
       contents: read
       pull-requests: write
@@ -69,23 +71,35 @@ jobs:
   review-fork-push:
     needs: config
     if: needs.config.outputs.review == 'true' && github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
-    uses: esciara/ai-workflows/.github/workflows/review-fork-push.yml@main
+    uses: esciara/ai-workflows/.github/workflows/review-fork-push.yml@7ea3e4984a2100b0b9e949bd3bb419e2e840b860 # v0.1.0
     permissions:
       pull-requests: write
 
-  # Workflow B (WP5: B1 classify on new issues and /retriage).
+  # Workflow B (WP5: B1 classify on new issues and /retriage). Review-only install: delete this job.
   triage:
     needs: config
     if: needs.config.outputs.triage == 'true' && (github.event_name == 'issues' || github.event_name == 'schedule' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
-    uses: esciara/ai-workflows/.github/workflows/triage.yml@main
+    uses: esciara/ai-workflows/.github/workflows/triage.yml@7ea3e4984a2100b0b9e949bd3bb419e2e840b860 # v0.1.0
+    # B1 reads the repo and PRs, writes only issue labels and comments. Widen when fixes (B5/B6) ship.
     permissions:
-      contents: write
+      contents: read
       issues: write
-      pull-requests: write
+      pull-requests: read
     with:
       config: ${{ needs.config.outputs.config }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # Chat notification test event (ADR-0024): a manual run sends one test message per channel in the config's `notify`.
+  # The only job given the Slack/Telegram secrets. Delete it if `notify: none`.
+  notify:
+    needs: config
+    if: needs.config.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && fromJSON(needs.config.outputs.config).notify != 'none'
+    uses: esciara/ai-workflows/.github/workflows/notify.yml@7ea3e4984a2100b0b9e949bd3bb419e2e840b860 # v0.1.0
+    permissions: {}
+    with:
+      channels: ${{ fromJSON(needs.config.outputs.config).notify }}
+    secrets:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
