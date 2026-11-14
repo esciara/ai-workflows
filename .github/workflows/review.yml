@@ -184,7 +184,6 @@ jobs:
           max-turns: 3
           model: ${{ fromJSON(inputs.config).model || '' }}
           usage-name: ${{ matrix.pass }}
-          usage-artifact: review-usage-${{ matrix.pass }}
       - if: always()
         env:
           PASS: ${{ matrix.pass }}
@@ -242,7 +241,6 @@ jobs:
           max-turns: 3
           model: ${{ fromJSON(inputs.config).model || '' }}
           usage-name: verify
-          usage-artifact: review-usage-verify
 
   # Steps 6-9, orchestrator side: validate the 5 answers, keep confirmed findings, verdict, the one summary comment
   # (found by its marker), the verdict label. The passes' answers are read as data, after schema validation.
