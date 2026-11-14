@@ -21,6 +21,7 @@ from typing import Any
 
 from aiwf import guard, publish, publish_analysis
 from aiwf.ghapi import BOT, GhRunner, get_or_none, remove_label, upsert_marker_comment
+from aiwf.mdtext import inline
 from aiwf.publish_triage import NEEDS_HUMAN
 
 MARKER = "<!-- ai-workflows:reproduce -->"
@@ -41,10 +42,6 @@ def fence(text: str, lang: str = "") -> str:
     longest = max((len(m) for m in re.findall(r"`+", text)), default=0)
     ticks = "`" * max(3, longest + 1)
     return f"{ticks}{lang}\n{text.rstrip()}\n{ticks}"
-
-
-def inline(text: str, limit: int = 200) -> str:
-    return publish_analysis.code(text, limit)  # one copy of the escaping rule
 
 
 def commands_table(cmds: list[dict[str, Any]]) -> list[str]:
