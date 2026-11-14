@@ -3,8 +3,9 @@ It also writes the "New issue triaged" chat alert (spec: Chat notifications) to 
 `alert_url`; triage.yml's notify job sends it for new issues only. The alert holds only fields the orchestrator checked
 (type, checked duplicate number, labels) and the repo name, never the issue title or other agent text.
 
-The classifier's references (duplicate issue, fixing commit or PR) are checked against the repo before they are linked:
-an unknown or invalid reference is dropped, never posted. A fix is only "possibly fixed by" (ADR-0035): reproducing the
+The classifier's references (duplicate issue, fixing commit or PR) must be among the candidates pass 2 was shown (env
+AIWF_TRIAGE_CANDIDATES, from the candidates job; missing means none) and are checked against the repo before they are
+linked: an unlisted, unknown or invalid reference is dropped, never posted. A fix is only "possibly fixed by" (ADR-0035): reproducing the
 bug (B2) confirms it. Triage never closes an issue.
 """
 
@@ -24,9 +25,35 @@ TYPE_LABELS = {"bug": "type: bug", "feature": "type: feature", "question": "type
 DUPLICATE = "triage: duplicate"
 NEEDS_HUMAN = "triage: needs-human"
 RANGE_ENV = "AIWF_FIX_RANGE_CONFIDENCE"  # `low` when the fix candidates were not from the reported version
+CANDIDATES_ENV = "AIWF_TRIAGE_CANDIDATES"  # {"issues": [n], "commits": [sha], "prs": [n]}: what pass 2 was shown
 B1_LABELS = (*TYPE_LABELS.values(), DUPLICATE, NEEDS_HUMAN)  # cleared on /retriage before the new result
 WAITS_FOR_REPRODUCE = (f"Bug from a reporter outside `maintainers`: reproducing it runs code, so it waits for a maintainer to "
                        f"comment `/reproduce` (ADR-0037). Labelled `{NEEDS_HUMAN}`.")
+
+
+def shown_candidates() -> dict[str, set[Any]]:
+    """The candidates pass 2 was shown (env CANDIDATES_ENV); an unset or malformed value means none (fail closed)."""
+    try:
+        raw = json.loads(os.environ.get(CANDIDATES_ENV) or "{}")
+    except json.JSONDecodeError:
+        raw = {}
+    raw = raw if isinstance(raw, dict) else {}
+
+    def items(key: str, kind: type) -> set[Any]:
+        value = raw.get(key)
+        return {v for v in value if isinstance(v, kind) and not isinstance(v, bool)} if isinstance(value, list) else set()
+
+    return {"issues": items("issues", int), "commits": items("commits", str), "prs": items("prs", int)}
+
+
+def was_shown(shown: dict[str, set[Any]], name: str, value: Any) -> bool:
+    """`duplicate_of` number or `possibly_fixed_by` ref was in pass 2's candidates (a commit by its listed prefix)."""
+    if name == "duplicate_of":
+        return isinstance(value, int) and value in shown["issues"]
+    ref = str(value.get("ref") or "")
+    if value.get("kind") == "commit":
+        return len(ref) >= 7 and any(sha.startswith(ref) for sha in shown["commits"])
+    return ref.isdigit() and int(ref) in shown["prs"]
 
 
 def check_duplicate(gh: publish.GhRunner, repo: str, issue: int, number: int | None) -> dict[str, Any] | None:
@@ -166,10 +193,11 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
     item = get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}
     current = {lb["name"] for lb in item.get("labels", [])}
     branch = (get_or_none(gh, f"repos/{repo}") or {}).get("default_branch", "main")
+    shown = shown_candidates()
     dup_ref = (data.get("duplicate_of") or {}).get("number")
-    dup = check_duplicate(gh, repo, issue, dup_ref)
+    dup = check_duplicate(gh, repo, issue, dup_ref) if dup_ref and was_shown(shown, "duplicate_of", dup_ref) else None
     fix_ref = data.get("possibly_fixed_by") if data["type"] == "bug" else None
-    fix = check_fix(gh, repo, branch, fix_ref)
+    fix = check_fix(gh, repo, branch, fix_ref) if fix_ref and was_shown(shown, "possibly_fixed_by", fix_ref) else None
     for name, value, ok in (("duplicate_of", dup_ref, dup), ("possibly_fixed_by", data.get("possibly_fixed_by"), fix)):
         if value and not ok:
             print(f"::warning title=Classifier reference dropped::{name}={json.dumps(value)} is not a valid reference")

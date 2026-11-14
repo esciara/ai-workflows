@@ -288,6 +288,8 @@ def trusted_config(monkeypatch):
     """B1 tests run as a trusted author's issue (the B2 gate has its own tests below)."""
     monkeypatch.setenv("AIWF_CONFIG", json.dumps({"maintainers": ["esciara"]}))
     monkeypatch.delenv("GITHUB_OUTPUT", raising=False)
+    # Every reference the tests below name was among pass 2's candidates, unless a test says otherwise.
+    monkeypatch.setenv(pt.CANDIDATES_ENV, json.dumps({"issues": [1, 7, 99], "commits": [SHA], "prs": [12, 13]}))
 
 
 class FakeGh:
@@ -584,3 +586,50 @@ def test_triage_workflow_sends_the_alert_for_new_issues_only():
     chat = [n for n, j in jobs.items() if any("secrets.SLACK_WEBHOOK_URL" in json.dumps(s) for s in j.get("steps", []))]
     assert chat == ["notify"]  # the only job holding the chat secrets
     assert "notify" in jobs["failed"]["needs"]  # a failed alert is reported like any failed job (ADR-0045)
+
+
+# --- references must be among the candidates pass 2 was shown (aiwf-wqn) ---------------------------------------------
+
+def test_duplicate_not_among_the_candidates_is_dropped(monkeypatch):
+    monkeypatch.setenv(pt.CANDIDATES_ENV, json.dumps({"issues": [8], "commits": [], "prs": []}))
+    gh = FakeGh(issues={7: issue(7)})
+    run(gh, duplicate_of=dup(7))
+    assert gh.added_labels() == ["type: bug"]
+    assert "uplicate" not in gh.comment_bodies()[0]
+    assert not any(c[1] == f"repos/{REPO}/issues/7" for c in gh.calls if len(c) == 2)  # not even looked up
+
+
+@pytest.mark.parametrize("ref", [fixed(), fixed("pr", "12")])
+def test_fix_not_among_the_listed_fixes_is_dropped(monkeypatch, ref):
+    monkeypatch.setenv(pt.CANDIDATES_ENV, json.dumps({"issues": [], "commits": ["f" * 40], "prs": [3]}))
+    pr = {"number": 12, "merged_at": "2026-10-01T00:00:00Z", "base": {"ref": "main"}, "html_url": "https://pr/12"}
+    gh = FakeGh(commits={SHA: {"sha": SHA, "html_url": URL}}, pulls={12: pr})
+    run(gh, possibly_fixed_by=ref)
+    assert "Possibly fixed" not in gh.comment_bodies()[0]
+
+
+@pytest.mark.parametrize("value", [None, "", "not json", "[7]", '{"issues": "7"}', '{"issues": [true, "7"]}'])
+def test_missing_or_malformed_candidates_drop_every_reference(monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv(pt.CANDIDATES_ENV)
+    else:
+        monkeypatch.setenv(pt.CANDIDATES_ENV, value)
+    gh = FakeGh(issues={7: issue(7)}, commits={SHA: {"sha": SHA, "html_url": URL}})
+    run(gh, duplicate_of=dup(7), possibly_fixed_by=fixed())
+    body = gh.comment_bodies()[0]
+    assert gh.added_labels() == ["type: bug"] and "uplicate" not in body and "Possibly fixed" not in body
+
+
+def test_candidates_output_lists_only_the_shown_duplicates_and_the_fixes():
+    c = {"sha": SHA, "subject": "s", "refs": [], "date": ""}
+    p = {"number": 12, "title": "t", "refs": []}
+    many = [issue(n, body="x" * 1_000) for n in range(2, 40)]
+    text, shown = triage.build_with_shown(issue(1), many, fix([c], [p]), "main", limit=8_000)
+    assert shown and len(shown) < len(many) and all(f'number="{n}"' in text for n in shown)
+    assert triage.listed(fix([c], [p]), shown) == {"issues": shown, "commits": [SHA], "prs": [12]}
+
+
+def test_triage_workflow_passes_the_candidates_to_publish():
+    wf = (Path(__file__).parent.parent / ".github/workflows/triage.yml").read_text()
+    assert "candidates: ${{ steps.gather.outputs.candidates }}" in wf
+    assert "AIWF_TRIAGE_CANDIDATES: ${{ needs.candidates.outputs.candidates }}" in wf
