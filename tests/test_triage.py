@@ -5,6 +5,7 @@ import pytest
 import yaml
 
 from aiwf import cli, ghapi, publish, publish_triage as pt, triage
+from ghfake import RecordingGh
 
 REPO = "o/r"
 
@@ -292,9 +293,10 @@ def trusted_config(monkeypatch):
     monkeypatch.setenv(pt.CANDIDATES_ENV, json.dumps({"issues": [1, 7, 99], "commits": [SHA], "prs": [12, 13]}))
 
 
-class FakeGh:
+class FakeGh(RecordingGh):
     def __init__(self, issues=None, commits=None, compare="ahead", labels=(), comments=(), pulls=None,
                  author="esciara", permission="write"):
+        super().__init__()
         self.pulls = pulls or {}
         self.issues = {1: {**issue(1), "user": {"login": author}}, **(issues or {})}
         self.permission = permission
@@ -302,10 +304,8 @@ class FakeGh:
         self.commits = commits or {}
         self.compare = compare
         self.comments = list(comments)
-        self.calls = []
 
-    def __call__(self, args):
-        self.calls.append(args)
+    def respond(self, args):
         if args[:2] == ["api", f"repos/{REPO}"]:
             return json.dumps({"default_branch": "main"})
         if "/collaborators/" in args[1]:
@@ -333,9 +333,6 @@ class FakeGh:
         if args[:3] == ["api", "-X", "DELETE"]:
             return ""
         return "{}"
-
-    def writes(self, method):
-        return [a for a in self.calls if a[:3] == ["api", "-X", method]]
 
     def added_labels(self):
         return [a.split("=", 1)[1] for c in self.writes("POST") if c[3].endswith("/labels") for a in c[4:] if a != "-f"]

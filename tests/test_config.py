@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from aiwf import cli, config
+from ghfake import RecordingGh
 
 FIX = Path(__file__).parent / "fixtures"
 ROOT = Path(__file__).resolve().parents[1]
@@ -164,12 +165,12 @@ def test_empty_or_non_mapping(text, msg):
 # --- fetching from GitHub (gh mocked) ----------------------------------------
 
 
-class FakeGh:
+class FakeGh(RecordingGh):
     def __init__(self, files, default_branch="main"):
-        self.files, self.default_branch, self.calls = files, default_branch, []
+        super().__init__()
+        self.files, self.default_branch = files, default_branch
 
-    def __call__(self, args):
-        self.calls.append(args)
+    def respond(self, args):
         endpoint = args[1]
         if "/contents/" in endpoint:
             path, ref = endpoint.split("/contents/", 1)[1].split("?ref=")

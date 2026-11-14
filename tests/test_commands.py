@@ -4,6 +4,7 @@ import pytest
 
 from aiwf import cli, commands
 from aiwf.commands import Command
+from ghfake import RecordingGh
 
 
 # --- parsing ------------------------------------------------------------------
@@ -76,12 +77,12 @@ def test_authorize(login, permission, ok):
     assert commands.authorize(login, ["esciara"], permission) is ok
 
 
-class FakeGh:
+class FakeGh(RecordingGh):
     def __init__(self, permission=None, fail=False):
-        self.permission, self.fail, self.calls = permission, fail, []
+        super().__init__()
+        self.permission, self.fail = permission, fail
 
-    def __call__(self, args):
-        self.calls.append(args)
+    def respond(self, args):
         if self.fail:
             raise RuntimeError("gh: Not Found (HTTP 404)")
         return self.permission + "\n"
