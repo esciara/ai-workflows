@@ -122,7 +122,8 @@ def run(gh: GhRunner, repo: str, cfg: dict[str, Any], labels: list[str], now: da
 
 def closed_numbers(raw: str) -> list[int]:
     """Issue numbers from actions/stale's `closed-issues-prs` output (a JSON list of issues); anything else is refused.
-    Only the numbers are read, never titles or other text."""
+    Only the numbers are read, never titles or other text. The raw output also holds actions/stale's options, the
+    job's GITHUB_TOKEN among them (masked; this step has it as GH_TOKEN anyway): never print it or the env."""
     items = json.loads(raw or "[]")
     if not isinstance(items, list):
         raise SystemExit("closed-issues-prs is not a JSON list")
@@ -131,7 +132,7 @@ def closed_numbers(raw: str) -> list[int]:
         n = item.get("number") if isinstance(item, dict) else None
         if type(n) is not int or n < 1:
             raise SystemExit("closed-issues-prs holds an item without a valid number")
-        if not item.get("isPullRequest") and n not in out:
+        if not item.get("pull_request") and n not in out:  # isPullRequest is a getter: not serialised
             out.append(n)
     return out
 

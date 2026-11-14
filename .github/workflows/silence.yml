@@ -86,6 +86,8 @@ jobs:
           persist-credentials: false
       - if: steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'
         uses: ./.ai-workflows/.github/actions/aiwf-setup
+      # The output also holds actions/stale's options (the masked job token among them): read through env, never printed.
+      # About 3 KB per issue; operations-per-run (default 30) keeps it far below the env size limit.
       - if: steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'
         env:
           GH_TOKEN: ${{ github.token }}
