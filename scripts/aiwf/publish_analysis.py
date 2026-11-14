@@ -19,11 +19,13 @@ import json
 import os
 import posixpath
 import re
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from aiwf import cli, config, guard, publish
 from aiwf.ghapi import GhRunner, find_marker_comment, remove_label
+from aiwf.mdtext import inline, run_link
 from aiwf.review import risk_tier
 
 MARKER = "<!-- ai-workflows:analysis -->"
@@ -44,17 +46,12 @@ def server() -> str:
     return os.environ.get("GITHUB_SERVER_URL", "https://github.com")
 
 
-def code(text: str, limit: int = 200) -> str:
-    """Inline code, also safe in a table cell: one line, no backticks, pipes escaped (B2's `inline` uses it too)."""
-    return "`" + " ".join(str(text).split())[:limit].replace("`", "'").replace("|", "\\|") + "`"
-
-
 def file_ref(repo: str, sha: str, path: str, line: int, files: set[str]) -> str:
     """A link at the analysed commit for a checked path and a whole-number line, else `path:line` as inline code."""
     if path in files and SHA_RE.fullmatch(sha) and type(line) is int and line >= 1:
         url = f"{server()}/{repo}/blob/{sha}/{quote(path, safe='/')}#L{line}"
         return f"[{publish.clean(f'{path}#L{line}', 320)}]({url})"
-    return code(f"{path}:{line}" if line else path, 320)
+    return inline(f"{path}:{line}" if line else path, 320)
 
 
 def status_lines(body: str) -> tuple[str, str]:
@@ -90,8 +87,8 @@ def analysis_body(data: dict[str, Any], repo: str, sha: str, files: set[str], cf
     rc, fix = data["root_cause"], data["proposed_fix"]
     paths = [tier_path(p) for p in [*fix["files_to_change"], rc["file"]] if p]
     tier = "high" if any(p == ".github/escape" for p in paths) else risk_tier(paths, cfg.get("risk_paths") or {})
-    to_change = ", ".join(code(p, 300) for p in fix["files_to_change"]) or "none named"
-    run = f"[run]({run_url})" if run_url else "unknown"
+    to_change = ", ".join(inline(p, 300) for p in fix["files_to_change"]) or "none named"
+    run = run_link(run_url, "unknown")
     lines = [MARKER, "## Bug analysis", maintainers_line(cfg),
              f"**Risk tier:** {tier} · **Confidence:** {data['confidence']} · **Size:** {data['size']} · **Run:** {run}", "",
              f"**Root cause** — {file_ref(repo, sha, rc['file'], rc['line'], files)}: "
@@ -109,16 +106,20 @@ def publish_analyst(data: dict[str, Any], repo: str, issue: int, run_url: str, g
     cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
     sha = os.environ.get(SHA_ENV, "")
     files_path = os.environ.get(FILES_ENV, "")
-    files = set(json.loads(open(files_path, encoding="utf-8").read())) if files_path else set()
+    files = set(json.loads(Path(files_path).read_text(encoding="utf-8"))) if files_path else set()
     found = find_marker_comment(gh, repo, issue, MARKER)
     body = with_status(analysis_body(data, repo, sha, files, cfg, run_url), WAITING,
                        earlier_decision(found.get("body") or "") if found else "")
     if found is None:
         publish.comment(gh, repo, issue, body)
     else:
-        gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{found['id']}", "-f", f"body={body}"])
+        patch_comment(gh, repo, found["id"], body)
     publish.add_labels(gh, repo, issue, AWAITING)
     print(f"analysis posted on {repo}#{issue}")
+
+
+def patch_comment(gh: GhRunner, repo: str, cid: int, body: str) -> None:
+    gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{cid}", "-f", f"body={body}"])
 
 
 def set_status(gh: GhRunner, repo: str, issue: int, status: str) -> bool:
@@ -127,21 +128,18 @@ def set_status(gh: GhRunner, repo: str, issue: int, status: str) -> bool:
     if found is None:
         return False
     body = found.get("body") or ""
-    gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{found['id']}", "-f",
-        f"body={with_status(body, status, earlier_decision(body))}"])
+    patch_comment(gh, repo, found["id"], with_status(body, status, earlier_decision(body)))
     return True
 
 
 def reanalyse(gh: GhRunner, repo: str, issue: int, run_url: str) -> None:
     """A B2 that reproduced again: any earlier decision no longer stands until B3 posts the new analysis."""
-    run = f"[run]({run_url})" if run_url else "a later run"
-    set_status(gh, repo, issue, f"re-analysing in {run}; if that run fails, `/reproduce` to analyse again.")
+    set_status(gh, repo, issue, f"re-analysing in {run_link(run_url)}; if that run fails, `/reproduce` to analyse again.")
 
 
 def supersede(gh: GhRunner, repo: str, issue: int, run_url: str) -> None:
     """A B2 that did not reproduce: the analysis no longer stands."""
-    run = f"[run]({run_url})" if run_url else "a later run"
-    set_status(gh, repo, issue, f"superseded by {run}; `/reproduce` to analyse again.")
+    set_status(gh, repo, issue, f"superseded by {run_link(run_url)}; `/reproduce` to analyse again.")
 
 
 def decision_status(name: str, login: str, comment_url: str, text: str) -> str:
