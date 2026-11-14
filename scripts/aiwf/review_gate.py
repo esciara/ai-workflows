@@ -20,8 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from aiwf import commands, config, labels
-
-GhRunner = commands.GhRunner
+from aiwf.ghapi import GhRunner
 
 DEPENDABOT = "dependabot[bot]"
 HUMAN_REVIEW = labels.HUMAN_REVIEW

@@ -18,7 +18,7 @@ import re
 from typing import Any
 
 from aiwf import guard, publish
-from aiwf.ghapi import BOT, get_or_none, remove_label, upsert_marker_comment
+from aiwf.ghapi import BOT, GhRunner, get_or_none, remove_label, upsert_marker_comment
 from aiwf.publish_triage import NEEDS_HUMAN
 
 MARKER = "<!-- ai-workflows:reproduce -->"
@@ -115,12 +115,12 @@ def requests_since_stop(comments: list[dict[str, Any]]) -> int:
     return n
 
 
-def all_comments(gh: publish.GhRunner, repo: str, issue: int) -> list[dict[str, Any]]:
+def all_comments(gh: GhRunner, repo: str, issue: int) -> list[dict[str, Any]]:
     out = gh(["api", "--paginate", f"repos/{repo}/issues/{issue}/comments?per_page=100", "--jq", ".[]"])
     return [json.loads(line) for line in out.splitlines() if line.strip()]
 
 
-def set_labels(gh: publish.GhRunner, repo: str, issue: int, current: set[str], add: str, drop: tuple[str, ...]) -> None:
+def set_labels(gh: GhRunner, repo: str, issue: int, current: set[str], add: str, drop: tuple[str, ...]) -> None:
     for label in drop:
         if label in current:
             remove_label(gh, repo, issue, label)
@@ -135,12 +135,12 @@ def sandbox_failed(cmds: list[dict[str, Any]]) -> bool:
     return bool(cmds) and all(c["exit_code"] != 0 and SANDBOX_START_ERROR.search(c["output"]) for c in cmds)
 
 
-def publish_reproducer(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
+def publish_reproducer(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: GhRunner) -> None:
     publish_result(data, repo, issue, run_url, gh)
     guard.clear_error(gh, repo, issue, run_url)  # published: an earlier run's sticky error comment no longer applies
 
 
-def publish_result(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
+def publish_result(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: GhRunner) -> None:
     item = get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}
     current = {lb["name"] for lb in item.get("labels", [])}
     stale = (publish.ERROR_LABEL, *SILENCE)
