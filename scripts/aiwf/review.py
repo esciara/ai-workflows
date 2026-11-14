@@ -225,6 +225,11 @@ def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, b
     return "\n\n".join(out), truncated
 
 
+def readable(path: Path, workdir: Path) -> bool:
+    """False for a symlink or a path resolving outside `workdir` (a PR can commit a link to /proc/self/environ)."""
+    return not path.is_symlink() and path.resolve().is_relative_to(workdir.resolve())
+
+
 def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """(agent context text, facts) for PR `number` at head `sha`; `workdir` is a checkout of that head."""
     pr = json.loads(gh(["api", f"repos/{repo}/pulls/{number}"]))
@@ -243,6 +248,8 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
     touched, too_big = [], False
     for f in files:
         p = workdir / f["filename"]
+        if not readable(p, workdir):  # symlink or path outside the checkout: untrusted PR must not pull in other files
+            continue
         if f["status"] != "removed" and p.is_file() and p.stat().st_size >= 200_000:
             too_big = True  # left out of touched_files: counts as truncated, like the context cap
         elif f["status"] != "removed" and p.is_file():
