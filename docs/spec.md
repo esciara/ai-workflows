@@ -136,7 +136,7 @@ The two highlighted steps are the only places the flow waits on a person, apart 
 
 **Who starts B2 (v1, ADR-0037).** B2 runs code, so it starts on its own only when the issue's author is trusted: in `maintainers`, with write or admin permission, which covers the maintainer and any collaborator listed there. On anyone else's bug, B1 stops with `triage: needs-human` and a note until a maintainer comments `/reproduce`, which starts or restarts B2; after that, a reply from the reporter while the issue has `triage: needs-info` restarts B2 as above.
 
-**Reporter silence.** Counted from the agent's last `triage: needs-info` comment. Any reply from the reporter stops the clock, removes `triage: no-response` and `stale`, and restarts B2. A maintainer can exempt an issue with `keep-open`.
+**Reporter silence.** Counted from the agent's last `triage: needs-info` comment. Any reply from the reporter stops the clock, removes `triage: no-response` and `stale`, and restarts B2. A maintainer can exempt an issue with `keep-open`: no ping, no `stale`, no close; `ai: off` and `ai: error` (a B2 rerun that failed, so a person looks first) exempt it the same way. The days come from `reporter_silence_days` (defaults 4, 14, 21, shown in the table below); they may be decimals, so a test config can shorten them to minutes. `actions/stale` reads `close − stale` as whole days, rounded down: under one day (test configs only) it closes the issue in the same run that labels it `stale`, after the stale comment. The stale and close days count from the issue's last update by anyone, so a maintainer's comment also pushes them back.
 
 | Day | What happens | Done by |
 | --- | --- | --- |
@@ -144,38 +144,32 @@ The two highlighted steps are the only places the flow waits on a person, apart 
 | 14 | Label `stale`, comment: closes in 7 days unless the requested details arrive | GitHub `actions/stale` |
 | 21 | Close as *not planned*, comment saying how to get it reopened | GitHub `actions/stale` |
 
-[`actions/stale`](https://github.com/actions/stale) counts days since the issue's last update, and the day-4 comment is an update, so it is set to 10 days to land on day 14:
+**Where it runs.** No agent and no model token: the caller's daily schedule (and a manual run) calls a reusable workflow of this repo, whose two jobs hold only `issues: write` (no `actions: write`, so `actions/stale` keeps no state between runs) and run in this order in the same run. It runs only when `workflows.triage` is on and nothing stops runs (repo-level switch); each run has its own concurrency group, so runs never cancel each other:
+
+1. **Ping** (orchestrator script). For each open issue with `triage: needs-info` and none of `triage: no-response`, `keep-open`, `ai: off`, `ai: error`: take the agent's latest needs-info comment (by its hidden marker; no such comment, e.g. a label set by hand: skip); if the issue's author has not commented since and it is at least `ping` days old, post one comment starting with the hidden marker `<!-- ai-workflows:no-response -->` that mentions each of `maintainers`: no reply from the reporter, decide whether the bug is worth pursuing without them; then label `triage: no-response`. It reads only labels, comment authors, dates and the markers, never issue text.
+2. **Stale** ([`actions/stale`](https://github.com/actions/stale), pinned to a full commit SHA). It handles only issues already pinged (`triage: no-response`), so the order is always ping, stale, close, and a reply (whose B2 rerun removes `triage: no-response`) takes the issue out of its reach. It counts days since the issue's last update, and the ping is an update, so it runs after the ping with `stale − ping` days to the stale label and `close − stale` days to the close:
 
 ```yaml
-# .github/workflows/stale-needs-info.yml
-name: Stale needs-info issues
-on:
-  schedule:
-    - cron: '17 5 * * *'   # daily
-permissions:
-  issues: write
-jobs:
-  stale:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/stale@v9   # pin to the current major
-        with:
-          only-issue-labels: 'triage: needs-info'
-          exempt-issue-labels: 'keep-open'
-          days-before-issue-stale: 10   # 4 days to the ping + 10 = day 14
-          days-before-issue-close: 7    # day 21
-          stale-issue-label: 'stale'
-          remove-stale-when-updated: true
-          close-issue-reason: 'not_planned'
-          stale-issue-message: >-
-            No reply for 14 days. This issue will close in 7 days
-            unless the details requested above are added.
-          close-issue-message: >-
-            Closed for lack of a reply. Add the requested details
-            in a comment and a maintainer will reopen it.
-          days-before-pr-stale: -1   # issues only
-          days-before-pr-close: -1
+- uses: actions/stale@<sha> # latest major at build time
+  with:
+    only-issue-labels: 'triage: needs-info,triage: no-response'   # plus the caller's extra scope labels, if any
+    exempt-issue-labels: 'keep-open,ai: off,ai: error'
+    days-before-issue-stale: <stale - ping>       # 10 with the defaults: day 14
+    days-before-issue-close: <close - stale>      # 7 with the defaults: day 21
+    stale-issue-label: 'stale'
+    remove-stale-when-updated: true
+    close-issue-reason: 'not_planned'
+    stale-issue-message: >-
+      No reply for <stale> days. This issue will close in <close - stale> days
+      unless the details requested above are added.
+    close-issue-message: >-
+      Closed for lack of a reply. Add the requested details
+      in a comment and a maintainer will reopen it.
+    days-before-pr-stale: -1   # issues only
+    days-before-pr-close: -1
 ```
+
+The reusable workflow takes an optional list of extra labels an issue must also carry to be handled (empty in the caller template); the e2e slot callers use it to touch only their own test issues. The "Reporter silent" chat alert is wired with the slice's notifications (WP11b), not here.
 
 **B3 — Analyse.** With read access to the code and the passing reproduction:
 
@@ -244,7 +238,7 @@ jobs:
 | --- | --- |
 | New issue triaged (B1) | #n triaged as bug, feature or question, plus duplicate of #k or needs a person when so; links to the issue |
 | B4 analysis posted | Bug #n analysed: root cause in one line; reply `/fix` or `/no-fix` on GitHub |
-| Reporter silent 4 days (B2) | #n: no reply from the reporter; worth pursuing? |
+| Reporter silent `ping` days (B2) | #n: no reply from the reporter; worth pursuing? |
 | `fix: needs-maintainer` (B5) | #n: fix failed after 3 rounds; draft PR #m |
 | Verdict on a PR (A) | PR #m: merge, changes requested or human review needed |
 | `ai: error` | Run failed on #n, with the run link |
