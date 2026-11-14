@@ -1,8 +1,10 @@
 """WP6 (B2 reproduce): the trusted-author gate in B1's publish, `/reproduce`, the reproducer's context and publisher."""
 
 import json
+from pathlib import Path
 
 import pytest
+import yaml
 
 from aiwf import cli, commands, publish, publish_reproduce as pr, reproduce
 from aiwf.commands import Command
@@ -143,6 +145,11 @@ def test_sandbox_that_cannot_start_fails_the_job_and_asks_the_reporter_nothing(m
     with pytest.raises(RuntimeError, match="sandbox could not start"):
         publish_answer(gh, monkeypatch, commands=cmds)
     assert gh.comment_bodies() == [] and gh.added_labels() == []
+
+
+def test_reproducer_runs_on_a_runner_where_the_sandbox_starts():
+    jobs = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/triage.yml").read_text())["jobs"]
+    assert jobs["reproduce"]["runs-on"] == "ubuntu-24.04"  # not 26.04 until bead aiwf-5t2 is done
 
 
 @pytest.mark.parametrize("cmds", [
