@@ -11,9 +11,10 @@ on:
   workflow_dispatch: {}   # once after install: create the label set
 
 # A review event gets its own group: with cancel-in-progress false only one run waits per group, so a verdict-only run
-# sharing the PR group could replace the queued review of a new push.
+# sharing the PR group could replace the queued review of a new push. Each review-event run also has its own group
+# (run id): reruns of several stale review runs (ADR-0059) would otherwise queue in one group and cancel each other.
 concurrency:
-  group: ai-review-${{ github.event_name == 'pull_request_review' && 'verdict-' || '' }}${{ github.event.pull_request.number || github.run_id }}
+  group: ai-review-${{ github.event_name == 'pull_request_review' && format('verdict-{0}-{1}', github.event.pull_request.number, github.run_id) || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: false
 
 permissions: {}
