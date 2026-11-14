@@ -135,7 +135,7 @@ flowchart TD
   class WP4 aDone
   class WP5 bDone
   class WP6 bDone
-  class WP7 bWip
+  class WP7 bDone
   class WP8 b
   class WP9 b
   class WP10 b
@@ -166,7 +166,7 @@ flowchart TD
 | WP4 | done | [docs/plan.md, line 40](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L40) |
 | WP5 | done | [docs/plan.md, line 41](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L41) |
 | WP6 | done | [docs/plan.md, line 42](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L42) |
-| WP7 | in progress | [docs/plan.md, line 43](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43) |
+| WP7 | done | [docs/plan.md, line 43](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43) |
 | WP8 | todo | [docs/plan.md, line 44](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44) |
 | WP9 | todo | [docs/plan.md, line 45](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45) |
 | WP10 | todo | [docs/plan.md, line 46](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46) |
@@ -187,8 +187,7 @@ flowchart TD
 
 Milestones: see [docs/plan.md](plan.md#slices-and-test-setup).
 
-Not started, so no flow diagram yet: WP8, WP9, WP10, WP11b (other events), WP13, WP17, WP18, WP19. WP7's code is merged and live from release v0.2.0, but its e2e run waits on the playground PR, so the plan still says in progress.
-
+Not started, so no flow diagram yet: WP8, WP9, WP10, WP11b (other events), WP13, WP17, WP18, WP19.
 ## WP1 — Shared runtime
 
 Done when ([docs/plan.md, line 35](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L35)): A command from a maintainer is accepted, from a non-maintainer is refused; all labels exist
