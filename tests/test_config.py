@@ -259,3 +259,13 @@ def test_silence_days_accept_decimals_for_test_configs():
 @pytest.mark.parametrize("days", ["{ping: 0, stale: 1, close: 2}", "{ping: -1, stale: 1, close: 2}"])
 def test_silence_days_must_be_positive(days):
     assert errors_of(f"maintainers: [a]\nreporter_silence_days: {days}\n")
+
+
+def test_example_template_validates_against_the_json_schema():
+    """The documented example (caps, notify, ...) must satisfy the published schema, not only our loader."""
+    import jsonschema
+    import yaml
+
+    schema = json.loads((ROOT / "schema" / "ai-workflows.schema.json").read_text())
+    example = yaml.safe_load((ROOT / "templates" / "ai-workflows.example.yml").read_text().replace("<OWNER>", "esciara"))
+    jsonschema.validate(example, schema)
