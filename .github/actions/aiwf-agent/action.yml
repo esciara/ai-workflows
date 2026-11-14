@@ -27,11 +27,7 @@ inputs:
     required: false
     default: ''
   usage-name:
-    description: Per-run metrics (spec Usage per run, ADR-0052); when set, writes usage/<name>.json and uploads it as artifact usage-artifact
-    required: false
-    default: ''
-  usage-artifact:
-    description: Artifact name for the usage file
+    description: Workflow A per-run metrics (spec Usage per run, ADR-0052); when set, writes usage/<name>.json and uploads it as artifact review-usage-<name>
     required: false
     default: ''
 outputs:
@@ -78,7 +74,7 @@ runs:
     - if: always() && inputs.usage-name != ''
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
-        name: ${{ inputs.usage-artifact }}
+        name: review-usage-${{ inputs.usage-name }}
         path: usage/
         if-no-files-found: ignore
         retention-days: 7

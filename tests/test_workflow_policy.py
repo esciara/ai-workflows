@@ -201,6 +201,11 @@ AGENT_ACTION_YML = ROOT / ".github" / "actions" / "aiwf-agent" / "action.yml"
 AGENT_USES = "./.ai-workflows/.github/actions/aiwf-agent"
 
 
+def _args_run() -> str:
+    """The aiwf-agent step that builds claude_args, found by its id."""
+    return next(s["run"] for s in yaml.safe_load(AGENT_ACTION_YML.read_text())["runs"]["steps"] if s.get("id") == "args")
+
+
 def _agent_steps():
     for path in REAL:
         doc = policy.load_workflow(path.read_text())
@@ -220,9 +225,8 @@ def test_every_agent_step_has_a_time_and_turn_limit():
         minutes = step.get("timeout-minutes")
         assert isinstance(minutes, int) and 0 < minutes < job["timeout-minutes"], where  # a step timeout fails
     assert seen >= 4  # extract, classify, review pass, verify
-    action = yaml.safe_load(AGENT_ACTION_YML.read_text())
-    assert action["inputs"]["max-turns"]["required"] is True
-    assert "--max-turns $MAX_TURNS" in action["runs"]["steps"][0]["run"]
+    assert yaml.safe_load(AGENT_ACTION_YML.read_text())["inputs"]["max-turns"]["required"] is True
+    assert "--max-turns $MAX_TURNS" in _args_run()
 
 
 # --- one shared agent action (CP8): agents run claude-code-action only through aiwf-agent ----------------------------
@@ -251,7 +255,7 @@ def test_schemas_have_no_single_quote(path):
 def test_shared_agent_action_refuses_quotes(tmp_path, schema, model):
     (tmp_path / "s.json").write_text(schema)
     out = tmp_path / "out"
-    run = yaml.safe_load(AGENT_ACTION_YML.read_text())["runs"]["steps"][0]["run"]
+    run = _args_run()
     env = {**os.environ, "SCHEMA_FILE": str(tmp_path / "s.json"), "MAX_TURNS": "3", "MODEL": model, "GITHUB_OUTPUT": str(out)}
     assert subprocess.run(["bash", "-c", run], env=env, capture_output=True).returncode == 1
     assert not out.exists()
@@ -260,7 +264,7 @@ def test_shared_agent_action_refuses_quotes(tmp_path, schema, model):
 def test_shared_agent_action_builds_the_claude_args(tmp_path):
     (tmp_path / "s.json").write_text(json.dumps({"$schema": "x", "type": "object", "description": "a $b"}))
     out = tmp_path / "out"
-    run = yaml.safe_load(AGENT_ACTION_YML.read_text())["runs"]["steps"][0]["run"]
+    run = _args_run()
     for model, tail in (("", ""), ("claude-sonnet-4-5", " --model 'claude-sonnet-4-5'")):
         env = {**os.environ, "SCHEMA_FILE": str(tmp_path / "s.json"), "MAX_TURNS": "3", "MODEL": model, "GITHUB_OUTPUT": str(out)}
         subprocess.run(["bash", "-c", run], env=env, check=True)
