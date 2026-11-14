@@ -1,7 +1,9 @@
 """Publisher for Workflow B, B2 (reproduce), from the reproducer's checked JSON (spec B2, ADR-0037).
 
 - Reproduced: label `triage: reproduced` and one sticky comment holding the failing test, its output and the commands
-  run; that comment is the stored repro record that B3 reads.
+  run; that comment is the stored repro record. Job output `reproduced=true`: B3 runs next in this run.
+- Either outcome removes `triage: awaiting-maintainer` and `fix: declined`; reproduced sets an earlier analysis
+  comment to "re-analysing", not reproduced marks it superseded (spec B3). A failed run changes neither.
 - Not reproduced: a new comment to the reporter (`@author`) with what was tried, the environment, what happened and two
   to four questions, label `triage: needs-info`; a reply from the reporter reruns B2. After `limits.info_requests` such
   requests since B2 last stopped, label `triage: needs-human` and stop instead (a maintainer's `/reproduce` restarts).
@@ -17,7 +19,7 @@ import os
 import re
 from typing import Any
 
-from aiwf import guard, publish
+from aiwf import guard, publish, publish_analysis
 from aiwf.ghapi import BOT, GhRunner, get_or_none, remove_label, upsert_marker_comment
 from aiwf.publish_triage import NEEDS_HUMAN
 
@@ -27,6 +29,7 @@ STOP_MARKER = "<!-- ai-workflows:reproduce-stop -->"
 REPRODUCED = "triage: reproduced"
 NEEDS_INFO = "triage: needs-info"
 SILENCE = ("triage: no-response", "stale")  # a reply restarts B2 (spec: Reporter silence)
+DECISION = (publish_analysis.AWAITING, publish_analysis.DECLINED)  # any B2 outcome clears an earlier B4 decision (spec B3)
 FALLBACK_QUESTIONS = (
     "What exact steps, code or commands make the bug happen, starting from a fresh checkout?",
     "Which version, operating system and language version do you use, and what is the full error message or output?",
@@ -143,17 +146,23 @@ def publish_reproducer(data: dict[str, Any], repo: str, issue: int, run_url: str
 def publish_result(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: GhRunner) -> None:
     item = get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}
     current = {lb["name"] for lb in item.get("labels", [])}
-    stale = (publish.ERROR_LABEL, *SILENCE)
+    stale = (publish.ERROR_LABEL, *SILENCE, *DECISION)
     t = data["test"]
     if data["reproduced"]:
         if not t["code"].strip() or not t["output"].strip():
             raise RuntimeError("reproducer says reproduced but returned no test code or output")  # job fails: ai: error
         set_labels(gh, repo, issue, current, REPRODUCED, (*stale, NEEDS_INFO, NEEDS_HUMAN))
         upsert_marker_comment(gh, repo, issue, MARKER, reproduced_body(data, run_url))
+        publish_analysis.reanalyse(gh, repo, issue, run_url)  # an earlier decision stops being current
+        out = os.environ.get("GITHUB_OUTPUT")
+        if out:  # B3 runs next in this run and updates the analysis comment
+            with open(out, "a", encoding="utf-8") as fh:
+                fh.write("reproduced=true\n")
         print(f"reproduced {repo}#{issue}")
         return
     if sandbox_failed(data["commands"]):  # a runner problem, not the reporter's: ask them nothing
         raise RuntimeError("the sandbox could not start: every command failed before running")  # job fails: ai: error
+    publish_analysis.supersede(gh, repo, issue, run_url)  # the analysis no longer stands (spec B3)
     cap = int(json.loads(os.environ.get("AIWF_CONFIG") or "{}").get("limits", {}).get("info_requests", 2))
     asked = requests_since_stop(all_comments(gh, repo, issue))
     if asked >= cap:

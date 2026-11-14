@@ -2,6 +2,7 @@
 # a new issue's result also goes to chat (WP11b1).
 # WP6: B2 reproduce (ADR-0037), after B1 for a trusted author's bug, on a maintainer's `/reproduce`, or on the reporter's
 # reply while the issue has `triage: needs-info`. The reproducer runs project commands: sandboxed Bash only, env scrubbed.
+# WP8: B3 analyse after a reproducing B2 (no tools, code in its prompt), B4 analysis comment, `/fix` and `/no-fix`.
 # B1 runs two agent passes (ADR-0035): pass 1 reads the issue and returns what to search for; the orchestrator gathers
 # duplicate candidates (issue search, all issues) and possible fixes (commits and merged PRs since the reported
 # version's tag) with a read-only token; pass 2 classifies. Issue and comment text are untrusted: they reach scripts
@@ -262,6 +263,8 @@ jobs:
     permissions:
       contents: read
       issues: read
+    outputs:
+      sha: ${{ steps.tree.outputs.sha }}  # the commit B2 runs on and B3 analyses (its links point there)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -274,13 +277,15 @@ jobs:
         with:
           path: target
           persist-credentials: false
-      - env:
+      - id: tree
+        env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
           AIWF_CONFIG: ${{ inputs.config }}
         run: |
           aiwf repro-context --repo "$REPO" --issue "$ISSUE" --out issue.md
+          echo "sha=$(git -C target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           tar -czf target.tgz -C target .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -372,6 +377,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       issues: write
+    outputs:
+      reproduced: ${{ steps.publish.outputs.reproduced }}  # 'true': B3 runs next
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -390,12 +397,131 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: aiwf publish --kind reproducer --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
 
+  # B3 context (spec B3): no agent and no token scope. It checks B2's answer against its schema, unpacks the tree B2 ran
+  # on (same-run artifact, no token) and puts into the prompt the source files the test imports or its output names,
+  # and their callers, capped as for A (ADR-0034). Those paths come from B2's untrusted answer: a path is read only
+  # when it is relative, every component is no symlink, its real path stays in the tree and it is a regular file. The
+  # list of tree files passing that check goes along, so the publish job links only those without opening the tree.
+  analyse-context:
+    needs: [repro-context, reproduce, repro-publish]
+    if: ${{ !cancelled() && needs.repro-publish.result == 'success' && needs.repro-publish.outputs.reproduced == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: repro-input
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - env:
+          REPRO_JSON: ${{ needs.reproduce.outputs.json }}
+          SHA: ${{ needs.repro-context.outputs.sha }}
+        run: |
+          mkdir tree && tar -xzf target.tgz -C tree && rm target.tgz
+          aiwf analyse-context --tree tree --sha "$SHA" --out analysis.md --files-out files.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: analyse-input
+          path: |
+            analysis.md
+            files.json
+          retention-days: 7
+
+  # B3 (analyst): root cause, blast radius, fix plan, confidence and size. No tools but StructuredOutput, no command
+  # runs (ADR-0039), so ADR-0037's exception does not extend to it; the code is in its prompt.
+  analyse:
+    needs: analyse-context
+    if: ${{ !cancelled() && needs.analyse-context.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    outputs:
+      json: ${{ steps.claude.outputs.structured_output }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: analyse-input
+      - *fetch-aiwf
+      - run: |
+          { cat .ai-workflows/prompts/analyst.md; echo; cat analysis.md; } > prompt.md
+      - id: claude
+        timeout-minutes: 10  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
+        uses: ./.ai-workflows/.github/actions/aiwf-agent
+        with:
+          oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt-file: prompt.md
+          schema: .ai-workflows/schema/analyst.json
+          max-turns: 3
+          model: ${{ fromJSON(inputs.config).model || '' }}
+
+  # B4: the analysis comment (by marker, updated in place) and `triage: awaiting-maintainer`, from the checked JSON.
+  # Risk tier and file links are built here (spec B3); links only for paths in files.json, at the analysed commit.
+  analyse-publish:
+    needs: [repro-context, analyse-context, analyse]
+    if: ${{ !cancelled() && needs.analyse.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: analyse-input
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AGENT_JSON: ${{ needs.analyse.outputs.json }}
+          AIWF_CONFIG: ${{ inputs.config }}
+          AIWF_ANALYSIS_SHA: ${{ needs.repro-context.outputs.sha }}
+          AIWF_ANALYSIS_FILES: files.json
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: aiwf publish --kind analyst --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
+
+  # B4 commands (spec B4): `/fix [guidance]` or `/no-fix <reason>` from a maintainer (config.yml checked the author,
+  # ADR-0005). Acts only while the issue has `triage: awaiting-maintainer`, read live; records the decision in the
+  # analysis comment's status line. WP9 makes `/fix` start B5.
+  decide:
+    if: github.event_name == 'issue_comment' && !github.event.issue.pull_request && (fromJSON(inputs.config).command == 'fix' || fromJSON(inputs.config).command == 'no-fix')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AIWF_CONFIG: ${{ inputs.config }}
+        run: aiwf decide --repo "$REPO" --issue "$ISSUE"
+
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
   # The reason names the failed jobs only. A failed chat alert (`notify`) is not an `ai: error`: triage itself worked,
   # and the failed notify job shows in the run (aiwf-3ci).
   failed:
-    needs: [context, extract, candidates, classify, publish, repro-context, reproduce, repro-publish]
+    needs: [context, extract, candidates, classify, publish, repro-context, reproduce, repro-publish, analyse-context,
+            analyse, analyse-publish, decide]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5

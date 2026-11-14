@@ -23,7 +23,7 @@ def jobs(name):
 
 
 @pytest.mark.parametrize("name,agents", [("review.yml", {"pass", "verify"}),
-                                         ("triage.yml", {"extract", "classify", "reproduce"})])
+                                         ("triage.yml", {"extract", "classify", "reproduce", "analyse"})])
 def test_every_agent_job_fetches_with_the_one_shared_step(name, agents):
     text = (WORKFLOWS / name).read_text()
     assert text.count("&fetch-aiwf") == 1 and text.count("*fetch-aiwf") == len(agents) - 1
