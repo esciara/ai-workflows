@@ -294,7 +294,8 @@ jobs:
   # only secret is the model token, kept from every command by the env scrub; every command runs in Claude Code's
   # sandbox (bubblewrap: writes only in work/ and the temp dir, egress only to `allowed_domains`, runner dirs unreadable),
   # with no fallback to unsandboxed commands. Tools: Bash and StructuredOutput only (Read, Edit, Write and WebFetch run
-  # outside the sandbox); `--setting-sources user` ignores the target repo's .claude settings and hooks. No repo code runs
+  # outside the sandbox); `--setting-sources user` ignores the target repo's .claude settings and hooks, and
+  # `--strict-mcp-config` its .mcp.json (both are also deleted from work/ before the agent starts). No repo code runs
   # outside the agent in this job. The token check fails the job, without printing anything, if the token value appears
   # in the agent's answer or transcript; the answer is passed on only when that check succeeded. The `if` is required:
   # without a status check GitHub skips the job when any earlier job was skipped, e.g. `publish` on a `/reproduce`.
@@ -319,6 +320,7 @@ jobs:
         run: |
           { cat .ai-workflows/prompts/reproducer.md; echo; cat issue.md; } > prompt.md
           mkdir work && tar -xzf target.tgz -C work && rm target.tgz
+          rm -rf work/.mcp.json work/.claude  # the repo's MCP servers, settings and hooks never load (aiwf-zzn)
           # Sandbox settings (ADR-0037), merged by base-action into the user settings that --setting-sources user loads.
           deny='[]'
           for d in "$RUNNER_TEMP" "$HOME/.claude" /home/runner/runners /home/runner/actions-runner /opt/actions-runner; do

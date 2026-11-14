@@ -7,6 +7,8 @@
 # The schema reaches --json-schema single-quoted inside claude_args, which base-action splits with shell-quote: a `'`
 # in the schema or the model would end the quote, so both are refused here (and schemas are checked by the policy
 # tests); inside single quotes `$` and spaces stay literal.
+# Every agent gets `--strict-mcp-config` with no `--mcp-config`: no MCP server starts, so a target repo's .mcp.json
+# cannot run repo code outside the sandbox (aiwf-zzn).
 # Command-running agents (ADR-0037: reproducer, later the implementer) pass `sandbox-settings`: the agent then also gets
 # Bash, auto-allowed, and `--setting-sources user` (the target repo's .claude settings and hooks are ignored). The file
 # must turn the sandbox on with no unsandboxed fallback, or this action fails before the agent starts. The caller sets
@@ -66,7 +68,7 @@ runs:
             "$SANDBOX_SETTINGS" > /dev/null || { echo "::error::sandbox-settings must enable the sandbox with no fallback"; exit 1; }
           tools="--tools Bash,StructuredOutput --allowedTools Bash --setting-sources user"
         fi
-        args="--max-turns $MAX_TURNS $tools --json-schema '$schema'"
+        args="--max-turns $MAX_TURNS $tools --strict-mcp-config --json-schema '$schema'"
         if [ -n "$MODEL" ]; then args="$args --model '$MODEL'"; fi
         echo "claude_args=$args" >> "$GITHUB_OUTPUT"
     - id: claude
