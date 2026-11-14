@@ -37,6 +37,8 @@ jobs:
     permissions:
       contents: read
       issues: read
+    outputs:
+      capped: ${{ steps.cap.outputs.capped }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,6 +47,15 @@ jobs:
           path: .ai-workflows
           persist-credentials: false
       - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      # Daily caps for outside authors (ADR-0058), before any agent: a capped issue skips extract and classify.
+      # Maintainers and `/retriage` are never capped.
+      - id: cap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AIWF_CONFIG: ${{ inputs.config }}
+        run: ~/.aiwf-venv/bin/aiwf triage-cap --repo "$REPO" --issue "$ISSUE"
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -60,6 +71,7 @@ jobs:
   # the prompt. The artifact comes from this run without a token (download-artifact has no token default).
   extract:
     needs: context
+    if: needs.context.outputs.capped != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: {}
@@ -127,7 +139,8 @@ jobs:
 
   # B1 pass 2 (classifier): class, duplicate, possible fix. No tools but StructuredOutput; issue and candidates inline.
   classify:
-    needs: candidates
+    needs: [context, candidates]
+    if: needs.context.outputs.capped != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions: {}
@@ -160,6 +173,7 @@ jobs:
             --json-schema '${{ env.SCHEMA }}'
 
   # Labels and the one triage comment, from the checked JSON; invalid output gives `ai: error` and nothing else.
+  # A capped issue (ADR-0058) gets `triage: needs-human` and a fixed comment instead, with no agent output.
   publish:
     needs: [context, extract, candidates, classify]
     if: always() && needs.context.result == 'success'
@@ -177,7 +191,14 @@ jobs:
           path: .ai-workflows
           persist-credentials: false
       - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - if: needs.context.outputs.capped == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: ~/.aiwf-venv/bin/aiwf triage-capped --repo "$REPO" --issue "$ISSUE"
       - id: publish
+        if: needs.context.outputs.capped != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}

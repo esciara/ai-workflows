@@ -81,3 +81,5 @@ Each release is a tag `v0.x.y` on esciara/ai-workflows. To upgrade, in `.github/
 ## Turning Workflow B on
 
 Put the `triage` job back from `templates/caller.yml` and set `workflows.triage: true` in `.github/ai-workflows.yml`. Workflow B classifies new issues; it fixes bugs only after a maintainer comments `/fix`.
+
+On a public repo anyone can open an issue, and each triage run uses your Claude subscription. Two caps bound that for authors not in `maintainers`: `limits.triage_per_author_per_day` (default 3) and `limits.triage_per_day` (default 20), over a rolling 24 hours. An issue over a cap runs no agent: it gets `triage: needs-human` and a comment saying the limit is reached; comment `/retriage` on it to triage it anyway. Set either cap to 0 to never triage outside authors automatically. Your own issues, and those of anyone in `maintainers`, are never capped.
