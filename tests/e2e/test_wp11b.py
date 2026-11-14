@@ -147,7 +147,7 @@ def test_new_issue_triaged_sends_one_message_with_a_working_link_on_both_channel
     for r in (slack, telegram):
         text = r["text"]
         assert re.search(rf"#{issue['number']}\b", text), f"{r['channel']} message does not name #{issue['number']}: {text}"
-        assert kind in text.lower(), f"{r['channel']} message does not state the type {kind!r}: {text}"
+        assert re.search(rf"\b{kind}\b", text.lower()), f"{r['channel']} message does not state the type {kind!r}: {text}"
 
     # The link points to the issue and works. Telegram's links are the ones it parsed out of the stored message;
     # Slack's webhook echoes nothing, so its link is the one sent.
