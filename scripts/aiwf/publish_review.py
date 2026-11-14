@@ -1,6 +1,7 @@
 """Workflow A, write side (steps 6-9): the verifier's decisions applied to the 4 passes' findings, the verdict, the one
 summary comment found by its marker (with the last run's findings marked resolved or still open), the run's one GitHub
-review carrying the new inline comments (never Approve; ADR-0041), the verdict label.
+review carrying the new inline comments (never Approve; ADR-0041), the verdict label. A replies to and resolves its own
+inline thread of each finding the verify pass marks resolved (ADR-0057), and counts the PR's open threads.
 
 Workflow A publishes with `aiwf review-publish` rather than a `publish --kind` publisher, because the comment needs the
 context job's facts (tier, CI, SHA) as well as the agent's JSON. Agent text is untrusted: every string is cleaned
@@ -40,6 +41,13 @@ MAX_STATE = 40  # open findings carried in the state block to the next run
 MAX_BODY = 60_000  # GitHub caps a comment at 65,536 characters
 THREAD_RE = re.compile(r"https://[A-Za-z0-9.-]+/[A-Za-z0-9._/-]+/pull/\d+#discussion_r\d+\Z")
 FINDING_RE = re.compile(r"<!-- ai-review:finding ([0-9a-f]{12}\+*) -->")
+THREAD_ID_RE = re.compile(r"#discussion_r(\d+)\Z")  # the thread's first comment id, from the link A recorded
+RESOLVED_PREFIX = "resolved in "
+THREADS_Q = ("query($o:String!,$n:String!,$p:Int!,$c:String){repository(owner:$o,name:$n){pullRequest(number:$p){"
+             "reviewThreads(first:100,after:$c){pageInfo{hasNextPage endCursor}"
+             "nodes{id isResolved comments(first:100){nodes{databaseId body}}}}}}}")
+RESOLVE_M = "mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}"
+MAX_THREAD_PAGES = 10
 CHANGES = labels.CHANGES_REQUESTED
 
 
@@ -73,10 +81,10 @@ def combine(passes: dict[str, dict[str, Any]], verify: dict[str, Any], prev_open
     findings, history, used = [], [], set()
     for p in prev_open:
         d = prev_dec.get(p["id"]) or {"status": "still-open", "reason": "not re-checked by the verifier", "candidate": None}
-        history.append({"title": p["title"], "path": p["path"], "status": d["status"], "reason": d["reason"]})
+        thread = {"thread": p["thread"]} if p.get("thread") else {}
+        history.append({"title": p["title"], "path": p["path"], "status": d["status"], "reason": d["reason"], **thread})
         if d["status"] == "still-open":
             cid = d.get("candidate")
-            thread = {"thread": p["thread"]} if p.get("thread") else {}
             if cid in confirmed and cid not in used:
                 used.add(cid)
                 findings.append({**confirmed[cid], "id": p["id"], "still_open": True, **thread})
@@ -100,10 +108,14 @@ def combine(passes: dict[str, dict[str, Any]], verify: dict[str, Any], prev_open
     return findings, history, counts
 
 
-def since_last(prev: dict[str, Any] | None, history: list[dict[str, Any]], counts: dict[str, int]) -> list[str]:
+def since_last(prev: dict[str, Any] | None, history: list[dict[str, Any]], counts: dict[str, int],
+               threads_open: int | None = None) -> list[str]:
+    """The "Since last run" line, ending with the PR's unresolved review threads when they could be counted."""
+    tail = "" if threads_open is None else f" · {threads_open} thread{'' if threads_open == 1 else 's'} open"
     if prev is None:
-        return ["**Since last run:** first run."]
-    lines = [f"**Since last run:** {counts['resolved']} resolved, {counts['still_open']} still open, {counts['new']} new."]
+        return [f"**Since last run:** first run{tail}."]
+    lines = [f"**Since last run:** {counts['resolved']} resolved, {counts['still_open']} still open, "
+             f"{counts['new']} new{tail}."]
     for h in history[:MAX_STATE]:
         lines.append(f"- {h['status']}: {clean(h['title'], 120)} ({clean(h['path'], 200)}) — {clean(h['reason'], 300)}")
     return lines
@@ -165,7 +177,7 @@ def render(data: dict[str, Any], facts: dict[str, Any], label: str, reasons: lis
     lines += ["", checked + (f", {counts['unchecked']} not checked (dropped)." if counts["unchecked"] else ".")]
     if data.get("suspicious_instructions"):
         lines += ["", publish.injection_line(data["suspicious_instructions"])]
-    lines += ["", *since_last(prev, data["history"], counts)]
+    lines += ["", *since_last(prev, data["history"], counts, data.get("threads_open"))]
     if run_url:
         lines += ["", f"[Run]({run_url})"]
     lines += ["", f"<!-- ai-review:state {state_json(state)} -->"]
@@ -299,6 +311,74 @@ def send_review(gh: GhRunner, repo: str, number: int, facts: dict[str, Any], lab
     return notes
 
 
+def review_threads(gh: GhRunner, repo: str, number: int) -> list[dict[str, Any]]:
+    """The PR's review threads: {id (node id), resolved, first (first comment's id), bodies}. Raises RuntimeError."""
+    owner, name = repo.split("/")
+    out: list[dict[str, Any]] = []
+    cursor: str | None = None
+    for _ in range(MAX_THREAD_PAGES):
+        args = ["api", "graphql", "-f", f"query={THREADS_Q}", "-f", f"o={owner}", "-f", f"n={name}", "-F", f"p={number}"]
+        if cursor:
+            args += ["-f", f"c={cursor}"]
+        try:
+            page = json.loads(gh(args))["data"]["repository"]["pullRequest"]["reviewThreads"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise RuntimeError(f"unexpected reviewThreads answer: {exc}") from None
+        for t in page["nodes"]:
+            comments = t["comments"]["nodes"]
+            out.append({"id": t["id"], "resolved": t["isResolved"], "first": comments[0]["databaseId"] if comments else None,
+                        "bodies": [c.get("body") or "" for c in comments]})
+        if not page["pageInfo"]["hasNextPage"]:
+            break
+        cursor = page["pageInfo"]["endCursor"]
+    return out
+
+
+def open_threads(gh: GhRunner, repo: str, number: int) -> int | None:
+    """Unresolved review threads on the PR, A's and others'; None (and a warning) when GitHub does not answer."""
+    try:
+        return sum(not t["resolved"] for t in review_threads(gh, repo, number))
+    except RuntimeError as exc:
+        print(f"::warning title=Threads not counted::{str(exc)[:300]}")
+        return None
+
+
+def close_threads(gh: GhRunner, repo: str, number: int, sha: str, history: list[dict[str, Any]]) -> list[str]:
+    """Step 9 (ADR-0057): reply `resolved in <sha>: <reason>` in A's own thread of each finding the verify pass marks
+    resolved, then resolve the thread. A thread is A's only when its first comment's id is the one A recorded in its
+    state (never by author login); a thread already resolved, or one that already holds A's reply, is not replied to
+    twice. Failures never fail the run: a warning, and a note for the summary."""
+    todo = [(h, int(m.group(1))) for h in history
+            if h["status"] == "resolved" and (m := THREAD_ID_RE.search(h.get("thread") or ""))]
+    if not todo:
+        return []
+    note = "Could not reply to or resolve {} thread(s) of fixed findings; see the run log."
+    try:
+        threads = {t["first"]: t for t in review_threads(gh, repo, number) if t["first"] is not None}
+    except RuntimeError as exc:
+        print(f"::warning title=Threads not closed::{str(exc)[:300]}")
+        return [note.format(len(todo))]
+    failed = 0
+    for h, cid in todo:
+        t = threads.get(cid)
+        if t is None or t["resolved"]:
+            continue  # deleted, or already resolved (by someone, or by an earlier run)
+        if not any(b.startswith(RESOLVED_PREFIX) for b in t["bodies"][1:]):
+            body = f"{RESOLVED_PREFIX}{sha[:7]}: {clean(h['reason'], 300) or 'fixed'}"
+            try:
+                gh(["api", "-X", "POST", f"repos/{repo}/pulls/{number}/comments/{cid}/replies", "-f", f"body={body}"])
+            except RuntimeError as exc:
+                print(f"::warning title=Thread reply failed::{cid}: {str(exc)[:300]}")
+                failed += 1
+                continue
+        try:
+            gh(["api", "graphql", "-f", f"query={RESOLVE_M}", "-f", f"id={t['id']}"])
+        except RuntimeError as exc:
+            print(f"::warning title=Thread not resolved::{cid}: {str(exc)[:300]}")
+            failed += 1
+    return [note.format(failed)] if failed else []
+
+
 def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str, Any], repo: str, number: int,
                    run_url: str, aiwf_sha: str, gh: GhRunner) -> bool:
     """Validate the 4 passes and the verifier, decide, then create or update the summary comment and set the label."""
@@ -346,11 +426,17 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
         got = json.loads(out or "{}")
         return got.get("id", cid), got.get("html_url", "")
 
+    closed = close_threads(gh, repo, number, facts["sha"], history)  # never changes the verdict
+    data["notes"] = closed
+    data["threads_open"] = open_threads(gh, repo, number)  # after the replies and resolves
     comment_id, summary_url = upsert(comment_id)
     notes = send_review(gh, repo, number, facts, label, findings, summary_url)
-    if notes or any(f.get("thread") and not f["still_open"] for f in findings):
-        data["notes"] = notes
-        upsert(comment_id)  # now with links to the new inline threads, and any notes
+    new_threads = any(f.get("thread") and not f["still_open"] for f in findings)
+    if notes or new_threads:
+        data["notes"] = closed + notes
+        if new_threads:
+            data["threads_open"] = open_threads(gh, repo, number)
+        upsert(comment_id)  # now with links to the new inline threads, the new count and any notes
     set_verdict_label(gh, repo, number, label)
     guard.clear_error(gh, repo, number, run_url)  # an earlier run's sticky error comment no longer applies
     if os.environ.get("GITHUB_OUTPUT"):  # for the metrics line (spec: Usage per run)

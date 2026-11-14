@@ -82,11 +82,23 @@ jobs:
           REVIEW: ${{ needs.review.result }}
         run: |
           short=${HEAD_SHA:0:7}
+          # Information only (spec: Open threads): "N unresolved threads at <sha>", the PR's unresolved review threads,
+          # A's and others'. It never changes the result; the ruleset's "Require conversation resolution" is the gate.
+          threads_info() {
+            local q='query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){reviewThreads(first:100){nodes{isResolved}}}}}'
+            local n
+            n=$(gh api graphql -f query="$q" -f o="${REPO%%/*}" -f n="${REPO#*/}" -F p="$PR" \
+              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)] | length' 2>/dev/null) || n=
+            if [[ "$n" =~ ^[0-9]+$ ]]; then echo "; $n unresolved thread$([ "$n" = 1 ] || echo s) at $short"; fi
+          }
           status() {  # status <state> <text>: the `verdict` commit status, max 140 characters; the job result is the verdict
+            local text="${2%; * unresolved thread*}"  # a restored text drops its old count
+            local info; info=$(threads_info)
+            local desc="${text:0:$((140 - ${#info}))}$info"
             # Not fatal: Dependabot runs get a read-only token whatever `permissions:` says, so the POST may be refused.
-            gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" -f context=verdict -f state="$1" -f description="${2:0:140}" >/dev/null \
+            gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" -f context=verdict -f state="$1" -f description="$desc" >/dev/null \
               || echo "::warning title=verdict::could not post the verdict status (read-only token?)"
-            echo "verdict: $1, $2" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "verdict: $1, $desc" | tee -a "$GITHUB_STEP_SUMMARY"
           }
           red() { status failure "$1"; echo "::error title=verdict::$1"; exit 1; }
           # Waiting keeps the job red (ADR-0055 playground result: a pending status does not gate a required check pinned to
