@@ -97,7 +97,11 @@ def cmd_report_error(args: argparse.Namespace) -> int:
     from aiwf import config
 
     if args.head_sha and head_moved(config.run_gh, args.repo, args.issue, args.head_sha):
-        print(f"{args.repo}#{args.issue}: head moved from {args.head_sha}; the newer run reports, not this one")
+        # The newer run waits behind this one (same concurrency group) and sets pending again when it starts;
+        # dropping it here keeps it from sticking if that push started no review (e.g. `[skip ci]`).
+        remove_label(config.run_gh, args.repo, args.issue, PENDING)
+        print(f"::warning title=Run superseded::{args.repo}#{args.issue}: head moved from {args.head_sha};"
+              " the newer run reports, not this one")
         return 0
     try:
         needs = json.loads(os.environ.get("AIWF_NEEDS") or "{}")

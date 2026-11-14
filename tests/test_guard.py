@@ -92,7 +92,7 @@ def report(monkeypatch, gh, *extra):
 def test_report_error_skips_a_run_whose_pr_head_moved(monkeypatch):
     gh = FakeGh(head="new")
     assert report(monkeypatch, gh, "--head-sha", "old") == 0
-    assert gh.writes() == []  # not even pending removed: the newer run owns the labels
+    assert gh.writes() == [["api", "-X", "DELETE", "repos/o/r/issues/3/labels/ai-review%3A%20pending"]]
 
 
 @pytest.mark.parametrize("head", ["same", None])  # unchanged head; unreadable PR reports as usual
