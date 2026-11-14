@@ -30,7 +30,7 @@ The build adds, in a maintainer-merged playground PR:
 
 Left to unit tests: the guidance reaching the implementer's brief (as data), the reviewer's fresh context, a reviewer
 `reject` leading to the next round, a branch that already exists (B5 does not start), a person's push to the branch
-(loop stops), a diff touching `.github/workflows/**` (round fails), a later B2 changing the status line (no push), and
+(loop stops), a diff touching anything under `.github/` (round fails), a later B2 changing the status line (no push), and
 the exit-condition check (setup, test, repro command) deciding the round. B6 (the fix PR and Workflow A on it) is
 WP10's test; this file asserts no non-draft PR either way.
 """
@@ -141,6 +141,7 @@ def test_fix_with_guidance_runs_the_fix_loop_to_an_approved_branch(e2e_target, t
     assert done[max(done)].get("review") == "success", done
     assert run["jobs"].get(ESCALATE_JOB) in (None, "skipped"), run["jobs"]
     assert NEEDS_MAINTAINER not in labels(issue["number"])
+    assert not bot_comments(issue["number"], FIX_MARKER), "an approved fix posted an escalation comment"
     assert not [p for p in fix_prs(issue["number"]) if p["draft"]], "an approved fix opened a draft PR"
 
     branch = fix_branch(issue["number"])
@@ -176,6 +177,9 @@ def test_a_forced_failure_escalates_to_a_draft_pr_and_the_maintainer(e2e_target,
     print(f"draft PR {pr['html_url']}: draft={pr['draft']}")
     assert pr["draft"], "the escalation PR is not a draft"
     assert pr["head"]["ref"] == fix_branch(issue["number"]), pr["head"]["ref"]
+    default = pg.api(f"repos/{pg.REPO}")["default_branch"]
+    ahead = pg.api(f"repos/{pg.REPO}/compare/{default}...{pr['head']['ref']}")["ahead_by"]
+    assert ahead >= 1, "the draft PR branch has none of the rejected round's work (spec: nothing is lost)"
     reviewers = {u["login"] for u in pr["requested_reviewers"]}
     pr_assignees = {u["login"] for u in pr["assignees"]}
     issue_assignees = {u["login"] for u in pg.api(f"repos/{pg.REPO}/issues/{issue['number']}")["assignees"]}
