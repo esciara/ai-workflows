@@ -258,6 +258,7 @@ def test_a_reject_without_findings_keeps_its_summary(base):
     ({**FIXED, ".gitlab-ci.yml": "x: 1\n"}, "other CI config"),
     ({**FIXED, "Jenkinsfile": "node {}\n"}, "other CI config"),
     ({**FIXED, "docs/CODEOWNERS": "* @x\n"}, "other CI config"),
+    ({**FIXED, ".forgejo/workflows/x.yml": "on: push\n"}, "other CI config"),
     ({}, "changed nothing"),
 ])
 def test_a_diff_that_is_never_pushed_rejects_the_round(base, edits, why):
@@ -341,11 +342,12 @@ def test_invalid_agent_output_raises(base, impl_raw, review_raw, check_ok):
                check_ok=check_ok)
 
 
-def push_cli(monkeypatch, tmp_path, base, gh, check_ok="false", **env):
+def push_cli(monkeypatch, tmp_path, base, gh, check_ok="false", log="forced failure (e2e)\n", **env):
     tree, patch = base(FIXED)
     out = setup_cli(monkeypatch, tmp_path, gh, {"limits": {"fix_rounds": 1}})
     (tmp_path / "meta.json").write_text(json.dumps(META))
-    (tmp_path / "check.log").write_text("forced failure (e2e)\n")
+    if log is not None:
+        (tmp_path / "check.log").write_text(log)
     for k, v in {"CHECK_OK": check_ok, "IMPLEMENT_JSON": impl(), "REVIEW_JSON": "", "PREV_HEAD": "",
                  "BASE_SHA": BASE, "RUN_URL": RUN, **env}.items():
         monkeypatch.setenv(k, v)
@@ -362,6 +364,12 @@ def test_push_cli_writes_the_record_and_outputs(monkeypatch, tmp_path, base):
     assert record["outcome"] == "rejected" and record["escalate"] and "forced failure" in record["check_output"]
     assert f"head={record['head']}\nnext=false\napproved=false\nescalate=true" in out
     assert "forced failure (e2e)" in (tmp_path / "round/findings.md").read_text()
+
+
+def test_push_cli_without_a_check_log_says_the_check_did_not_finish(monkeypatch, tmp_path, base):
+    code, _ = push_cli(monkeypatch, tmp_path, base, Gh(comments=[comment(ANALYSIS)]), log=None)
+    record = json.loads((tmp_path / "round/round.json").read_text())
+    assert code == 0 and record["check_output"] == "The check did not finish."
 
 
 def test_push_cli_fails_on_invalid_output_and_skips_on_ai_off(monkeypatch, tmp_path, base):
@@ -419,10 +427,10 @@ def test_an_existing_pr_is_reused_and_assignment_failures_only_warn(capsys):
             if self.url(args).startswith(f"repos/{REPO}/pulls?head=o:ai-fix/issue-1"):
                 return json.dumps([{"number": 30, "html_url": "https://github.com/o/r/pull/30"}])
             return super().respond(args)
-    gh = Existing(fail=["/issues/30/assignees", "/requested_reviewers"])
+    gh = Existing(fail=["/issues/1/assignees", "/issues/30/assignees", "/requested_reviewers"])
     assert esc.escalate(gh, REPO, 1, CFG, [rec(1)], "h" * 40, RUN) == "escalated #1: draft PR #30"
     assert not [u for m, u, b in gh.posted if u == f"repos/{REPO}/pulls"]
-    assert capsys.readouterr().out.count("::warning::") == 2
+    assert capsys.readouterr().out.count("::warning::") == 3
 
 
 def test_with_nothing_pushed_there_is_no_pr():

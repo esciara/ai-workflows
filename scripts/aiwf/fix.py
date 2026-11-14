@@ -149,7 +149,8 @@ def changes(tree: Path) -> list[tuple[str, str, str]]:
 # branch with the project's secrets. Compared lower-case; a directory blocks everything under it.
 CI_PATHS = (".github", ".circleci", ".buildkite", ".gitlab", ".gitlab-ci.yml", ".travis.yml", "azure-pipelines.yml",
             "jenkinsfile", "bitbucket-pipelines.yml", ".drone.yml", ".woodpecker", ".woodpecker.yml", "appveyor.yml",
-            ".appveyor.yml", "codeowners", "docs/codeowners", ".gitlab/codeowners")
+            ".appveyor.yml", ".semaphore", "cloudbuild.yaml", "cloudbuild.yml", "bitrise.yml", ".gitea", ".forgejo",
+            "codeowners", "docs/codeowners", ".gitlab/codeowners")  # best effort: not every CI service is listed
 
 
 def is_ci(path: str) -> bool:
@@ -163,9 +164,9 @@ def unpushable(paths: list[tuple[str, str, str]], patch_size: int) -> str:
         return "The round changed nothing."
     if patch_size > MAX_PATCH:
         return f"The diff is larger than {MAX_PATCH} bytes; it was not pushed."
-    github = sorted(p for _, p, _ in paths if is_ci(p))
-    if github:
-        return "The diff touches `.github/` or other CI config, which is never pushed: " + ", ".join(github[:10])
+    ci = sorted(p for _, p, _ in paths if is_ci(p))
+    if ci:
+        return "The diff touches `.github/` or other CI config, which is never pushed: " + ", ".join(ci[:10])
     if any(mode == "160000" for _, _, mode in paths):
         return "The diff changes a submodule, which is never pushed."
     return ""

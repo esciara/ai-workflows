@@ -1015,8 +1015,9 @@ jobs:
 
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
-  # The reason names the failed jobs only. A round's check job is left out: its failure rejects the round (spec B5). A failed chat alert (`notify`) is not an `ai: error`: triage itself worked,
-  # and the failed notify job shows in the run (aiwf-3ci).
+  # The reason names the failed jobs only. A failed chat alert (`notify`) is not an `ai: error`: triage itself worked,
+  # and the failed notify job shows in the run (aiwf-3ci). A round's check job is left out too: its failure rejects the
+  # round (spec B5).
   failed:
     needs: [context, extract, candidates, classify, publish, repro-context, reproduce, repro-publish, analyse-context,
             analyse, analyse-publish, decide, fix-context, round-1-implement, round-1-review, round-1-push,
