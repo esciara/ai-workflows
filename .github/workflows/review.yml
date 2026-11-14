@@ -256,6 +256,7 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
+      contents: write  # resolveReviewThread is refused without it (ADR-0057, probe: playground PR #220); no agent runs here
     outputs:
       verdict: ${{ steps.publish.outputs.verdict }}
     steps:

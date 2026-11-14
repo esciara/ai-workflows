@@ -70,7 +70,7 @@ Why: findings become fixes before push on our own PRs (cheaper than A rounds), A
 - The block is forgeable by a session that lies; accepted, the check targets forgetting, and the maintainer reads the block on exception PRs.
 - The maintainer's own PRs on this repo also need the block (or go to `human-review`); see open question in the PR.
 - Pre-push review costs one to three opus subagent runs per PR; A runs fewer rounds in exchange.
-- A's thread replies and resolves add GraphQL calls to the publish job; the policy tests need no new permission if `pull-requests: write` covers `resolveReviewThread` (to verify on the playground in the WP's e2e).
+- A's thread replies and resolves add GraphQL calls to the publish job. Amended 2026-11-14 (WP18, maintainer decision): `pull-requests: write` does not cover `resolveReviewThread` (FORBIDDEN "Resource not accessible by integration"; also with `issues: write`); it works with `contents: write` added (probe run 43609709482, playground PR #220). The publish job and the callers' `review` job get `contents: write`. Risk: that token can push to unprotected branches; the publish job runs the orchestrator only (no agent, no checkout of PR code executed), and protected branches stay safe. Upgrade: callers pinned to v0.2.0 need the caller edit and a release bump; until then the resolve fails with a warning and the reply still posts.
 - B's run per issue grows by up to the remaining rounds of A runs; the per-run time budget (ADR-0050) must cover it.
 - Spec edits: A step 9, "How it is sent", the review template's "Since last run" line, B5 and B6 (see the ADR's PR). On acceptance, ADR-0032 and ADR-0053 get an `Amended by: ADR-0057` line.
 

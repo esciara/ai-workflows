@@ -28,6 +28,7 @@ In Settings → Actions → General → Workflow permissions:
 
 - "Allow GitHub Actions to create and approve pull requests" stays off (unticked). Workflow A only comments, requests changes and labels; it never approves.
 - "Read repository contents and packages permissions" is fine as the default: every job asks for the permissions it needs.
+- The caller's `review` job asks for `contents: write`: GitHub refuses to resolve a review thread without it, and Workflow A resolves its own threads once their finding is fixed. Only the publishing job uses it; the AI agents get no token.
 - Recommended, outside this page: in Settings → Rules → Rulesets (or Settings → Branches, branch protection) for the default branch, turn on "Require conversation resolution before merging", so review threads Workflow A has not closed block the merge. Workflow A replies to and resolves its own thread once a later run finds the finding fixed; other threads are left to people.
 
 ## 4. Copy the caller workflow
