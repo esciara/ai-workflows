@@ -173,7 +173,7 @@ The two highlighted steps are the only places the flow waits on a person, apart 
 
 The reusable workflow takes an optional list of extra labels an issue must also carry to be handled (empty in the caller template); the e2e slot callers use it to touch only their own test issues. The "Reporter silent" chat alert is wired with the slice's notifications (WP11b), not here.
 
-**B3 — Analyse.** Runs in the same run as a B2 that reproduced, and again after every later B2 that reproduces. The analyst reads the stored reproduction (test, output, commands run) and the code at the commit B2 ran on. It runs no commands and has no file tools: a job with no agent puts the code into its prompt (the source files the test imports or that appear in the output, and their callers, capped in size as for A's passes, ADR-0034), so ADR-0037's exception does not extend to it. Those paths come from B2's output, which is untrusted: the job reads a path only when it is relative, resolves inside the checked-out tree and is a regular file (no symlink), and the step that reads them holds no token. Like B1 and B2, the analyst also reports any instructions it finds in what it reads (Guardrails). It returns:
+**B3 — Analyse.** Runs in the same run as a B2 that reproduced, and again after every later B2 that reproduces. The analyst reads the stored reproduction (test, output, commands run) and the code at the commit B2 ran on. It runs no commands and has no file tools: a job with no agent puts the code into its prompt (the source files the test imports or that appear in the output, and their callers, capped in size as for A's passes, ADR-0034), so ADR-0037's exception does not extend to it. Those paths come from B2's output, which is untrusted: the job reads a path only when it is relative, its resolved real path is inside the checked-out tree (no symlink in any component) and it is a regular file, and the step that reads them holds no token. Like B1 and B2, the analyst also reports any instructions it finds in what it reads (Guardrails). It returns:
 
 - **Root cause:** the faulty code (file and line), and why it produces the observed behaviour.
 - **Blast radius:** other callers or features affected.
@@ -188,7 +188,7 @@ The orchestrator computes the **risk tier** from the files to change with A's pa
 - `/fix <guidance>` — go ahead, with the guidance added to the implementer's brief.
 - `/no-fix <reason>` — label `fix: declined`, stop.
 
-On either command the orchestrator first removes `triage: awaiting-maintainer`, then sets the comment's status line to who decided, with a link to their comment and, for `/fix <guidance>`, the guidance (cleaned like the analyst's text), where a later B5 finds it, reading it only from that bot-authored comment, found by its marker; `triage: reproduced` stays. `/fix` then starts B5. The "B4 analysis posted" chat alert is wired with the slice's notifications (WP11b), not here.
+On either command the orchestrator first removes `triage: awaiting-maintainer`, then sets the comment's status line to who decided, with a link to their comment and the command's text: the `/fix` guidance, where a later B5 finds it, or the `/no-fix` reason. That text is cleaned like the analyst's, collapsed to one line and capped at 300 characters; B5 reads it only from the status line of the analysis comment written by the workflow's bot (author and marker), and gives it to the implementer as data; `triage: reproduced` stays. `/fix` then starts B5. The "B4 analysis posted" chat alert is wired with the slice's notifications (WP11b), not here.
 
 ```markdown
 <!-- ai-workflows:analysis -->
@@ -200,7 +200,7 @@ On either command the orchestrator first removes `triage: awaiting-maintainer`, 
 **Blast radius** — other callers or features affected.
 **Proposed fix** — approach; files to change; the regression test to keep; alternatives rejected.
 
-**Status:** waiting for `/fix` or `/no-fix`.  |  fix approved by @esciara ([comment](…)); guidance: …  |  fix declined by @esciara ([comment](…)).
+**Status:** waiting for `/fix` or `/no-fix`.  |  fix approved by @esciara ([comment](…)); guidance: …  |  fix declined by @esciara ([comment](…)); reason: …
 ```
 
 **B5 — Fix loop, at most 3 rounds (**[REV-03](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**, **[EXE-06](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**).** Each round runs in a sandbox on branch `ai-fix/issue-<n>`:
