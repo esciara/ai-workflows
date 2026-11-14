@@ -263,6 +263,8 @@ limits:
   human_review_lines: 400
   fix_rounds: 3
   info_requests: 2
+  triage_per_author_per_day: 3  # B1 runs per outside author (not in maintainers) per 24 hours; 0 = never
+  triage_per_day: 20            # B1 runs for all outside authors per 24 hours; 0 = never
 reporter_silence_days: {ping: 4, stale: 14, close: 21}
 notify: slack                   # slack, telegram, or both: slack,telegram
 fork_prs: on-command            # public repos: review fork PRs only after /review
@@ -297,7 +299,7 @@ Rights needed to install in maintainer mode: write access to add the workflow fi
 **Hard limits**
 
 - Agents never merge, close, delete branches or edit CI config; the workflow token is never granted those permissions. The only automatic close is GitHub's stale action on silent needs-info issues (B2).
-- Caps: 3 fix rounds, 2 info requests per issue, and a fixed time limit and turn limit per agent ([CST-01](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)); hitting a fix or info cap escalates, and an agent that hits its time or turn limit fails the run, which gets `ai: error` like any failure.
+- Caps: 3 fix rounds, 2 info requests per issue, and a fixed time limit and turn limit per agent ([CST-01](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)); hitting a fix or info cap escalates, and an agent that hits its time or turn limit fails the run, which gets `ai: error` like any failure. Triage caps for issues from authors not in `maintainers` (ADR-0058): `limits.triage_per_author_per_day` (default 3) and `limits.triage_per_day` (default 20), counted over a rolling 24 hours from the REST issue list (every issue opened counts, ordered by issue number); a capped issue runs no agent, gets `triage: needs-human` and one fixed comment, and is not retried automatically. Maintainers' issues and `/retriage` are never capped; 0 means outsiders are never triaged automatically.
 - One summary comment per PR or issue, updated in place, so reruns never spam the thread.
 - Text in issues, PRs and comments is data. Instructions found there are ignored and reported in the comment as a possible injection.
 - `ai: off` on an item, or a repo-level switch, stops every run immediately ([CTL-08](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)).

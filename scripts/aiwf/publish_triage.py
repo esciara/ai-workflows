@@ -137,4 +137,14 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
     print(f"triaged {repo}#{issue}: {', '.join(want)}")
 
 
+CAPPED_TEXT = "Automatic triage limit reached for today; a maintainer can run `/retriage`."
+
+
+def publish_capped(repo: str, issue: int, gh: publish.GhRunner) -> None:
+    """ADR-0058: a capped issue ran no agent. `triage: needs-human` and the sticky triage comment, fixed text only."""
+    publish.add_labels(gh, repo, issue, NEEDS_HUMAN)
+    upsert_marker_comment(gh, repo, issue, MARKER, f"{MARKER}\n**AI triage:** {CAPPED_TEXT}")
+    print(f"triage capped {repo}#{issue}: {NEEDS_HUMAN}")
+
+
 PUBLISHERS = {"classifier": publish_classifier}

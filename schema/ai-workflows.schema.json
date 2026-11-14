@@ -33,7 +33,9 @@
       "properties": {
         "human_review_lines": {"type": "integer", "minimum": 1, "default": 400},
         "fix_rounds": {"type": "integer", "minimum": 1, "default": 3},
-        "info_requests": {"type": "integer", "minimum": 0, "default": 2}
+        "info_requests": {"type": "integer", "minimum": 0, "default": 2},
+        "triage_per_author_per_day": {"type": "integer", "minimum": 0, "default": 3, "description": "B1 runs per outside author (not in maintainers) in a rolling 24 hours; 0 = never auto-triage outsiders (ADR-0058)."},
+        "triage_per_day": {"type": "integer", "minimum": 0, "default": 20, "description": "B1 runs for all outside authors together in a rolling 24 hours; 0 = never auto-triage outsiders (ADR-0058)."}
       }
     },
     "reporter_silence_days": {
