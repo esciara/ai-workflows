@@ -56,7 +56,7 @@ def combine(passes: dict[str, dict[str, Any]], verify: dict[str, Any], prev_open
     """(findings, history, counts) from the passes' candidates, the verifier's answer and the last run's open findings.
 
     Only candidates the verifier confirms are kept (step 6), with its severity; a candidate it does not mention is
-    dropped and counted as unchecked. Each previous finding is resolved or still open with a reason (step 9); a still
+    dropped and counted as unchecked (`unchecked_serious` for blocking or should-fix ones, which force human review). Each previous finding is resolved or still open with a reason (step 9); a still
     open one stays a finding (and counts toward the verdict) under its old id, with the matching candidate's fresher
     text when the verifier names one. Ids the verifier invents match nothing and are ignored."""
     cands = {c["id"]: c for c in review.candidates(passes)}
@@ -64,7 +64,8 @@ def combine(passes: dict[str, dict[str, Any]], verify: dict[str, Any], prev_open
     for d in verify["decisions"]:
         if d["id"] in cands:
             decisions.setdefault(d["id"], d)
-    confirmed = {cid: {**{k: c[k] for k in FIELDS if k in c}, "severity": decisions[cid]["severity"]}
+    confirmed = {cid: {**{k: c[k] for k in FIELDS if k in c and (k != "replacement" or decisions[cid].get("replacement_ok", True))},
+                       "severity": decisions[cid]["severity"]}  # a replacement the verifier rejects loses its suggestion block
                  for cid, c in cands.items() if decisions.get(cid, {}).get("verdict") == "confirmed"}
     prev_dec: dict[str, dict[str, Any]] = {}
     for d in verify["previous"]:
@@ -93,6 +94,7 @@ def combine(passes: dict[str, dict[str, Any]], verify: dict[str, Any], prev_open
     verdicts = [decisions[cid]["verdict"] for cid in cands if cid in decisions]
     counts = {"candidates": len(cands), "confirmed": verdicts.count("confirmed"), "refuted": verdicts.count("refuted"),
               "duplicate": verdicts.count("duplicate"), "unchecked": len(cands) - len(decisions),
+              "unchecked_serious": sum(c["severity"] in ("blocking", "should-fix") for cid, c in cands.items() if cid not in decisions),
               "resolved": sum(h["status"] == "resolved" for h in history),
               "still_open": sum(h["status"] == "still-open" for h in history), "new": len(confirmed) - len(used)}
     return findings, history, counts
@@ -319,7 +321,7 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
     findings, history, counts = combine(passes, verify, prev["open"] if prev else [])
     if counts["unchecked"]:
         print(f"::warning title=Unchecked findings::the verifier skipped {counts['unchecked']} candidate(s); dropped")
-    label, reasons = review.verdict(findings, facts)
+    label, reasons = review.verdict(findings, facts, counts["unchecked_serious"])
     suspicious = list(dict.fromkeys(s for d in (*passes.values(), verify) for s in d["suspicious_instructions"]))[:10]
     data = {"summary": verify["summary"], "findings": findings, "history": history, "counts": counts,
             "tests": passes["tests"]["summary"], "suspicious_instructions": suspicious}

@@ -13,9 +13,10 @@
           "id": {"type": "string", "minLength": 1, "maxLength": 40},
           "verdict": {"enum": ["confirmed", "refuted", "duplicate"]},
           "severity": {"enum": ["blocking", "should-fix", "nit"]},
-          "reason": {"type": "string", "minLength": 1, "maxLength": 300}
+          "reason": {"type": "string", "minLength": 1, "maxLength": 300},
+          "replacement_ok": {"type": "boolean", "description": "False when the candidate has a replacement (a suggestion block) that is wrong or incomplete; true otherwise."}
         },
-        "required": ["id", "verdict", "severity", "reason"],
+        "required": ["id", "verdict", "severity", "reason", "replacement_ok"],
         "additionalProperties": false
       }
     },

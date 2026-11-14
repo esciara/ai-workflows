@@ -132,8 +132,11 @@ def wait_ci(gh: GhRunner, repo: str, sha: str, own_run_id: str, required: list[s
         waited += poll
 
 
-def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str, list[str]]:
-    """The spec's rubric, first matching row wins; returns (label, reasons)."""
+def verdict(findings: list[dict[str, Any]], facts: dict[str, Any], unverified: int = 0) -> tuple[str, list[str]]:
+    """The spec's rubric, first matching row wins; returns (label, reasons).
+
+    `unverified`: blocking or should-fix candidates the verifier left without a decision; they are not published, so
+    a human must look."""
     blocking = sum(f["severity"] == "blocking" for f in findings)
     if blocking or facts["ci"] == "red":
         return labels.CHANGES_REQUESTED, [r for r in (
@@ -145,6 +148,7 @@ def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str,
         f"{facts['changed_lines']} changed lines (> {facts['human_review_lines']})"
         if facts["changed_lines"] > facts["human_review_lines"] else "",
         f"CI still running after {CI_BUDGET // 60} min" if facts["ci"] == "timeout" else "",
+        f"{unverified} blocking or should-fix candidate(s) the verifier did not check" if unverified else "",
         f"context cut (cap of {CONTEXT_CAP} characters, or a file of 200 KB or more left out): the review saw part of the change" if facts["truncated"] else "",
     ) if r]
     if reasons:
