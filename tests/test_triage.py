@@ -548,7 +548,7 @@ def test_alert_says_duplicate_and_needs_a_person(monkeypatch, tmp_path):
     assert got["alert_text"] == f"[{REPO}] #1 triaged as bug, duplicate of #7, needs a person"
 
 
-@pytest.mark.parametrize("ref,issues", [(dup(7, "low"), {7: issue(7)}), (dup(9), {})])
+@pytest.mark.parametrize("ref,issues", [(dup(7, "low"), {7: issue(7)}), (dup(99), {})])  # 99: a candidate, not on the repo
 def test_alert_names_no_unlabelled_or_unchecked_duplicate(monkeypatch, tmp_path, ref, issues):
     got = alert_outputs(monkeypatch, tmp_path, FakeGh(issues=issues), duplicate_of=ref)
     assert got["alert_text"] == f"[{REPO}] #1 triaged as bug"
