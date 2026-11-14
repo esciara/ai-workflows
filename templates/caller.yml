@@ -3,7 +3,7 @@
 # Each job grants the most its called workflow needs; the called jobs narrow it with their own `permissions:`.
 # Every `uses:` of esciara/ai-workflows is pinned to one release commit SHA with its tag in a comment (ADR-0040); scripts
 # load from the same commit (ADR-0040). To upgrade, replace the SHA and the tag on every line together (docs/install.md).
-# Review only: delete the `triage` job and set `workflows.triage: false` in .github/ai-workflows.yml.
+# Review only: delete the `triage` and `silence` jobs and set `workflows.triage: false` in .github/ai-workflows.yml.
 name: AI workflows
 on:
   pull_request:
