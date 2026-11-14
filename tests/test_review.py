@@ -798,13 +798,13 @@ def test_gather_skips_symlinks_but_reads_normal_files(tmp_path):
     assert "OUTSIDESECRET" not in context
 
 
-def gather_when_diff_refused(tmp_path, files):
+def gather_when_diff_refused(tmp_path, files, error="HTTP 406: Sorry, the diff exceeded the maximum number of lines (20000)"):
     answers = {"pulls/1": {"title": "t", "body": "", "additions": 2, "deletions": 0}, "files": [files],
                "graphql": {"data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": []}}}}}}
 
     def gh(args):
         if any("diff" in a for a in args):
-            raise RuntimeError("HTTP 406: Sorry, the diff exceeded the maximum number of lines (20000)")
+            raise RuntimeError(error)
         key = "graphql" if "graphql" in args else "files" if any("/files" in a for a in args) else "pulls/1"
         return json.dumps(answers[key])
 
@@ -819,6 +819,18 @@ def test_diff_406_falls_back_to_file_patches_and_counts_as_truncated(tmp_path):
     assert facts["truncated"] is True
     assert "diff --git a/a.py b/a.py" in context and "+y" in context and "+L" not in context
     assert facts["commentable"].get("a.py")
+
+
+def test_too_large_error_without_406_also_falls_back(tmp_path):
+    files = [{"filename": "a.py", "status": "modified", "additions": 1, "deletions": 0, "patch": "@@ -1 +1 @@\n+y"}]
+    _, facts = gather_when_diff_refused(tmp_path, files, error="diff too_large")
+    assert facts["truncated"] is True
+
+
+def test_diff_from_files_uses_old_name_for_renames_and_skips_files_without_patch():
+    files = [{"filename": "new.py", "previous_filename": "old.py", "patch": "@@ -1 +1 @@\n+y"},
+             {"filename": "image.png"}]
+    assert review.diff_from_files(files) == "diff --git a/old.py b/new.py\n--- a/old.py\n+++ b/new.py\n@@ -1 +1 @@\n+y\n"
 
 
 def test_other_diff_errors_still_raise(tmp_path):
