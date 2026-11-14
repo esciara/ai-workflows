@@ -73,10 +73,13 @@ CLEARED = "✅ **An earlier ai-workflows error is cleared:** a later run finishe
 
 def clear_error(gh: GhRunner, repo: str, number: int, run_url: str) -> None:
     """Mark our sticky error comment as cleared, when there is one not yet cleared; fixed text only."""
-    found = find_marker_comment(gh, repo, number, ERROR_MARKER)
-    if found and not found["body"].startswith(f"{ERROR_MARKER}\n{CLEARED}"):
-        body = f"{ERROR_MARKER}\n{CLEARED}" + (f" [Run log]({run_url})" if run_url else "")
-        gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{found['id']}", "-f", f"body={body}"])
+    try:  # the result is already published: a failed edit must not turn the run into an `ai: error`
+        found = find_marker_comment(gh, repo, number, ERROR_MARKER)
+        if found and not found["body"].startswith(f"{ERROR_MARKER}\n{CLEARED}"):
+            body = f"{ERROR_MARKER}\n{CLEARED}" + (f" [Run log]({run_url})" if run_url else "")
+            gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{found['id']}", "-f", f"body={body}"])
+    except (RuntimeError, ValueError, KeyError) as exc:
+        print(f"::warning title=Error comment not cleared::{repo}#{number}: {str(exc)[:200]}")
 
 
 def head_moved(gh: GhRunner, repo: str, number: int, sha: str) -> bool:

@@ -276,8 +276,11 @@ jobs:
           FACTS: ${{ needs.context.outputs.facts }}
           VERIFY_JSON: ${{ needs.verify.outputs.json }}
           AIWF_SHA: ${{ job.workflow_sha }}
+          HEAD_SHA: ${{ needs.gate.outputs.sha }}   # no context because the head moved: no `ai: error` (aiwf-3ci)
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: aiwf review-publish --repo "$REPO" --pr "$PR" --run-url "$RUN_URL" --passes-dir passes
+        run: >-
+          aiwf review-publish --repo "$REPO" --pr "$PR" --run-url "$RUN_URL" --passes-dir passes
+          --head-sha "$HEAD_SHA"
 
   # Per-run metrics (spec: Usage per run, ADR-0052): one JSON line, artifact `ai-workflows-metrics` (metrics.jsonl)
   # and the log. Reads only the agents' usage numbers and the run's facts; writes nothing to GitHub.
