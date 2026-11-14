@@ -22,7 +22,6 @@ PENDING = labels.PENDING
 ERROR_MARKER = "<!-- ai-workflows:error -->"
 
 
-
 def event_labels(payload: dict[str, Any]) -> set[str]:
     """Label names on the event's issue or PR, as the event saw them."""
     names = set()

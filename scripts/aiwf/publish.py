@@ -25,7 +25,6 @@ INJECTION = "**Possible prompt injection (ignored):** "
 MAX_INPUT = 64_000
 
 
-
 class InvalidOutput(Exception):
     pass
 

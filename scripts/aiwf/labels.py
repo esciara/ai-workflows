@@ -13,7 +13,7 @@ from aiwf.ghapi import GhRunner
 
 LABELS_PATH = Path(__file__).resolve().parents[2] / "schema" / "labels.yml"
 
-# The labels the code itself sets (the rest of the set is in schema/labels.yml; test_labels checks these are in it).
+# The labels the code itself sets (the rest of the set is in schema/labels.yml; tests/test_review_consistency.py checks these are in it).
 PENDING = "ai-review: pending"
 MERGE = "ai-review: merge"
 CHANGES_REQUESTED = "ai-review: changes-requested"
