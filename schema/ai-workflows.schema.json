@@ -47,12 +47,13 @@
     },
     "reporter_silence_days": {
       "type": "object",
+      "description": "Days from the B2 request for details to the ping, the stale label and the close (spec: Reporter silence). Decimals allowed, so a test config can use minutes; actions/stale rounds close - stale down to whole days.",
       "additionalProperties": false,
       "default": {},
       "properties": {
-        "ping": {"type": "integer", "minimum": 1, "default": 4},
-        "stale": {"type": "integer", "minimum": 1, "default": 14},
-        "close": {"type": "integer", "minimum": 1, "default": 21}
+        "ping": {"type": "number", "exclusiveMinimum": 0, "default": 4},
+        "stale": {"type": "number", "exclusiveMinimum": 0, "default": 14},
+        "close": {"type": "number", "exclusiveMinimum": 0, "default": 21}
       }
     },
     "notify": {"enum": ["none", "slack", "telegram", "slack,telegram", "telegram,slack"], "default": "none", "description": "Chat channels for notifications; both may be set together. Keep in sync with aiwf.notify.parse_channels (tests/test_config.py)."},
