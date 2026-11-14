@@ -60,6 +60,7 @@ def body(path):
     ["pr", "review", "4", "-R", PG, "--approve"], ["pr", "review", "4", "-R", PG, "--request-changes", "-b", "no"],
     [*body("issues/3/comments"), "-f", "body=/fix"], [*body("pulls/4/reviews"), "-f", "event=APPROVE", "-f", "body=ok"],
     [*body("actions/workflows/9/dispatches"), "-f", "ref=main", "-F", "return_run_details=true"],
+    [*body("actions/workflows/9/dispatches"), "-f", "ref=main", "-f", "inputs[labels]=e2e-wp7-x", "-F", "return_run_details=true"],
 ])
 def test_as_maintainer_allows(args):
     assert maintainer_allowed(args) == (True, "")
@@ -72,6 +73,8 @@ def test_as_maintainer_allows(args):
     ["api", "-X", "POST", "repos/esciara/ai-workflows/issues/3/comments", "-f", "body=x"],
     [*body("issues/3/comments"), "-f", "title=x"], [*body("issues/3/comments"), "-F", "body=@secret"],
     [*body("pulls/4/merge")], [*body("issues/3/comments"), f"repos/{PG}/issues/4/comments"], [],
+    [*body("actions/workflows/9/dispatches"), "-f", "ref=main", "-f", "inputs[other]=x"],
+    [*body("issues/3/comments"), "-f", "inputs[labels]=x"],
 ])
 def test_as_maintainer_refuses(args):
     allowed, why = maintainer_allowed(args)
