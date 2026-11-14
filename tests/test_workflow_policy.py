@@ -288,7 +288,7 @@ def test_shared_agent_action_builds_the_claude_args(tmp_path):
     for model, tail in (("", ""), ("claude-sonnet-4-5", " --model 'claude-sonnet-4-5'")):
         env = {**os.environ, "SCHEMA_FILE": str(tmp_path / "s.json"), "MAX_TURNS": "3", "MODEL": model, "GITHUB_OUTPUT": str(out)}
         subprocess.run(["bash", "-c", run], env=env, check=True)
-        want = """claude_args=--max-turns 3 --tools StructuredOutput --json-schema '{"type":"object","description":"a $b"}'"""
+        want = """claude_args=--max-turns 3 --tools StructuredOutput --strict-mcp-config --json-schema '{"type":"object","description":"a $b"}'"""
         assert out.read_text().splitlines()[-1] == want + tail
 
 
@@ -308,7 +308,7 @@ def test_shared_agent_action_gives_bash_only_with_a_safe_sandbox(tmp_path):
     base = {**os.environ, "SCHEMA_FILE": str(tmp_path / "s.json"), "MAX_TURNS": "3", "MODEL": "", "GITHUB_OUTPUT": str(out)}
     env = {**base, "SANDBOX_SETTINGS": _sandbox(tmp_path, **SAFE)}
     subprocess.run(["bash", "-c", run], env=env, check=True)
-    want = "claude_args=--max-turns 3 --tools Bash,StructuredOutput --allowedTools Bash --setting-sources user --json-schema '{}'"
+    want = "claude_args=--max-turns 3 --tools Bash,StructuredOutput --allowedTools Bash --setting-sources user --strict-mcp-config --json-schema '{}'"
     assert out.read_text().splitlines()[-1] == want
     out.unlink()
     for unsafe in ({**SAFE, "enabled": False}, {**SAFE, "failIfUnavailable": False},
@@ -337,6 +337,9 @@ def test_command_running_agents_are_sandboxed_and_scrubbed():
             run = "\n".join(str(s.get("run", "")) for s in steps)
             assert "bubblewrap socat" in run and "apparmor_restrict_unprivileged_userns=0" in run, where
             assert "failIfUnavailable: true" in run and "allowUnsandboxedCommands: false" in run, where
+            # aiwf-zzn: the target repo's MCP servers, settings and hooks are deleted before the agent starts
+            clean = next(i for i, s in enumerate(steps) if "rm -rf work/.mcp.json work/.claude" in str(s.get("run", "")))
+            assert clean < steps.index(agent) and "if" not in steps[clean], f"{where}: repo .mcp.json/.claude removed first"
             setup = next(i for i, s in enumerate(steps) if "bubblewrap" in str(s.get("run", "")))
             assert setup < steps.index(agent) and "if" not in steps[setup], f"{where}: sandbox setup runs first, always"
             check = next(s for s in steps if s.get("name") == "Token check")
