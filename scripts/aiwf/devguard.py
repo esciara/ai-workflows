@@ -187,7 +187,8 @@ def decide(command: str) -> tuple[bool, str]:
             return False, "gh write as the maintainer: use scripts/dev/as-agent gh … (bare gh may only read)"
     if APPROVE.search(command) and not via_maintainer:
         return False, "agents never approve PRs"
-    if re.search(r"\bgit\b.*\bpush\b[^;&|]*[\s:/]main(?=$|[\s;&|\"'])", command):
+    # `push` must be a word of its own, not part of a name like `wp1-push-fix` (aiwf-2gp)
+    if re.search(r"\bgit\b.*(?<![\w./-])push(?![\w./-])[^;&|]*[\s:/]main(?=$|[\s;&|\"'])", command):
         return False, "push to main (open a PR)"
     return True, ""
 

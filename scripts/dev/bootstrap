@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Sets up .venv (Python 3.12, locked deps plus the test extra: pytest, pytest-xdist) in this checkout; run once in each fresh worktree.
+# Then: .venv/bin/pytest -q, scripts/dev/verify-wp <WP> (it picks up .venv by itself). Needs uv (https://docs.astral.sh/uv/).
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+uv sync --quiet --locked --extra test
+echo "ready: .venv/bin/pytest -q"

@@ -15,6 +15,9 @@ ALLOWED = [
     f"scripts/dev/as-maintainer pr review 4 -R {PG} --approve",
     "git push https://github.com/opinionated-digital-center/ai-workflows-playground.git HEAD:fork-bug",
     "uv run --extra test pytest -q", "echo hello | grep gh",
+    # aiwf-2gp: worktree add, also with "push" inside a path or branch name
+    "git worktree add ../ai-workflows-push-fix -b wp1-push-fix origin/main", f"{AGENT} git worktree add ../x -b wp1-x origin/main",
+    "bd create --description 'git worktree add PATH -b BR origin/main'", "git log --oneline origin/main",
     # ADR-0051: enabling auto-merge as the App, nothing else
     f"{AGENT} gh pr merge 7 --auto --rebase", f"{AGENT} gh pr merge 7 --rebase --auto -R esciara/ai-workflows",
 ]
