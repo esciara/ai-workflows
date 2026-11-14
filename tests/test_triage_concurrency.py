@@ -1,5 +1,6 @@
 """aiwf-kbc: one B1/B2 run per issue at a time; runs that start nothing get their own group (no expression engine:
 the group's shape and its link to the B1/B2 entry conditions)."""
+import json
 import re
 from pathlib import Path
 
@@ -20,26 +21,28 @@ def test_issue_group_for_starting_runs_else_own_group():
     assert not GROUP.startswith("ai-workflows-")  # the caller's group prefix: sharing it would deadlock
 
 
-def test_every_b1_and_b2_start_is_in_the_issue_group():
-    """Each command that starts B1 or B2 and the reporter's reply clause must queue in the issue's group."""
+def norm(text: str) -> str:
+    return " ".join(text.split())
+
+
+# The reporter's reply, as repro-context starts B2 on it. In both expressions: narrower in the group, a reply could run
+# B2 beside a running one; wider, any comment by the reporter could replace a pending maintainer command.
+REPLY = ["github.event_name == 'issue_comment'", "!github.event.issue.pull_request",
+         "fromJSON(inputs.config).command == ''",
+         "github.event.comment.user.login == github.event.issue.user.login",
+         "contains(github.event.issue.labels.*.name, 'triage: needs-info')"]
+
+
+def test_reply_clause_is_the_same_as_repro_contexts():
+    starts = norm(WF["jobs"]["repro-context"]["if"])
+    for cond in REPLY:
+        assert cond in starts and cond in GROUP, cond
+
+
+def test_every_b1_and_b2_command_and_new_issues_are_in_the_issue_group():
     jobs = WF["jobs"]
-    starts = jobs["context"]["if"] + " " + jobs["repro-context"]["if"]
+    starts = norm(jobs["context"]["if"] + " " + jobs["repro-context"]["if"])
     commands = set(re.findall(r"command == '([a-z-]+)'", starts))
     assert commands == {"retriage", "reproduce"}
-    assert all(f'"{c}"' in GROUP for c in commands)
+    assert f"""contains(fromJSON('{json.dumps(sorted(commands, reverse=True))}'), fromJSON(inputs.config).command)""" in GROUP
     assert "github.event_name == 'issues'" in GROUP
-    assert "github.event.comment.user.login == github.event.issue.user.login" in GROUP
-    assert "fromJSON(inputs.config).command == ''" in GROUP and "!github.event.issue.pull_request" in GROUP
-
-
-def test_reply_clause_is_exactly_repro_contexts():
-    """Narrower than repro-context's: a reply could run B2 beside a running one. Wider: any comment by the reporter
-    could take the pending slot and cancel a pending maintainer command."""
-    clause = WF["jobs"]["repro-context"]["if"].split("||")[-1]
-    conds = []
-    for c in clause.split("&&"):
-        c = " ".join(c.split()).lstrip("( ").rstrip(") }")  # drop the clause's own parentheses and the closing }}
-        conds.append(c + ")" * (c.count("(") - c.count(")")))
-    assert len(conds) == 5 and "contains(github.event.issue.labels.*.name, 'triage: needs-info')" in conds
-    for cond in conds:
-        assert cond in GROUP, cond
