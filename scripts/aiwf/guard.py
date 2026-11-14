@@ -11,16 +11,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from typing import Any, Callable
+from typing import Any
 
-from aiwf.ghapi import remove_label, upsert_marker_comment
+from aiwf import labels
+from aiwf.ghapi import GhRunner, remove_label, upsert_marker_comment
 
 OFF_LABEL = "ai: off"
-ERROR_LABEL = "ai: error"
-PENDING = "ai-review: pending"
+ERROR_LABEL = labels.ERROR
+PENDING = labels.PENDING
 ERROR_MARKER = "<!-- ai-workflows:error -->"
 
-GhRunner = Callable[[list[str]], str]
 
 
 def event_labels(payload: dict[str, Any]) -> set[str]:

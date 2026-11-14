@@ -19,12 +19,12 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from aiwf import commands, config
+from aiwf import commands, config, labels
 
 GhRunner = commands.GhRunner
 
 DEPENDABOT = "dependabot[bot]"
-HUMAN_REVIEW = "ai-review: human-review"
+HUMAN_REVIEW = labels.HUMAN_REVIEW
 
 
 @dataclass(frozen=True)

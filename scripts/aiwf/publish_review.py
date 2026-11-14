@@ -18,18 +18,18 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from aiwf import config, guard, publish, review
+from aiwf import config, guard, labels, publish, review
 from aiwf import review_placement as placement
-from aiwf.ghapi import BOT, find_marker_comment, remove_label
+from aiwf.ghapi import BOT, GhRunner, find_marker_comment, remove_label
 
 MARKER = "<!-- ai-review:summary v1 -->"
 STATE_V = 2  # v1 (WP2a) kept finding keys only; its state reads as no prior state
 STATE_RE = re.compile(r"<!-- ai-review:state (\{.*?\}) -->\s*\Z", re.S)
-PENDING = "ai-review: pending"
+PENDING = labels.PENDING
 HEADINGS = {
-    "ai-review: merge": "✅ Merge",
-    "ai-review: changes-requested": "❌ Changes requested",
-    "ai-review: human-review": "👀 Human review needed",
+    labels.MERGE: "✅ Merge",
+    labels.CHANGES_REQUESTED: "❌ Changes requested",
+    labels.HUMAN_REVIEW: "👀 Human review needed",
 }
 CI_TEXT = {"green": "green", "red": "red", "none": "no checks", "timeout": "still running (timed out)"}
 PUBLISHERS: dict = {}  # see the module docstring
@@ -40,7 +40,7 @@ MAX_STATE = 40  # open findings carried in the state block to the next run
 MAX_BODY = 60_000  # GitHub caps a comment at 65,536 characters
 THREAD_RE = re.compile(r"https://[A-Za-z0-9.-]+/[A-Za-z0-9._/-]+/pull/\d+#discussion_r\d+\Z")
 FINDING_RE = re.compile(r"<!-- ai-review:finding ([0-9a-f]{12}\+*) -->")
-CHANGES = "ai-review: changes-requested"
+CHANGES = labels.CHANGES_REQUESTED
 
 
 clean = publish.clean  # one table-safe line (shared with triage)
@@ -180,7 +180,7 @@ def valid_state(prev: Any) -> bool:
                for f in prev["open"])
 
 
-def find_summary(gh: publish.GhRunner, repo: str, number: int) -> tuple[int | None, dict[str, Any] | None]:
+def find_summary(gh: GhRunner, repo: str, number: int) -> tuple[int | None, dict[str, Any] | None]:
     """(comment id, prior state) of the bot's own summary comment; a forged marker from anyone else is ignored."""
     found = find_marker_comment(gh, repo, number, MARKER)
     if found is None:
@@ -195,7 +195,7 @@ def find_summary(gh: publish.GhRunner, repo: str, number: int) -> tuple[int | No
     return found["id"], prev
 
 
-def set_verdict_label(gh: publish.GhRunner, repo: str, number: int, label: str) -> None:
+def set_verdict_label(gh: GhRunner, repo: str, number: int, label: str) -> None:
     for old in [PENDING, *HEADINGS]:
         if old != label:
             remove_label(gh, repo, number, old)
@@ -222,13 +222,13 @@ def inline_comment(f: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
     return {**out, "body": "\n".join(parts)}
 
 
-def bot_changes_requested(gh: publish.GhRunner, repo: str, number: int) -> list[int]:
+def bot_changes_requested(gh: GhRunner, repo: str, number: int) -> list[int]:
     """Ids of our own reviews that still request changes."""
     pages = json.loads(gh(["api", "--paginate", "--slurp", f"repos/{repo}/pulls/{number}/reviews?per_page=100"]))
     return [r["id"] for page in pages for r in page if r["user"]["login"] == BOT and r["state"] == "CHANGES_REQUESTED"]
 
 
-def post_review(gh: publish.GhRunner, repo: str, number: int, payload: dict[str, Any]) -> dict[str, Any]:
+def post_review(gh: GhRunner, repo: str, number: int, payload: dict[str, Any]) -> dict[str, Any]:
     assert payload["event"] in ("REQUEST_CHANGES", "COMMENT")  # never APPROVE (spec, Workflow A step 8)
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
         json.dump(payload, fh)
@@ -238,7 +238,7 @@ def post_review(gh: publish.GhRunner, repo: str, number: int, payload: dict[str,
         os.unlink(fh.name)
 
 
-def send_review(gh: publish.GhRunner, repo: str, number: int, facts: dict[str, Any], label: str, findings: list[dict[str, Any]],
+def send_review(gh: GhRunner, repo: str, number: int, facts: dict[str, Any], label: str, findings: list[dict[str, Any]],
                 summary_url: str) -> list[str]:
     """At most one GitHub review for this run (ADR-0041): Request changes for `changes-requested`, else Comment, with
     the new inline comments; none when there is nothing new and the review state would not change. Our earlier
@@ -298,7 +298,7 @@ def send_review(gh: publish.GhRunner, repo: str, number: int, facts: dict[str, A
 
 
 def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str, Any], repo: str, number: int,
-                   run_url: str, aiwf_sha: str, gh: publish.GhRunner) -> bool:
+                   run_url: str, aiwf_sha: str, gh: GhRunner) -> bool:
     """Validate the 4 passes and the verifier, decide, then create or update the summary comment and set the label."""
     try:
         passes = {}

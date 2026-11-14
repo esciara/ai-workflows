@@ -14,13 +14,12 @@ import argparse
 import json
 import os
 import re
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import quote
 
 from aiwf import config, ghapi, publish
-from aiwf.ghapi import get_json
+from aiwf.ghapi import GhRunner, get_json
 
-GhRunner = Callable[[list[str]], str]
 
 MAX_CONTEXT = 120_000
 MAX_ISSUE_BODY = 8_000

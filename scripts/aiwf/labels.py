@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import quote
 
 import yaml
 
+from aiwf.ghapi import GhRunner
+
 LABELS_PATH = Path(__file__).resolve().parents[2] / "schema" / "labels.yml"
 
-GhRunner = Callable[[list[str]], str]
+# The labels the code itself sets (the rest of the set is in schema/labels.yml; test_labels checks these are in it).
+PENDING = "ai-review: pending"
+MERGE = "ai-review: merge"
+CHANGES_REQUESTED = "ai-review: changes-requested"
+HUMAN_REVIEW = "ai-review: human-review"
+VERDICTS = (MERGE, CHANGES_REQUESTED, HUMAN_REVIEW)
+ERROR = "ai: error"
 
 
 def load(path: Path = LABELS_PATH) -> list[dict[str, str]]:
