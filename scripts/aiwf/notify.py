@@ -4,7 +4,8 @@
 Secrets (SLACK_WEBHOOK_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID) and the message (NOTIFY_TEXT, NOTIFY_URL) come from
 env vars, never the command line. Nothing printed carries a secret: errors are reduced to a status or an exception
 type and redacted, and the result lines hold only what the provider answered (Slack: status and body; Telegram: `ok`,
-`message_id` and the links it parsed out of the stored message), not the chat ID or the request URL.
+`message_id` and the links it parsed out of the stored message) plus the message text sent, not the chat ID or the
+request URL.
 """
 
 from __future__ import annotations
@@ -104,7 +105,7 @@ def send_slack(webhook: str, text: str, url: str, post: Post) -> dict[str, Any]:
     status, body = post(webhook, slack_payload(text, url))
     if status != 200 or body.strip() != "ok":
         raise NotifyError(f"Slack answered HTTP {status}: {body.strip()[:200]}")
-    return {"channel": "slack", "status": status, "body": body.strip(), "links": [url]}
+    return {"channel": "slack", "status": status, "body": body.strip(), "links": [url], "text": text}
 
 
 def send_telegram(token: str, chat_id: str, text: str, url: str, post: Post) -> dict[str, Any]:
@@ -116,7 +117,8 @@ def send_telegram(token: str, chat_id: str, text: str, url: str, post: Post) -> 
     if status != 200 or data.get("ok") is not True:
         raise NotifyError(f"Telegram answered HTTP {status}: {str(data.get('description', ''))[:200]}")
     message = data.get("result") or {}
-    return {"channel": "telegram", "ok": True, "message_id": message.get("message_id"), "links": telegram_links(message)}
+    return {"channel": "telegram", "ok": True, "message_id": message.get("message_id"), "links": telegram_links(message),
+            "text": text}
 
 
 def notify(channels: list[str], text: str, url: str, env: Mapping[str, str], post: Post | None = None

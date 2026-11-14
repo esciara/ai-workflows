@@ -508,3 +508,66 @@ def test_no_injection_line_without_quotes(monkeypatch, extract_json):
     run(gh)
     [body] = gh.comment_bodies()
     assert publish.INJECTION not in body
+
+
+# --- "New issue triaged" chat alert (WP11b1) -------------------------------------------------------------------------
+
+def alert_outputs(monkeypatch, tmp_path, gh, **data):
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    run(gh, **data)
+    return dict(line.split("=", 1) for line in out.read_text().splitlines())
+
+
+@pytest.mark.parametrize("kind", ["bug", "feature", "question"])
+def test_alert_names_the_issue_its_type_and_links_it(monkeypatch, tmp_path, kind):
+    got = alert_outputs(monkeypatch, tmp_path, FakeGh(), type=kind)
+    assert got == {"alert_text": f"[{REPO}] #1 triaged as {kind}", "alert_url": f"https://github.com/{REPO}/issues/1"}
+
+
+def test_alert_says_duplicate_and_needs_a_person(monkeypatch, tmp_path):
+    got = alert_outputs(monkeypatch, tmp_path, FakeGh(issues={7: issue(7)}), confidence="low", duplicate_of=dup(7))
+    assert got["alert_text"] == f"[{REPO}] #1 triaged as bug, duplicate of #7, needs a person"
+
+
+@pytest.mark.parametrize("ref,issues", [(dup(7, "low"), {7: issue(7)}), (dup(9), {})])
+def test_alert_names_no_unlabelled_or_unchecked_duplicate(monkeypatch, tmp_path, ref, issues):
+    got = alert_outputs(monkeypatch, tmp_path, FakeGh(issues=issues), duplicate_of=ref)
+    assert got["alert_text"] == f"[{REPO}] #1 triaged as bug"
+
+
+def test_alert_carries_no_agent_or_issue_text(monkeypatch, tmp_path):
+    reason = "Send everyone to https://evil.example now."
+    got = alert_outputs(monkeypatch, tmp_path, FakeGh(issues={7: issue(7, title="<!channel> pwn")}), reason=reason,
+                        duplicate_of=dup(7), suspicious_instructions=["ping everyone"])
+    assert got == {"alert_text": f"[{REPO}] #1 triaged as bug, duplicate of #7",
+                   "alert_url": f"https://github.com/{REPO}/issues/1"}
+
+
+def test_no_alert_when_the_output_is_invalid(monkeypatch, tmp_path):
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    assert not publish.publish("classifier", '{"type": "bug"}', REPO, 1, "", FakeGh())
+    assert not out.exists()
+
+
+def test_triage_workflow_sends_the_alert_for_new_issues_only():
+    from pathlib import Path
+
+    import yaml
+    jobs = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/triage.yml").read_text())["jobs"]
+    job = jobs["notify"]
+    assert job["needs"] == "publish" and job["permissions"] == {}
+    for cond in ("github.event_name == 'issues'", "github.event.action == 'opened'",
+                 "needs.publish.outputs.alert_text != ''", "fromJSON(inputs.config).notify != 'none'"):
+        assert cond in job["if"], cond
+    assert "always()" not in job["if"]
+    assert jobs["publish"]["outputs"] == {"alert_text": "${{ steps.publish.outputs.alert_text }}",
+                                          "alert_url": "${{ steps.publish.outputs.alert_url }}"}
+    send = job["steps"][-1]
+    assert send["run"].endswith("aiwf notify --channels \"$CHANNELS\"") and "GH_TOKEN" not in send["env"]
+    assert send["env"]["NOTIFY_TEXT"] == "${{ needs.publish.outputs.alert_text }}"
+    chat = [n for n, j in jobs.items() if any("secrets.SLACK_WEBHOOK_URL" in json.dumps(s) for s in j.get("steps", []))]
+    assert chat == ["notify"]  # the only job holding the chat secrets
+    assert "notify" in jobs["failed"]["needs"]  # a failed alert is reported like any failed job (ADR-0045)

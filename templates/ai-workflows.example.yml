@@ -14,7 +14,7 @@ limits:
   fix_rounds: 3                 # not used yet, WP9
   info_requests: 2              # not used yet, WP6
 reporter_silence_days: {ping: 4, stale: 14, close: 21}   # must be increasing; not used yet, WP7
-notify: none                    # none | slack | telegram | slack,telegram; not used yet, WP11b
+notify: none                    # none | slack | telegram | slack,telegram; new-issue alert now, other events later (WP11b)
 fork_prs: on-command            # on-command (review fork PRs only after /review) | off
 workflows:
   review: true                  # Workflow A

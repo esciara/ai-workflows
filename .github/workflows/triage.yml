@@ -1,4 +1,5 @@
-# Reusable: Workflow B (issue triage and fixes). WP5: B1 classify on `issues.opened` and on a maintainer's `/retriage`.
+# Reusable: Workflow B (issue triage and fixes). WP5: B1 classify on `issues.opened` and on a maintainer's `/retriage`;
+# a new issue's result also goes to chat (WP11b1).
 # B1 runs two agent passes (ADR-0035): pass 1 reads the issue and returns what to search for; the orchestrator gathers
 # duplicate candidates (issue search, all issues) and possible fixes (commits and merged PRs since the reported
 # version's tag) with a read-only token; pass 2 classifies. Issue and comment text are untrusted: they reach scripts
@@ -169,6 +170,9 @@ jobs:
       contents: read  # check a fixing commit is on the default branch
       issues: write
       pull-requests: read  # check a fixing PR was merged into the default branch
+    outputs:
+      alert_text: ${{ steps.publish.outputs.alert_text }}
+      alert_url: ${{ steps.publish.outputs.alert_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -189,11 +193,39 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: ~/.aiwf-venv/bin/aiwf publish --kind classifier --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
 
+  # "New issue triaged" chat alert (spec: Chat notifications, WP11b1) to the config's `notify` channels: new issues only,
+  # never on `/retriage`. Only a published classifier result sets the alert (a capped issue has none, ADR-0058); its
+  # text holds checked fields only. The only job given the chat secrets, through env vars to the send step; no GitHub
+  # token scope. aiwf notify never prints the secrets, the request URLs or the chat ID.
+  notify:
+    needs: publish
+    if: github.event_name == 'issues' && github.event.action == 'opened' && needs.publish.outputs.alert_text != '' && fromJSON(inputs.config).notify != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - env:
+          CHANNELS: ${{ fromJSON(inputs.config).notify }}
+          NOTIFY_TEXT: ${{ needs.publish.outputs.alert_text }}
+          NOTIFY_URL: ${{ needs.publish.outputs.alert_url }}
+          AIWF_SHA: ${{ job.workflow_sha }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: ~/.aiwf-venv/bin/aiwf notify --channels "$CHANNELS"
+
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
   # The reason names the failed jobs only.
   failed:
-    needs: [context, extract, candidates, classify, publish]
+    needs: [context, extract, candidates, classify, publish, notify]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
