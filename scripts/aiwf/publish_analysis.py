@@ -5,7 +5,8 @@
   tree files that passed the path check (`analyse.safe_file`) and a whole-number line. Label `triage: awaiting-maintainer`.
 - B4 (`aiwf decide`): only while the issue has `triage: awaiting-maintainer`, read live; removes it first, then sets the
   comment's status line to who decided, a link to their comment and the command's text (cleaned, one line, capped).
-  `/no-fix` also labels `fix: declined`. WP9 makes `/fix` start B5, which reads the guidance only from this status line.
+  `/no-fix` also labels `fix: declined`. A recorded `/fix` starts B5 (job output `fix=true`), which reads the guidance
+  only from this status line.
 - A later B2 that does not reproduce marks the comment superseded (`supersede`). Each new status keeps an earlier
   decision under it as "Previously:"; B5 reads only the `**Status:**` line.
 
@@ -187,7 +188,11 @@ def cmd_decide(args: argparse.Namespace) -> int:
         print(f"::notice title=ai: off::#{args.issue} has '{guard.OFF_LABEL}': nothing changed")
         return 0
     text = json.loads(cfg.get("command_args") or '""')
-    print(decide(config.run_gh, args.repo, args.issue, name, text if isinstance(text, str) else "", cli.read_event()))
+    done = decide(config.run_gh, args.repo, args.issue, name, text if isinstance(text, str) else "", cli.read_event())
+    print(done)
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out and name == "fix" and done.endswith(f" recorded on #{args.issue}"):  # recorded in the status line: B5 starts
+        cli.write_outputs(out, {"fix": "true"})
     return 0
 
 

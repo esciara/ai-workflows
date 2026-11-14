@@ -54,8 +54,8 @@ def test_full_config_keeps_explicit_values():
 
 
 def test_partial_nested_object_is_filled():
-    cfg = load_text("maintainers: [a]\nlimits: {fix_rounds: 5}\n")
-    assert cfg["limits"] == {"human_review_lines": 400, "fix_rounds": 5, "info_requests": 2, **TRIAGE_CAP_DEFAULTS}
+    cfg = load_text("maintainers: [a]\nlimits: {fix_rounds: 1}\n")
+    assert cfg["limits"] == {"human_review_lines": 400, "fix_rounds": 1, "info_requests": 2, **TRIAGE_CAP_DEFAULTS}
 
 
 def test_example_template_is_valid():
@@ -90,6 +90,8 @@ def test_unknown_nested_key_rejected_with_path():
 def test_wrong_type_reports_path():
     errs = errors_of("maintainers: [a]\nlimits: {fix_rounds: three}\n")
     assert errs[0].startswith("$.limits.fix_rounds:")
+    for bad in (0, 4):  # spec B5: 1 to 3 rounds
+        assert errors_of(f"maintainers: [a]\nlimits: {{fix_rounds: {bad}}}\n")[0].startswith("$.limits.fix_rounds:")
 
 
 @pytest.mark.parametrize("key", ["triage_per_author_per_day", "triage_per_day"])
