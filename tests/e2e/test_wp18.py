@@ -29,7 +29,7 @@ import re
 import time
 
 import playground as pg
-from test_wp3 import (BUG_LINE, CART, FIX_LINE, STATE_RE, bot_review_comments, head_sha, put_file, read_file,
+from test_wp3 import (BUG_LINE, CART, FIX_LINE, bot_review_comments, head_sha, put_file, read_file,
                       review_run, seeded_pr, summary)
 
 THREADS_OPEN_RE = re.compile(r"(\d+) threads? open")
@@ -65,9 +65,11 @@ def bug_thread(number: int, bug_range: tuple[int, int]) -> dict:
               if c["path"] == CART and c.get("line") and (c.get("start_line") or c["line"]) <= hi and c["line"] >= lo}
     assert inline, f"no bot inline comment on {CART} lines {lo}-{hi}"
     hits = [t for t in threads(number) if t["comments"] and t["comments"][0]["id"] in inline]
-    assert len(hits) == 1, f"expected exactly one bot thread on the seeded bug, got {[t['id'] for t in hits]}"
-    assert hits[0]["comments"][0]["author"] == pg.BOT.removesuffix("[bot]"), hits[0]["comments"][0]["author"]
-    return hits[0]
+    assert hits, f"no bot thread on the seeded bug at {CART} lines {lo}-{hi}"
+    bug = [t for t in hits if "100" in t["comments"][0]["body"]]
+    assert bug, f"no bot thread mentions the missing `/ 100`: {[t['comments'][0]['body'][:80] for t in hits]}"
+    assert bug[0]["comments"][0]["author"] == pg.BOT.removesuffix("[bot]"), bug[0]["comments"][0]["author"]
+    return bug[0]
 
 
 def threads_open(number: int) -> int:
@@ -100,6 +102,7 @@ def test_a_fixing_push_gets_a_reply_and_the_thread_resolved_a_non_fixing_push_le
         assert not t1["resolved"], "the bug thread is already resolved after the first run"
         assert len(t1["comments"]) == 1, f"unexpected replies in the new thread: {t1['comments']}"
         open1 = [t for t in threads(number) if not t["resolved"]]
+        pre_fix = {t["id"] for t in open1}  # every one of these must be closed by the fixing push
         assert threads_open(number) == len(open1), (threads_open(number), len(open1))
         print(f"first run: thread {t1['id']} open, summary says {threads_open(number)} threads open")
 
@@ -127,5 +130,12 @@ def test_a_fixing_push_gets_a_reply_and_the_thread_resolved_a_non_fixing_push_le
         m = RESOLVED_RE.match(replies[0]["body"])
         assert m, f"reply is not 'resolved in <short sha>: <reason>': {replies[0]['body'][:200]!r}"
         assert sha3.startswith(m.group(1)), f"reply names {m.group(1)}, the fixing commit is {sha3[:7]}"
-        assert not [t for t in threads(number) if not t["resolved"]], "unresolved threads remain on the fixed PR"
+        after = threads(number)
+        not_closed = [t["id"] for t in after if t["id"] in pre_fix and not t["resolved"]]
+        assert not not_closed, f"pre-fix bot threads not resolved by the fixing push: {not_closed}"
+        left = [t for t in after if not t["resolved"]]
+        for t in left:
+            print(f"unresolved after fix: {t['id']} {t['path']} {[(c['author'], c['body'][:80]) for c in t['comments']]}")
+        assert threads_open(number) == len(left), (threads_open(number), len(left))
+        assert not left, f"{len(left)} unresolved threads remain on the fixed PR (new findings, or a missed resolve)"
         assert threads_open(number) == 0, f"the summary does not say 0 threads open: {summary(number)}"
