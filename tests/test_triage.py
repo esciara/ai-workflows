@@ -585,7 +585,7 @@ def test_triage_workflow_sends_the_alert_for_new_issues_only():
     assert send["env"]["NOTIFY_TEXT"] == "${{ needs.publish.outputs.alert_text }}"
     chat = [n for n, j in jobs.items() if any("secrets.SLACK_WEBHOOK_URL" in json.dumps(s) for s in j.get("steps", []))]
     assert chat == ["notify"]  # the only job holding the chat secrets
-    assert "notify" in jobs["failed"]["needs"]  # a failed alert is reported like any failed job (ADR-0045)
+    assert "notify" not in jobs["failed"]["needs"]  # a failed alert is no `ai: error`: triage worked (aiwf-3ci)
 
 
 # --- references must be among the candidates pass 2 was shown (aiwf-wqn) ---------------------------------------------

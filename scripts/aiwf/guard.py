@@ -4,6 +4,8 @@
 - `report_error`: label `ai: error` plus one sticky error comment with the run link and a reason built from job names
   only (never agent text). Nothing re-runs: the maintainer reads the log, removes the label and re-runs if wanted.
 - An agent that hits its time or turn limit (ADR-0050) fails its job, so it goes through `report_error` too.
+- A stale PR run reports nothing (aiwf-3ci): with `--head-sha`, when the PR's head is no longer that commit (a push
+  after the gate chose it, e.g. "PR head moved"), the run for the new head owns the labels and reports its own result.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ import os
 from typing import Any
 
 from aiwf import labels
-from aiwf.ghapi import GhRunner, remove_label, upsert_marker_comment
+from aiwf.ghapi import GhRunner, get_or_none, remove_label, upsert_marker_comment
 
 OFF_LABEL = "ai: off"
 ERROR_LABEL = labels.ERROR
@@ -64,9 +66,19 @@ def report_error(gh: GhRunner, repo: str, number: int, run_url: str, reason: str
     return True
 
 
+def head_moved(gh: GhRunner, repo: str, number: int, sha: str) -> bool:
+    """The PR's head is now another commit than `sha`. An unreadable PR counts as not moved: report as usual."""
+    pr = get_or_none(gh, f"repos/{repo}/pulls/{number}")
+    head = ((pr or {}).get("head") or {}).get("sha") if isinstance(pr, dict) else None
+    return bool(head) and head != sha
+
+
 def cmd_report_error(args: argparse.Namespace) -> int:
     from aiwf import config
 
+    if args.head_sha and head_moved(config.run_gh, args.repo, args.issue, args.head_sha):
+        print(f"{args.repo}#{args.issue}: head moved from {args.head_sha}; the newer run reports, not this one")
+        return 0
     try:
         needs = json.loads(os.environ.get("AIWF_NEEDS") or "{}")
     except json.JSONDecodeError:
@@ -82,4 +94,5 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--repo", required=True)
     p.add_argument("--issue", required=True, type=int)
     p.add_argument("--run-url", required=True)
+    p.add_argument("--head-sha", default="", help="PR runs: the head the run reviewed; skip when the PR moved on")
     p.set_defaults(func=cmd_report_error)
