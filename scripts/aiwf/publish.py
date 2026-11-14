@@ -16,12 +16,14 @@ from typing import Any, Callable
 
 from jsonschema import Draft202012Validator
 
+from aiwf import labels
+from aiwf.ghapi import GhRunner
+
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schema"
-ERROR_LABEL = "ai: error"
+ERROR_LABEL = labels.ERROR
 INJECTION = "**Possible prompt injection (ignored):** "
 MAX_INPUT = 64_000
 
-GhRunner = Callable[[list[str]], str]
 
 
 class InvalidOutput(Exception):

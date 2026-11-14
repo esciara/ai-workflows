@@ -15,9 +15,9 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from aiwf import config
+from aiwf import config, labels
+from aiwf.ghapi import GhRunner
 
-GhRunner = Callable[[list[str]], str]
 CI_BUDGET = 20 * 60  # seconds; then the verdict is human-review (ADR-0034); a config key comes with WP12 budgets
 CI_POLL = 20
 CI_GRACE = 90  # with no check run at all, wait this long for CI to register before calling it "none"
@@ -136,7 +136,7 @@ def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str,
     """The spec's rubric, first matching row wins; returns (label, reasons)."""
     blocking = sum(f["severity"] == "blocking" for f in findings)
     if blocking or facts["ci"] == "red":
-        return "ai-review: changes-requested", [r for r in (
+        return labels.CHANGES_REQUESTED, [r for r in (
             f"{blocking} blocking finding(s)" if blocking else "", "a CI check is red" if facts["ci"] == "red" else "") if r]
     reasons = [r for r in (
         "risk tier high" if facts["tier"] == "high" else "",
@@ -148,8 +148,8 @@ def verdict(findings: list[dict[str, Any]], facts: dict[str, Any]) -> tuple[str,
         f"context cut (cap of {CONTEXT_CAP} characters, or a file of 200 KB or more left out): the review saw part of the change" if facts["truncated"] else "",
     ) if r]
     if reasons:
-        return "ai-review: human-review", reasons
-    return "ai-review: merge", ["no blocking findings, CI green, tier " + facts["tier"]]
+        return labels.HUMAN_REVIEW, reasons
+    return labels.MERGE, ["no blocking findings, CI green, tier " + facts["tier"]]
 
 
 def commentable(diff: str) -> dict[str, list[list[int]]]:

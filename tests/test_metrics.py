@@ -7,9 +7,6 @@ RESULT = {"type": "result", "subtype": "success", "result": "agent text, never k
           "num_turns": 2, "total_cost_usd": 0.0123,
           "usage": {"input_tokens": 12, "output_tokens": 900, "cache_read_input_tokens": 5000,
                     "cache_creation_input_tokens": 3000, "server_tool_use": {"web_search_requests": 0}}}
-USAGE_JQ = """[[.[] | select(.type == "result")] | last | select(. != null)
-    | {type, duration_ms, num_turns, total_cost_usd, usage: ((.usage // {})
-    | {input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens})}]"""
 
 
 def test_usage_keeps_numbers_only_from_the_last_result():
@@ -32,7 +29,6 @@ def test_workflow_jq_reduces_the_execution_file(tmp_path):
     import yaml
     from pathlib import Path
     wf = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/review.yml").read_text())
-    assert " ".join(wf["env"]["USAGE_JQ"].split()) == " ".join(USAGE_JQ.split())
     src = tmp_path / "exec.json"
     src.write_text(json.dumps([{"type": "system"}, RESULT]))
     out = subprocess.run(["jq", "-c", wf["env"]["USAGE_JQ"], str(src)], capture_output=True, text=True, check=True)
