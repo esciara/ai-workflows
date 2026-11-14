@@ -15,13 +15,12 @@ import argparse
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import quote
 
 from aiwf import config, guard, publish_triage
-from aiwf.ghapi import get_json
+from aiwf.ghapi import GhRunner, get_json
 
-GhRunner = Callable[[list[str]], str]
 WINDOW = timedelta(hours=24)
 
 
