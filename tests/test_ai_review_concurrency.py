@@ -10,4 +10,6 @@ def test_review_event_has_own_concurrency_group():
     doc = yaml.safe_load((ROOT / ".github" / "workflows" / "ai-review.yml").read_text())
     group = doc["concurrency"]["group"]
     assert "pull_request_review" in group and "verdict-" in group
+    # per-run group: reruns of several stale review runs must not queue in one group (ADR-0059)
+    assert "github.run_id" in group.split("||")[0]
     assert doc["concurrency"]["cancel-in-progress"] is False
