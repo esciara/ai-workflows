@@ -197,8 +197,8 @@ def _value(args: list[str], *flags: str) -> list[str]:
 
 
 def maintainer_allowed(args: list[str]) -> tuple[bool, str]:
-    """Allow-list of `as-maintainer <gh args>`: maintainer comments, PR reviews and approvals, and the labels-sync
-    `workflow_dispatch`, on the playground only."""
+    """Allow-list of `as-maintainer <gh args>`: maintainer comments, PR reviews and approvals, and the e2e
+    `workflow_dispatch` runs (labels-sync; reporter silence with its `labels` input, WP7), on the playground only."""
     a = args[1:] if args[:1] == ["gh"] else list(args)
     if a[:2] in (["issue", "comment"], ["pr", "comment"], ["pr", "review"]):
         if not re.fullmatch(r"\d+", a[2] if len(a) > 2 else ""):
@@ -216,7 +216,7 @@ def maintainer_allowed(args: list[str]) -> tuple[bool, str]:
         allowed_paths = [
             (rf"{base}issues/\d+/comments", {"body"}),
             (rf"{base}pulls/\d+/reviews", {"body", "event", "commit_id"}),
-            (rf"{base}actions/workflows/\d+/dispatches", {"ref"}),
+            (rf"{base}actions/workflows/\d+/dispatches", {"ref", "inputs[labels]"}),
         ]
         if len(paths) != 1:
             return False, "exactly one API path"
@@ -239,4 +239,4 @@ def maintainer_allowed(args: list[str]) -> tuple[bool, str]:
             else:
                 return False, f"argument not allowed: {x}"
         return (True, "") if method == "POST" else (False, "needs -X POST")
-    return False, "as-maintainer only posts comments, PR reviews/approvals and the labels-sync dispatch on " + PLAYGROUND
+    return False, "as-maintainer only posts comments, PR reviews/approvals and the e2e workflow dispatches on " + PLAYGROUND
