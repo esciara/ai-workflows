@@ -79,7 +79,7 @@ jobs:
   # Workflow B (WP5: B1 classify on new issues and /retriage). Review-only install: delete this job.
   triage:
     needs: config
-    if: needs.config.outputs.triage == 'true' && (github.event_name == 'issues' || github.event_name == 'schedule' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
+    if: needs.config.outputs.triage == 'true' && (github.event_name == 'issues' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
     uses: esciara/ai-workflows/.github/workflows/triage.yml@971b60126a957026a2e939ee1c527fdac7d340af # v0.1.0
     # B1 reads the repo and PRs, writes only issue labels and comments. Widen when fixes (B5/B6) ship.
     permissions:
