@@ -4,7 +4,9 @@
 # 1. ping: on silent needs-info issues, a comment mentioning the maintainers and the `triage: no-response` label
 #    (aiwf silence-ping; reads labels, comment authors, dates and markers only, never issue text);
 # 2. stale: actions/stale labels `stale` and closes, only on issues already pinged, so the order is always ping, stale,
-#    close. Its clock counts from the last update (the ping is one), hence `stale - ping` days to the label.
+#    close. Its clock counts from the last update (the ping is one), hence `stale - ping` days to the label. Then
+#    aiwf silence-closed takes `triage: no-response` and `stale` off the issues it closed (numbers only), so a
+#    maintainer who reopens one is not overruled ~17 days later (aiwf-9ni).
 name: ai-workflows reporter silence
 on:
   workflow_call:
@@ -57,7 +59,8 @@ jobs:
     permissions:
       issues: write
     steps:
-      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+      - id: stale
+        uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
         with:
           only-issue-labels: ${{ needs.ping.outputs.only_labels }}
           exempt-issue-labels: 'keep-open,ai: off,ai: error'
@@ -74,3 +77,18 @@ jobs:
             in a comment and a maintainer will reopen it.
           days-before-pr-stale: -1
           days-before-pr-close: -1
+      - if: steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - if: steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'
+        uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - if: steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          AIWF_CLOSED: ${{ steps.stale.outputs.closed-issues-prs }}
+        run: aiwf silence-closed --repo "$REPO"
