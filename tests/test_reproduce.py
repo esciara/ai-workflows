@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from aiwf import cli, commands, publish, publish_reproduce as pr, reproduce
+from aiwf import cli, commands, guard, publish, publish_reproduce as pr, reproduce
 from aiwf.commands import Command
 
 from test_triage import REPO, FakeGh, run, trusted_config  # noqa: F401 (autouse: maintainers [esciara])
@@ -128,6 +128,15 @@ def test_reproduced_updates_the_existing_comment(monkeypatch):
     publish_answer(gh, monkeypatch, reproduced=True, test=REPRO)
     [patch] = gh.writes("PATCH")
     assert patch[3].endswith("/comments/5") and not [w for w in gh.writes("POST") if w[3].endswith("/comments")]
+
+
+@pytest.mark.parametrize("extra", [{"reproduced": True, "test": REPRO}, {}])  # reproduced, or a question asked
+def test_published_answer_clears_the_earlier_error_comment(monkeypatch, extra):
+    err = {"id": 8, "user": {"login": BOT}, "body": f"{guard.ERROR_MARKER}\n⚠️ old error"}
+    gh = FakeGh(author="rep", labels=("ai: error",), comments=[err])
+    publish_answer(gh, monkeypatch, **extra)
+    [cleared] = [w for w in gh.writes("PATCH") if w[3].endswith("/comments/8")]
+    assert cleared[-1].startswith(f"body={guard.ERROR_MARKER}\n{guard.CLEARED}")
 
 
 def test_reproduced_without_a_test_fails_the_job(monkeypatch):
