@@ -52,7 +52,7 @@ The config is read from the default branch only, so commit both files to it (a P
 
 ## 6. Run the workflow once by hand
 
-In the Actions tab, open "AI workflows", click "Run workflow" on the default branch (a `workflow_dispatch` run). This creates the labels (`ai-review: merge`, `ai-review: changes-requested`, `ai-review: human-review`, `ai-review: pending` and the triage labels). With a chat channel set, it also sends one test message. A daily scheduled run keeps the labels in sync. The labels run needs `actions: write`: start it from the Actions tab, or as the repo admin with `gh workflow run`.
+In the Actions tab, open "AI workflows", click "Run workflow" on the default branch (a `workflow_dispatch` run). This creates the labels (`ai-review: merge`, `ai-review: changes-requested`, `ai-review: human-review`, `ai-review: pending` and the triage labels). With a chat channel set, it also sends one test message. A daily scheduled run keeps the labels in sync, and so does a manual run after an upgrade (new releases may add labels). The labels run needs `actions: write`: start it from the Actions tab, or as the repo admin with `gh workflow run`.
 
 ## 7. Block merges on Request changes (optional)
 
@@ -67,6 +67,11 @@ Open a small test PR from a branch of the target repo. Within about 10 minutes:
 - the run's log has an `aiwf-metrics` line, and the run has an `ai-workflows-metrics` artifact.
 
 Fork PRs are reviewed only when a maintainer comments `/review` on them.
+
+- Dependabot PRs get `ai-review: human-review` with no model call: GitHub gives its runs no secrets. A maintainer's `/review` still reviews one.
+- PRs already open at install are not reviewed until their next push (or a maintainer's `/review`).
+- `ai: off` on an issue or PR is the maintainer's kill switch: every workflow skips that item. `ai: error` means a run failed on that item (agent crash, time or turn limit, invalid output): open the run link in the comment. Nothing retries; remove the label and push or comment `/review` or `/retriage` to run again.
+- With Workflow B on, open a test issue: within about 10 minutes it gets a `triage: …` label and one comment. The daily scheduled run never triages.
 
 ## Linked issues
 
