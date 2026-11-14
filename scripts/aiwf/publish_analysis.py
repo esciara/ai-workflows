@@ -44,8 +44,8 @@ def server() -> str:
     return os.environ.get("GITHUB_SERVER_URL", "https://github.com")
 
 
-def code(text: str, limit: int) -> str:
-    """Inline code (as publish_reproduce.inline, which imports this module): one line, no backticks or pipes."""
+def code(text: str, limit: int = 200) -> str:
+    """Inline code, also safe in a table cell: one line, no backticks, pipes escaped (B2's `inline` uses it too)."""
     return "`" + " ".join(str(text).split())[:limit].replace("`", "'").replace("|", "\\|") + "`"
 
 
