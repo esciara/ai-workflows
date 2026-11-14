@@ -164,6 +164,8 @@ def test_a_forced_failure_escalates_to_a_draft_pr_and_the_maintainer(e2e_target,
     _, run = fix(issue, "/fix")
     done = rounds(run)
     assert sorted(done) == list(range(1, cap + 1)), f"expected exactly {cap} round(s): {done}"
+    # A failed check skips the reviewer (spec B5): `rounds` leaves skipped jobs out.
+    assert all(j.get("check") == "failure" and "review" not in j for j in done.values()), done
     assert run["jobs"].get(ESCALATE_JOB) == "success", run["jobs"]
     assert NEEDS_MAINTAINER in labels(issue["number"])
 
