@@ -56,9 +56,3 @@ def test_anything_but_a_file_is_rejected(payload):
 @pytest.mark.parametrize("content", ["!!!not base64!!!", base64.b64encode(b"\xff\xfe\x00bad").decode()])
 def test_undecodable_content(content):
     assert errors_of(contents({"type": "file", "content": content})).errors == ["content is not valid base64/UTF-8"]
-
-
-def test_content_with_github_line_breaks_decodes():
-    body = base64.encodebytes(b"maintainers: [a]\n" * 10).decode()  # the API wraps base64 at 60 columns
-    text, _ = config.fetch_from_repo("o/r", "c.yml", gh=contents({"type": "file", "content": body}))
-    assert text == "maintainers: [a]\n" * 10

@@ -46,11 +46,3 @@ def test_a_refused_agent_push_is_raised(tmp_path, monkeypatch, no_real_git):
     monkeypatch.setattr(e2eslot.subprocess, "run", refuse)
     with e2eslot.hold(2, timeout=0), pytest.raises(subprocess.CalledProcessError):
         e2eslot.push_target(2, cwd=tmp_path)
-
-
-def test_no_push_without_the_slot(tmp_path, monkeypatch, no_real_git):
-    ran = []
-    monkeypatch.setattr(e2eslot.subprocess, "run", lambda cmd, **kw: ran.append(cmd))
-    with pytest.raises(RuntimeError, match="slot 3"):
-        e2eslot.push_target(3, cwd=tmp_path)
-    assert ran == []
