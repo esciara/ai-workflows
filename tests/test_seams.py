@@ -79,6 +79,27 @@ def test_e2e_names_follow_the_held_slot(monkeypatch):
         "AI workflows (e2e 3)", "AI workflows notify (e2e 3)", "e2e-target-3")
 
 
+def test_reusable_issue_is_per_slot_by_title_and_body(monkeypatch):
+    monkeypatch.setattr(pg, "held_slot", lambda: 2)
+    label = {"name": "e2e-target-2"}
+    old = {"number": 5, "title": "T", "labels": [label]}  # old title without the slot: ignored
+    mine = {"number": 6, "title": "T (slot 2)", "labels": [label]}
+    other = {"number": 7, "title": "T (slot 2)", "labels": [{"name": "e2e-target-3"}]}  # other slot's label: ignored
+    pr = {"number": 8, "title": "T (slot 2)", "labels": [label], "pull_request": {}}
+    created = []
+    monkeypatch.setattr(pg, "open_issue", lambda title, body, *, e2e, **_: created.append((title, body, e2e)) or {"number": 9, "title": title})
+    monkeypatch.setattr(pg, "api", lambda path, *a, **k: [old, other, pr, mine])
+    assert pg.reusable_issue("T", "B", e2e=True) == {"number": 6, "title": "T (slot 2)"}  # reuses this slot's issue
+    assert not created
+    monkeypatch.setattr(pg, "api", lambda path, *a, **k: [old, other, pr])
+    assert pg.reusable_issue("T", "B", e2e=True) == {"number": 9, "title": "T (slot 2)"}  # none left: creates a new one
+    assert created == [("T (slot 2)", "B\n\n(fixture for e2e slot 2)", True)]  # slot in title and in body
+    created.clear()
+    monkeypatch.setattr(pg, "api", lambda path, *a, **k: [])
+    pg.reusable_issue("T", "B", e2e=False)
+    assert created == [("T", "B", False)]  # no slot suffix without e2e
+
+
 def test_throwaway_e2e_pr_uses_prefix_then_labels_and_cleans_up(monkeypatch):
     monkeypatch.setenv("AIWF_E2E_SLOT_HELD", "2")
     monkeypatch.setenv("AIWF_E2E_TARGET_SHA", "abc")
