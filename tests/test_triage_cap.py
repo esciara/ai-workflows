@@ -144,3 +144,22 @@ def test_publish_capped_label_and_fixed_comment():
     assert labels[-2:] == ["-f", "labels[]=triage: needs-human"]
     body = comment[-1].removeprefix("body=")
     assert body == f"{pt.MARKER}\n**AI triage:** Automatic triage limit reached for today; a maintainer can run `/retriage`."
+
+
+class CliGh(RecordingGh):
+    def __init__(self, labels):
+        super().__init__()
+        self.labels = labels
+
+    def respond(self, args):
+        if self.url(args).endswith("/labels?per_page=100"):
+            return json.dumps([{"name": n} for n in self.labels])
+        return "" if "--paginate" in args else "{}"
+
+
+@pytest.mark.parametrize("labels,writes", [(["ai: off"], 0), ([], 2)])
+def test_cli_triage_capped_respects_ai_off(monkeypatch, labels, writes):
+    gh = CliGh(labels)
+    monkeypatch.setattr(tc.config, "run_gh", gh)
+    assert cli.main(["triage-capped", "--repo", REPO, "--issue", "7"]) == 0
+    assert len(gh.writes()) == writes
