@@ -30,7 +30,9 @@ MAX_SCAN_BYTES = 50_000_000  # the callers scan stops there (large repos)
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache", ".pytest_cache", "dist", "build"}
 SOURCE_EXT = {"py", "js", "mjs", "cjs", "ts", "tsx", "jsx", "go", "rs", "rb", "java", "kt", "c", "h", "cc", "cpp",
               "hpp", "cs", "php", "swift", "scala", "sh"}
-PATH_RE = re.compile(r"(?:[\w.-]+/)*[\w.-]+\.(?:" + "|".join(sorted(SOURCE_EXT)) + r")\b")
+TOKEN_RE = re.compile(r"[\w./-]{1,300}")  # linear: path-like runs, then an extension check on each
+EXT_RE = re.compile(r"\.(?:" + "|".join(sorted(SOURCE_EXT)) + r")$")
+MAX_SCAN_TEXT = 100_000  # characters of each output searched for paths
 IMPORT_RE = re.compile(r"^\s*(?:from\s+([\w.]+)\s+import\s+\(?([\w ,]+)|import\s+([\w.]+))", re.MULTILINE)
 TAGS = ("reproduction", "source_files", "file", "callers")
 TAG_RE = re.compile(r"<(\s*/?\s*(?:" + "|".join(TAGS) + r")\b)", re.IGNORECASE)
@@ -81,7 +83,7 @@ def named_paths(answer: dict[str, Any]) -> list[str]:
             names += [f"{module}/{n.strip()}.py" for n in m.group(2).split(",") if n.strip()]
     outputs = [answer["test"]["output"], *(c["output"] for c in answer["commands"])]
     for text in outputs:
-        names += PATH_RE.findall(text)
+        names += [t for tok in TOKEN_RE.findall(text[:MAX_SCAN_TEXT]) if EXT_RE.search(t := tok.rstrip("."))]
     names = [re.sub(r"^(?:\./|/)+", "", n) for n in names]
     return list(dict.fromkeys(n for n in names if n))
 

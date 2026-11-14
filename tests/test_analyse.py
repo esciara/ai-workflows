@@ -41,6 +41,14 @@ def test_safe_file_refuses_everything_else(tree, rel):
     assert analyse.safe_file(tree, rel) is None
 
 
+def test_path_search_stays_fast_on_hostile_output():
+    import time
+    hostile = repro(test={**repro()["test"], "output": "a/" * 200_000 + "x" + ".a" * 100_000})
+    start = time.monotonic()
+    analyse.named_paths(hostile)
+    assert time.monotonic() - start < 2
+
+
 def test_match_prefers_the_nearest_file():
     files = ["tests/fixtures/vendor/x/cart.py", "src/cart.py", "src/minicart/cart.py"]
     assert analyse.match("cart.py", files) == "src/cart.py"
