@@ -156,14 +156,10 @@ def test_cli_skip_outputs(tmp_path, monkeypatch):
 
 
 def test_cli_dependabot_sets_human_review_only(monkeypatch):
-    calls = []
-
-    def gh(args):
-        calls.append(args)
-        return ""
-
+    gh = RecordingGh()
     monkeypatch.setattr(review_gate.config, "run_gh", gh)
     assert cli.main(["review-dependabot", "--repo", REPO, "--pr", "7"]) == 0
+    calls = gh.calls
     posts = [c for c in calls if "POST" in c]
     assert posts == [["api", "-X", "POST", f"repos/{REPO}/issues/7/labels", "-f", "labels[]=ai-review: human-review"]]
     deletes = [c for c in calls if c not in posts]
