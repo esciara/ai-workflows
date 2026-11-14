@@ -367,14 +367,15 @@ flowchart TD
   DC -- "reporter commented since the request,<br/>or already pinged since" --> SK
   DC -- "request younger than ping days" --> SK
   DC -- "due" --> PN["comment with hidden marker mentions each maintainer<br/>+ label 'triage: no-response'"]
-  PG --> ST["silence.yml job stale, runs after ping<br/>only when the scope is non-empty<br/>actions/stale on needs-info + no-response issues"]
+  PG --> ST["silence.yml job stale, runs after ping<br/>runs after ping succeeds, never without the label filter<br/>actions/stale on needs-info + no-response issues"]
   PN -.-> ST
   ST --> SL{"days since last update<br/>(the ping counts)"}
   SL -- "stale - ping days" --> SA["label 'stale' + comment<br/>closes in close - stale days"]
-  SA --> CL["close - stale days later: closed as not planned<br/>comment says how to get it reopened"]
+  SA --> CL["close - stale days later (whole days, rounded down; under 1 day: same run): closed as not planned<br/>comment says how to get it reopened"]
   RP["Reporter's reply while 'triage: needs-info'"] --> B2["B2 reruns (WP6 diagram)<br/>repro-publish removes 'triage: no-response' and 'stale'"]
   B2 -.-> LS
-  KO["Maintainer adds 'keep-open'"] -.-> SK
+  KO["Maintainer adds 'keep-open'<br/>(exempt in both jobs: no ping, no stale, no close)"] -.-> SK
+  KO -.-> ST
 ```
 
 ## WP11a — Notification senders
