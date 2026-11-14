@@ -486,6 +486,17 @@ def test_invalid_output_gives_ai_error_only():
     assert gh.comment_bodies() == []
 
 
+@pytest.mark.parametrize("valid", [True, False])
+def test_only_a_published_triage_clears_the_earlier_error_comment(valid):
+    from aiwf import guard
+    err = {"id": 8, "user": {"login": ghapi.BOT}, "body": f"{guard.ERROR_MARKER}\nold error"}
+    gh = FakeGh(comments=[err])
+    raw = json.dumps({"type": "bug", "confidence": "high", "reason": "r", "suspicious_instructions": []})
+    assert publish.publish("classifier", raw if valid else '{"type": "bug"}', REPO, 1, "https://run/1", gh) is valid
+    cleared = [w for w in gh.writes("PATCH") if w[3].endswith("/comments/8")]
+    assert bool(cleared) is valid and all(f"{guard.CLEARED}" in w[-1] for w in cleared)
+
+
 def test_cli_registers_triage_commands():
     names = set()
     for mod in cli.command_modules():

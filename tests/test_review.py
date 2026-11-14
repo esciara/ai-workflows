@@ -620,6 +620,15 @@ def test_invalid_agent_output_sets_ai_error_and_posts_nothing(bad):
     assert ["api", "-X", "POST", "repos/o/r/issues/5/labels", "-f", "labels[]=ai: error"] in gh.calls
 
 
+@pytest.mark.parametrize("valid", [True, False])
+def test_only_a_published_review_clears_the_earlier_error_comment(valid):
+    from aiwf import guard
+    err = {"id": 7, "user": {"login": pr.BOT}, "body": f"{guard.ERROR_MARKER}\nold error"}
+    gh = FakeGh(comments=[err])
+    assert bool(publish(gh, passes(), verify() if valid else '{"summary": "x"}')) is valid
+    assert (guard.CLEARED in err["body"]) is valid
+
+
 def test_cmd_reads_answers_from_the_passes_dir(tmp_path, monkeypatch):
     for name in review.PASSES:
         (tmp_path / f"{name}.json").write_text(answer())
