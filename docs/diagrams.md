@@ -187,7 +187,7 @@ flowchart TD
 
 Milestones: see [docs/plan.md](plan.md#slices-and-test-setup).
 
-Not started, so no flow diagram yet: WP8, WP9, WP10, WP11b (other events), WP13, WP17, WP18, WP19. WP7 is in progress with only its spec text and e2e test merged, no code yet, so no flow diagram either.
+Not started, so no flow diagram yet: WP8, WP9, WP10, WP11b (other events), WP13, WP17, WP18, WP19. WP7's code is merged and live from release v0.2.0, but its e2e run waits on the playground PR, so the plan still says in progress.
 
 ## WP1 — Shared runtime
 
@@ -349,7 +349,32 @@ flowchart TD
   PU -- "not reproduced, requests left" --> NI["'triage: needs-info'<br/>comment @reporter: tried, happened, 2-4 questions"]
   PU -- "not reproduced, info_requests reached" --> ST["'triage: needs-human' + stop comment<br/>/reproduce restarts"]
   NI -.-> RY
-  NI -. "silence: WP7" .-> WS["ping, stale, close"]
+  NI -. "silence (WP7 diagram)" .-> WS["ping, stale, close"]
+```
+
+## WP7 — B2 · reporter silence
+
+Done when ([docs/plan.md, line 43](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43)): With days shortened in config, ping, stale and close happen in order; a reply resets them; `keep-open` exempts (`tests/e2e/test_wp7.py`)
+
+No agent and no model token. Days come from `reporter_silence_days` (defaults 4 / 14 / 21), decimals allowed. Live on target repos from release v0.2.0 (caller template job `silence`).
+
+```mermaid
+flowchart TD
+  CR["Caller's daily cron or manual run<br/>only if workflows.triage is on<br/>and nothing stops runs"] --> PG["silence.yml job ping<br/>issues: write only, no actions scope<br/>aiwf silence-ping"]
+  PG --> LS["open issues with 'triage: needs-info'<br/>none of no-response, keep-open, ai: off, ai: error<br/>(plus the caller's extra scope labels)"]
+  LS --> DC{"per issue, labels, comment authors,<br/>dates and markers only, never issue text"}
+  DC -- "exempt label, or no needs-info comment<br/>of the bot (label set by hand)" --> SK["skip"]
+  DC -- "reporter commented since the request,<br/>or already pinged since" --> SK
+  DC -- "request younger than ping days" --> SK
+  DC -- "due" --> PN["comment with hidden marker mentions each maintainer<br/>+ label 'triage: no-response'"]
+  PG --> ST["silence.yml job stale, runs after ping<br/>only when the scope is non-empty<br/>actions/stale on needs-info + no-response issues"]
+  PN -.-> ST
+  ST --> SL{"days since last update<br/>(the ping counts)"}
+  SL -- "stale - ping days" --> SA["label 'stale' + comment<br/>closes in close - stale days"]
+  SA --> CL["close - stale days later: closed as not planned<br/>comment says how to get it reopened"]
+  RP["Reporter's reply while 'triage: needs-info'"] --> B2["B2 reruns (WP6 diagram)<br/>repro-publish removes 'triage: no-response' and 'stale'"]
+  B2 -.-> LS
+  KO["Maintainer adds 'keep-open'"] -.-> SK
 ```
 
 ## WP11a — Notification senders
