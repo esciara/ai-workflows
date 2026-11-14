@@ -78,6 +78,11 @@ def threads_open(number: int) -> int:
     return int(m.group(1))
 
 
+def brief(t: dict) -> list[tuple[str, str]]:
+    """(author, first 80 chars) of each comment of a thread, for failure messages and prints."""
+    return [(c["author"], c["body"][:80]) for c in t["comments"]]
+
+
 def push(number: int, branch: str, path: str, text: str, blob_sha: str | None, message: str) -> tuple[str, str]:
     """Commit to the PR branch; returns (sha, timestamp to look for the rerun from)."""
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 5))
@@ -103,8 +108,9 @@ def test_a_fixing_push_gets_a_reply_and_the_thread_resolved_a_non_fixing_push_le
         assert len(t1["comments"]) == 1, f"unexpected replies in the new thread: {t1['comments']}"
         open1 = [t for t in threads(number) if not t["resolved"]]
         pre_fix = {t["id"] for t in open1}  # every one of these must be closed by the fixing push
-        assert threads_open(number) == len(open1), (threads_open(number), len(open1))
-        print(f"first run: thread {t1['id']} open, summary says {threads_open(number)} threads open")
+        counted = threads_open(number)
+        assert counted == len(open1), (counted, len(open1))
+        print(f"first run: thread {t1['id']} open, summary says {counted} threads open")
 
         # 2. Non-fixing push (an unrelated new file): the thread stays open, with no reply from the bot.
         sha2, at = push(number, pr["branch"], f"e2e/{pr['branch'].replace('/', '-')}-unrelated.md",
@@ -113,8 +119,9 @@ def test_a_fixing_push_gets_a_reply_and_the_thread_resolved_a_non_fixing_push_le
         t2 = next(t for t in threads(number) if t["id"] == t1["id"])
         assert not t2["resolved"], "a push that does not fix the bug resolved its thread"
         assert len(t2["comments"]) == 1, f"the bot replied in a thread whose finding is still open: {t2['comments']}"
-        assert threads_open(number) >= 1, "the summary says 0 threads open while the bug thread is open"
-        print(f"non-fixing push {sha2[:7]}: thread still open, no reply, summary {threads_open(number)} open")
+        counted = threads_open(number)
+        assert counted >= 1, "the summary says 0 threads open while the bug thread is open"
+        print(f"non-fixing push {sha2[:7]}: thread still open, no reply, summary {counted} open")
 
         # 3. Fixing push: the bot replies in its own thread, resolves it; the summary says 0 threads open.
         cart, cart_sha = read_file(CART, pr["branch"])
@@ -123,7 +130,7 @@ def test_a_fixing_push_gets_a_reply_and_the_thread_resolved_a_non_fixing_push_le
                         "fix: percent is out of 100")
         review_run(sha3, after=at)
         t3 = next(t for t in threads(number) if t["id"] == t1["id"])
-        print(f"fixing push {sha3[:7]}: thread comments {[(c['author'], c['body'][:80]) for c in t3['comments']]}")
+        print(f"fixing push {sha3[:7]}: thread comments {brief(t3)}")
         assert t3["resolved"], "the thread of the fixed bug is not resolved (resolveReviewThread with GITHUB_TOKEN?)"
         replies = t3["comments"][1:]
         assert len(replies) == 1 and replies[0]["author"] == t3["comments"][0]["author"], t3["comments"]
@@ -135,7 +142,8 @@ def test_a_fixing_push_gets_a_reply_and_the_thread_resolved_a_non_fixing_push_le
         assert not not_closed, f"pre-fix bot threads not resolved by the fixing push: {not_closed}"
         left = [t for t in after if not t["resolved"]]
         for t in left:
-            print(f"unresolved after fix: {t['id']} {t['path']} {[(c['author'], c['body'][:80]) for c in t['comments']]}")
-        assert threads_open(number) == len(left), (threads_open(number), len(left))
+            print(f"unresolved after fix: {t['id']} {t['path']} {brief(t)}")
+        counted = threads_open(number)
+        assert counted == len(left), (counted, len(left))
         assert not left, f"{len(left)} unresolved threads remain on the fixed PR (new findings, or a missed resolve)"
-        assert threads_open(number) == 0, f"the summary does not say 0 threads open: {summary(number)}"
+        assert counted == 0, f"the summary does not say 0 threads open: {summary(number)}"
