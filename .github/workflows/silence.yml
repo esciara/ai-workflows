@@ -77,15 +77,13 @@ jobs:
             in a comment and a maintainer will reopen it.
           days-before-pr-stale: -1
           days-before-pr-close: -1
-      - if: steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .ai-workflows
           persist-credentials: false
-      - if: steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'
-        uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
       # The output also holds actions/stale's options (the masked job token among them): read through env, never printed.
       # About 3 KB per issue; operations-per-run (default 30) keeps it far below the env size limit.
       - if: steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'

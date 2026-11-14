@@ -246,7 +246,7 @@ def test_closed_issues_lose_the_silence_labels_after_the_stale_step():
     """aiwf-9ni: only when the stale step closed something; numbers reach the script through env only."""
     steps = WF["jobs"]["stale"]["steps"]
     cond = "steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'"
-    assert [x.get("if") for x in steps[1:]] == [cond] * 3
+    assert [x.get("if") for x in steps[1:]] == [None, None, cond]  # one gate: checkout and setup are cheap
     last = steps[-1]
     assert last["run"] == 'aiwf silence-closed --repo "$REPO"' and "${{" not in last["run"]
     assert last["env"]["AIWF_CLOSED"] == "${{ steps.stale.outputs.closed-issues-prs }}"
