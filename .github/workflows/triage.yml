@@ -240,7 +240,7 @@ jobs:
         run: ~/.aiwf-venv/bin/aiwf notify --channels "$CHANNELS"
 
   # B2 context with a read-only token: the issue and the comments that matter, the project's commands, and the default
-  # branch's code (persist-credentials false: no token is left in the tarball's .git).
+  # branch's code (persist-credentials false: no token is left in the tarball's .git). Pattern: docs/patterns.md.
   # Which events run B2 (ADR-0037), each its own clause: B1 publish handed on a trusted author's bug; `/reproduce` from a
   # maintainer (config.yml parsed the comment, ADR-0005); or the reporter's reply, a comment that is no command, by the
   # issue's author, while the issue has `triage: needs-info`, which only B2 sets, so only after a trusted start.
