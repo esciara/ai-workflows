@@ -175,3 +175,36 @@ def test_clear_error_without_an_error_comment_writes_nothing():
     gh = FakeGh(comments=[{"id": 5, "user": {"login": "mallory"}, "body": guard.ERROR_MARKER}])
     guard.clear_error(gh, "o/r", 3, "")
     assert gh.writes() == []
+
+
+def test_clear_error_failure_is_only_a_warning(capsys):
+    def broken(args):
+        raise RuntimeError("HTTP 502")
+    guard.clear_error(broken, "o/r", 3, "")
+    assert "::warning title=Error comment not cleared::o/r#3: HTTP 502" in capsys.readouterr().out
+
+
+def publish_without_facts(monkeypatch, gh, head_sha):
+    monkeypatch.setattr(pr.config, "run_gh", gh)
+    monkeypatch.delenv("FACTS", raising=False)
+    args = type("A", (), {"repo": "o/r", "pr": 3, "run_url": "", "passes_dir": "x", "head_sha": head_sha})
+    return pr.cmd_review_publish(args)
+
+
+def test_review_publish_without_context_on_a_moved_head_sets_no_error(monkeypatch):
+    gh = FakeGh(head="new")
+    assert publish_without_facts(monkeypatch, gh, "old") == 0
+    assert gh.writes() == [["api", "-X", "DELETE", "repos/o/r/issues/3/labels/ai-review%3A%20pending"]]
+
+
+@pytest.mark.parametrize("head,sha", [("same", "same"), ("new", ""), (None, "old")])
+def test_review_publish_without_context_otherwise_sets_ai_error(monkeypatch, head, sha):
+    gh = FakeGh(head=head)
+    assert publish_without_facts(monkeypatch, gh, sha) == 1
+    assert any(c[3] == "repos/o/r/issues/3/labels" and "labels[]=ai: error" in c for c in gh.writes())
+
+
+def test_review_publish_passes_the_gate_sha():
+    wf = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/review.yml").read_text())
+    step = next(s for s in wf["jobs"]["publish"]["steps"] if s.get("id") == "publish")
+    assert step["env"]["HEAD_SHA"] == "${{ needs.gate.outputs.sha }}" and '--head-sha "$HEAD_SHA"' in step["run"]

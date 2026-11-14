@@ -369,6 +369,10 @@ def cmd_review_publish(args: argparse.Namespace) -> int:
         return 0
     facts = json.loads(os.environ.get("FACTS") or "null")
     if not isinstance(facts, dict):
+        if args.head_sha and guard.head_moved(config.run_gh, args.repo, args.pr, args.head_sha):
+            print(f"::notice title=Head moved::#{args.pr} moved on from {args.head_sha}; the newer run reviews it")
+            remove_label(config.run_gh, args.repo, args.pr, PENDING)
+            return 0
         print("::error title=No review context::the context job produced no facts")
         set_verdict_label(config.run_gh, args.repo, args.pr, publish.ERROR_LABEL)
         return 1
@@ -391,4 +395,5 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--pr", required=True, type=int)
     p.add_argument("--run-url", default="")
     p.add_argument("--passes-dir", required=True, help="the passes' answers, <pass>.json")
+    p.add_argument("--head-sha", default="", help="the head the gate chose; no `ai: error` when the PR moved on")
     p.set_defaults(func=cmd_review_publish)
