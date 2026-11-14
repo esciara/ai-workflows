@@ -80,10 +80,14 @@ def clear_error(gh: GhRunner, repo: str, number: int, run_url: str) -> None:
 
 
 def head_moved(gh: GhRunner, repo: str, number: int, sha: str) -> bool:
-    """The PR's head is now another commit than `sha`. An unreadable PR counts as not moved: report as usual."""
+    """The PR's head is now another commit than `sha` and that push starts its own review: a same-repo PR, not a
+    draft (a fork PR or a draft gets no automatic review, so this run still reports). An unreadable PR: not moved."""
     pr = get_or_none(gh, f"repos/{repo}/pulls/{number}")
-    head = ((pr or {}).get("head") or {}).get("sha") if isinstance(pr, dict) else None
-    return bool(head) and head != sha
+    if not isinstance(pr, dict) or pr.get("draft"):
+        return False
+    head = pr.get("head") or {}
+    same_repo = (head.get("repo") or {}).get("full_name") == repo
+    return bool(head.get("sha")) and head["sha"] != sha and same_repo
 
 
 def cmd_report_error(args: argparse.Namespace) -> int:

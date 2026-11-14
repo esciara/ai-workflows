@@ -214,10 +214,10 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
     publish.add_labels(gh, repo, issue, *want)
     upsert_marker_comment(gh, repo, issue, MARKER, body(data, dup, fix, fix_conf, run_url, suspicious_instructions(data), waits))
     print(f"triaged {repo}#{issue}: {', '.join(want)}")
-    guard.clear_error(gh, repo, issue, run_url)  # an earlier run's sticky error comment no longer applies
     dup_number = dup["number"] if dup and DUPLICATE in want else None
     server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
     write_alert(*alert(repo, issue, data["type"], dup_number, NEEDS_HUMAN in want, server))
+    guard.clear_error(gh, repo, issue, run_url)  # an earlier run's sticky error comment no longer applies
     if trusted:
         start_reproduce()
 

@@ -14,18 +14,18 @@ BOT = ghapi.BOT
 class FakeGh(RecordingGh):
     """Item labels and issue comments; records every call."""
 
-    def __init__(self, labels=(), comments=(), head=None):
+    def __init__(self, labels=(), comments=(), head=None, head_repo="o/r", draft=False):
         super().__init__()
         self.labels = list(labels)
         self.comments = list(comments)
-        self.head = head
+        self.head, self.head_repo, self.draft = head, head_repo, draft
 
     def respond(self, args):
         method, url = self.method(args), self.url(args)
         if method == "GET" and "/pulls/" in url:
             if self.head is None:
                 raise RuntimeError("404")
-            return json.dumps({"head": {"sha": self.head}})
+            return json.dumps({"draft": self.draft, "head": {"sha": self.head, "repo": {"full_name": self.head_repo}}})
         if method == "GET" and "/labels" in url:
             return json.dumps([{"name": n} for n in self.labels])
         if method == "GET" and url.endswith("/comments?per_page=100"):
@@ -99,6 +99,14 @@ def test_report_error_skips_a_run_whose_pr_head_moved(monkeypatch):
 def test_report_error_reports_when_the_head_did_not_move(monkeypatch, head):
     gh = FakeGh(head=head)
     assert report(monkeypatch, gh, "--head-sha", "same") == 0
+    assert ["api", "-X", "POST", "repos/o/r/issues/3/labels", "-f", "labels[]=ai: error"] in gh.writes()
+
+
+@pytest.mark.parametrize("pr", [{"head_repo": "fork/r"}, {"draft": True}])
+def test_report_error_still_reports_when_the_push_starts_no_review(monkeypatch, pr):
+    # A fork PR (reviewed only on /review) or a draft gets no new review run, so this run still reports.
+    gh = FakeGh(head="new", **pr)
+    assert report(monkeypatch, gh, "--head-sha", "old") == 0
     assert ["api", "-X", "POST", "repos/o/r/issues/3/labels", "-f", "labels[]=ai: error"] in gh.writes()
 
 

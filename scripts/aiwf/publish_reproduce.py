@@ -17,7 +17,7 @@ import os
 import re
 from typing import Any
 
-from aiwf import publish
+from aiwf import guard, publish
 from aiwf.ghapi import BOT, get_or_none, remove_label, upsert_marker_comment
 from aiwf.publish_triage import NEEDS_HUMAN
 
@@ -136,6 +136,11 @@ def sandbox_failed(cmds: list[dict[str, Any]]) -> bool:
 
 
 def publish_reproducer(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
+    publish_result(data, repo, issue, run_url, gh)
+    guard.clear_error(gh, repo, issue, run_url)  # published: an earlier run's sticky error comment no longer applies
+
+
+def publish_result(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
     item = get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}
     current = {lb["name"] for lb in item.get("labels", [])}
     stale = (publish.ERROR_LABEL, *SILENCE)
