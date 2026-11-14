@@ -6,6 +6,10 @@ Runs in silence.yml's `ping` job, on the caller's daily schedule or a manual run
 commented since and `ping` days have passed, it posts one comment starting with PING_MARKER that mentions each of
 `maintainers`, then labels `triage: no-response`. It reads only labels, comment authors, dates and markers, never
 issue text. It also writes the `actions/stale` inputs of the `stale` job, computed from `reporter_silence_days`.
+
+After actions/stale, `silence-closed` takes `triage: no-response` and `stale` off the issues it just closed, so a
+maintainer's reopen is final (aiwf-9ni): the reopened issue is out of the stale step's scope, and the ping step has
+already pinged for that request. A reply from the reporter still reruns B2 (`triage: needs-info` stays).
 """
 
 from __future__ import annotations
@@ -18,12 +22,13 @@ from typing import Any
 from urllib.parse import quote
 
 from aiwf import config, guard, publish
-from aiwf.ghapi import BOT, GhRunner
+from aiwf.ghapi import BOT, GhRunner, remove_label
 from aiwf.publish_reproduce import NEEDS_INFO, NEEDS_INFO_MARKER, all_comments
 
 PING_MARKER = "<!-- ai-workflows:no-response -->"
 NO_RESPONSE = "triage: no-response"
 KEEP_OPEN = "keep-open"
+STALE = "stale"
 EXEMPT = frozenset({NO_RESPONSE, KEEP_OPEN, guard.OFF_LABEL, guard.ERROR_LABEL})
 DAY = 86400.0
 
@@ -115,6 +120,36 @@ def run(gh: GhRunner, repo: str, cfg: dict[str, Any], labels: list[str], now: da
     return pinged
 
 
+def closed_numbers(raw: str) -> list[int]:
+    """Issue numbers from actions/stale's `closed-issues-prs` output (a JSON list of issues); anything else is refused.
+    Only the numbers are read, never titles or other text."""
+    items = json.loads(raw or "[]")
+    if not isinstance(items, list):
+        raise SystemExit("closed-issues-prs is not a JSON list")
+    out = []
+    for item in items:
+        n = item.get("number") if isinstance(item, dict) else None
+        if type(n) is not int or n < 1:
+            raise SystemExit("closed-issues-prs holds an item without a valid number")
+        if not item.get("isPullRequest") and n not in out:
+            out.append(n)
+    return out
+
+
+def unlabel_closed(gh: GhRunner, repo: str, numbers: list[int]) -> None:
+    """Take the silence labels off issues the stale step closed; `triage: needs-info` stays (a reply reruns B2)."""
+    for n in numbers:
+        for label in (NO_RESPONSE, STALE):
+            remove_label(gh, repo, n, label)
+
+
+def cmd_closed(args: argparse.Namespace) -> int:
+    numbers = closed_numbers(os.environ.get("AIWF_CLOSED") or "[]")
+    unlabel_closed(config.run_gh, args.repo, numbers)
+    print(f"reporter silence: took {NO_RESPONSE!r} and {STALE!r} off closed issue(s) {numbers} in {args.repo}")
+    return 0
+
+
 def cmd_ping(args: argparse.Namespace) -> int:
     cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
     labels = scope_labels(args.labels)
@@ -134,3 +169,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--labels", default="", help="extra scope labels, comma-separated")
     p.add_argument("--github-output", default=None)
     p.set_defaults(func=cmd_ping)
+    p = sub.add_parser("silence-closed", help="B2 reporter silence: after actions/stale, take the silence labels off "
+                                              "the issues it closed (env AIWF_CLOSED), so a reopen is final")
+    p.add_argument("--repo", required=True)
+    p.set_defaults(func=cmd_closed)

@@ -140,6 +140,47 @@ def test_cli_writes_the_stale_inputs_before_pinging(tmp_path, monkeypatch):
                    "stale_after": "10", "close_after": "7", "stale_days": "14"}
 
 
+# --- after the stale step: a maintainer's reopen is final (aiwf-9ni) ---------------------------------------------------
+
+def test_closed_numbers_reads_numbers_only_and_skips_prs():
+    raw = json.dumps([{"number": 7, "title": "x\nstale_after=0"}, {"number": 9, "isPullRequest": True},
+                      {"number": 7, "title": "dup"}])
+    assert s.closed_numbers(raw) == [7]
+    assert s.closed_numbers("") == [] and s.closed_numbers("[]") == []
+
+
+@pytest.mark.parametrize("raw", ['{"number": 1}', '[{"number": "1"}]', '[{"number": 0}]', '[{"title": "t"}]',
+                                 '[{"number": true}]', '[3]'])
+def test_closed_numbers_refuses_anything_else(raw):
+    with pytest.raises(SystemExit):
+        s.closed_numbers(raw)
+
+
+def test_closed_issues_lose_no_response_and_stale_but_keep_needs_info():
+    gh = Gh([], {})
+    s.unlabel_closed(gh, REPO, [7, 8])
+    assert [gh.url(w) for w in gh.writes("DELETE")] == [
+        f"repos/{REPO}/issues/7/labels/triage%3A%20no-response", f"repos/{REPO}/issues/7/labels/stale",
+        f"repos/{REPO}/issues/8/labels/triage%3A%20no-response", f"repos/{REPO}/issues/8/labels/stale"]
+    assert len(gh.writes()) == 4
+
+
+def test_reopened_issue_is_not_pinged_again():
+    """After silence-closed, a reopened issue keeps only `triage: needs-info`: out of the stale scope, and the ping
+    step already pinged for that request, so nothing closes it again until a new request for details."""
+    comments = [ask(25), c(BOT, f"{s.PING_MARKER}\n@Boss ...", 21), c("Boss", "reopening", 1)]
+    assert s.decide(issue(), comments, 4, NOW) == "skip: already pinged since the request"
+    assert s.NO_RESPONSE in s.stale_inputs(DAYS, [NEEDS_INFO])["only_labels"].split(",")
+
+
+def test_cli_closed_reads_the_env(monkeypatch):
+    gh = Gh([], {})
+    monkeypatch.setattr(config, "run_gh", gh)
+    monkeypatch.setenv("AIWF_CLOSED", json.dumps([{"number": 5, "title": "t"}]))
+    assert cli.main(["silence-closed", "--repo", REPO]) == 0
+    assert len(gh.writes("DELETE")) == 2
+
+
 # --- the stale step's inputs -----------------------------------------------------------------------------------------
 
 def test_scope_labels_always_start_with_needs_info():
@@ -187,7 +228,7 @@ def test_stale_never_runs_without_its_scope():
 
 def test_stale_step_matches_the_spec():
     step = WF["jobs"]["stale"]["steps"][0]
-    assert step["uses"].startswith("actions/stale@") and len(WF["jobs"]["stale"]["steps"]) == 1
+    assert step["uses"].startswith("actions/stale@") and step["id"] == "stale"
     w = step["with"]
     fixed = {k: v for k, v in w.items() if "${{" not in str(v)}
     assert fixed == {"exempt-issue-labels": "keep-open,ai: off,ai: error", "stale-issue-label": "stale",
@@ -199,6 +240,16 @@ def test_stale_step_matches_the_spec():
         assert f"{key}: '{w[key]}'" in SPEC, key
     message = w["stale-issue-message"]
     assert "will close in" in message and "{{ needs.ping.outputs.close_after }}" in message
+
+
+def test_closed_issues_lose_the_silence_labels_after_the_stale_step():
+    """aiwf-9ni: only when the stale step closed something; numbers reach the script through env only."""
+    steps = WF["jobs"]["stale"]["steps"]
+    cond = "steps.stale.outputs.closed-issues-prs != '' && steps.stale.outputs.closed-issues-prs != '[]'"
+    assert [x.get("if") for x in steps[1:]] == [cond] * 3
+    last = steps[-1]
+    assert last["run"] == 'aiwf silence-closed --repo "$REPO"' and "${{" not in last["run"]
+    assert last["env"]["AIWF_CLOSED"] == "${{ steps.stale.outputs.closed-issues-prs }}"
 
 
 def test_ping_job_reads_extra_labels_through_env_only():
