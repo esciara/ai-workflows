@@ -39,6 +39,8 @@ def fmt_days(days: float) -> str:
 
 def scope_labels(extra: str) -> list[str]:
     """`triage: needs-info` plus the caller's extra labels (comma-separated; blanks dropped)."""
+    if "\n" in extra or "\r" in extra:  # would forge GITHUB_OUTPUT keys
+        raise SystemExit("--labels must not contain a line break")
     out = [NEEDS_INFO]
     for name in (s.strip() for s in extra.split(",")):
         if name and name not in out:
@@ -52,7 +54,7 @@ def stale_inputs(days: dict[str, float], labels: list[str]) -> dict[str, str]:
     return {
         "only_labels": ",".join([labels[0], NO_RESPONSE, *labels[1:]]),
         "stale_after": fmt_days(days["stale"] - days["ping"]),
-        "close_after": str(int(days["close"] - days["stale"])),
+        "close_after": str(int(round(days["close"] - days["stale"], 6))),  # 2.3 - 0.3 is 1.999...
         "stale_days": fmt_days(days["stale"]),
     }
 

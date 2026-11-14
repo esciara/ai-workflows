@@ -161,6 +161,12 @@ def test_days_never_use_exponent_notation(days, text):
 
 def test_close_days_round_down():
     assert s.stale_inputs({"ping": 1, "stale": 2, "close": 9.9}, [NEEDS_INFO])["close_after"] == "7"
+    assert s.stale_inputs({"ping": 0.1, "stale": 0.3, "close": 2.3}, [NEEDS_INFO])["close_after"] == "2"
+
+
+def test_labels_with_a_line_break_are_refused():
+    with pytest.raises(SystemExit):
+        s.scope_labels("a\nstale_after=0")
 
 
 # --- silence.yml -----------------------------------------------------------------------------------------------------
