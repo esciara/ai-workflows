@@ -18,10 +18,8 @@ LABEL_LITERAL = re.compile(r"ai-review: [a-z-]+|ai: error")
 
 
 def test_pass_list_is_the_same_in_python_and_the_workflow():
-    wf = yaml.safe_load(REVIEW_YML)
-    assert tuple(wf["jobs"]["pass"]["strategy"]["matrix"]["pass"]) == review.PASSES
-    loop = re.search(r"for p in ([a-z ]+); do", REVIEW_YML).group(1).split()  # the verifier's candidate ids
-    assert tuple(loop) == review.PASSES
+    assert not re.search(r"for p in [a-z]+ [a-z]+", REVIEW_YML)  # no literal copy of the list left in review.yml
+    assert "[correctness" not in REVIEW_YML  # the matrix comes from the context job's `passes` output (tests/test_ghapi.py)
     assert metrics.AGENTS == (*review.PASSES, "verify")
 
 

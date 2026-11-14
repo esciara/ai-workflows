@@ -28,7 +28,7 @@ GENERATED_RE = re.compile(r"(\.min\.(js|css)|\.map|_pb2(_grpc)?\.pyi?|\.pb\.go|\
 MAX_GENERATED = 20  # names kept in the facts and shown in the summary
 CONTEXT_CAP = 120_000  # characters of diff + files + callers handed to an agent
 GREEN = {"success", "neutral", "skipped"}
-PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; must match the matrix in review.yml
+PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; review-context publishes it as the `passes` output, which review.yml's matrix and verifier loop read
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 MAX_COMMENTABLE = 300  # files whose diff lines are passed on for inline comments; the others get general comments only
 DEF_RE = re.compile(r"\b(?:def|function|func|fn|class)\s+([A-Za-z_][A-Za-z0-9_]{2,})")
@@ -323,7 +323,7 @@ def cmd_review_context(args: argparse.Namespace) -> int:
     print(f"context: {len(context)} chars; facts: {json.dumps(facts)}")
     if os.environ.get("GITHUB_OUTPUT"):
         from aiwf.cli import write_outputs
-        write_outputs(os.environ["GITHUB_OUTPUT"], {"facts": json.dumps(facts, separators=(",", ":"))})
+        write_outputs(os.environ["GITHUB_OUTPUT"], {"facts": json.dumps(facts, separators=(",", ":")), "passes": json.dumps(PASSES)})
     return 0
 
 

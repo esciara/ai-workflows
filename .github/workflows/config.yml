@@ -25,9 +25,6 @@ on:
       triage:
         description: "'true' when enabled and workflows.triage"
         value: ${{ jobs.load.outputs.triage }}
-      command:
-        description: "Slash command accepted from the comment (maintainer with write access), or ''; also in config JSON"
-        value: ${{ jobs.load.outputs.command }}
 
 # Least privilege by default (ADR-0038); each job grants what it needs.
 permissions: {}
@@ -43,7 +40,6 @@ jobs:
       enabled: ${{ steps.cfg.outputs.enabled }}
       review: ${{ steps.cfg.outputs.review }}
       triage: ${{ steps.cfg.outputs.triage }}
-      command: ${{ steps.cfg.outputs.command }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

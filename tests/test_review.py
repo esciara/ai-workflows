@@ -372,6 +372,20 @@ def test_previous_findings_file_cannot_close_its_tag(tmp_path, monkeypatch):
     assert "<" not in text and json.loads(text) == prev["open"]
 
 
+def test_review_context_publishes_the_pass_list_as_an_output(tmp_path, monkeypatch):
+    from aiwf import publish_review
+    out = tmp_path / "gh_output"
+    monkeypatch.setattr(publish_review, "find_summary", lambda *a: (None, None))
+    monkeypatch.setattr(review, "gather", lambda *a: ("ctx", {}))
+    monkeypatch.setattr(review, "wait_ci", lambda *a: "green")
+    monkeypatch.setenv("AIWF_CONFIG", "{}")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    args = type("A", (), {"repo": "o/r", "pr": 1, "sha": "s", "workdir": str(tmp_path), "out": str(tmp_path / "c"),
+                          "previous": str(tmp_path / "p.json")})
+    review.cmd_review_context(args)
+    assert f"passes={json.dumps(list(review.PASSES))}" in out.read_text()
+
+
 def test_truncated_context_gives_human_review_with_a_reason():
     label, reasons = review.verdict([], {**FACTS, "truncated": True})
     assert label == "ai-review: human-review" and any("context cut" in r for r in reasons)

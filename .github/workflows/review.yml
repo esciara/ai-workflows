@@ -111,6 +111,7 @@ jobs:
       actions: read  # which workflow run a check belongs to: ours or the repo's CI (orchestrator only)
     outputs:
       facts: ${{ steps.ctx.outputs.facts }}
+      passes: ${{ steps.ctx.outputs.passes }}  # review.PASSES as a JSON list: the one source of the pass matrix and the verifier loop
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -159,7 +160,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pass: [correctness, security, maintainability, tests]  # = review.PASSES
+        pass: ${{ fromJSON(needs.context.outputs.passes) }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -205,7 +206,7 @@ jobs:
   # Step 6 (and the agent half of step 9): one fresh agent tries to refute each candidate and marks the last run's
   # findings resolved or still open. It sees candidates by id; the publisher joins its decisions back to them.
   verify:
-    needs: pass
+    needs: [context, pass]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions: {}
@@ -221,11 +222,13 @@ jobs:
           merge-multiple: true
           path: passes
       - *fetch-aiwf
-      - run: |
+      - env:
+          PASSES: ${{ needs.context.outputs.passes }}
+        run: |
           # Candidate ids `<pass>-<n>`, as review.candidates() rebuilds them; a pass's answer that is not JSON is
           # skipped here and fails validation in the publish job. `<` is written as \u003c (same JSON, as previous.json),
           # so a pass's answer cannot close `<candidates>` or fake another tag (review.fence).
-          for p in correctness security maintainability tests; do
+          for p in $(jq -r '.[]' <<<"$PASSES"); do
             jq -c --arg p "$p" '[.findings // [] | to_entries[] | .value + {id: "\($p)-\(.key + 1)", pass: $p}]' \
               "passes/$p.json" 2>/dev/null || echo '[]'
           done | jq -rs 'add // [] | tojson | gsub("<"; "\\u003c")' > candidates.json
