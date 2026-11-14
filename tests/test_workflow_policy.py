@@ -340,6 +340,8 @@ def test_command_running_agents_are_sandboxed_and_scrubbed():
             # aiwf-zzn: the target repo's MCP servers, settings and hooks are deleted before the agent starts
             clean = next(i for i, s in enumerate(steps) if "rm -rf work/.mcp.json work/.claude" in str(s.get("run", "")))
             assert clean < steps.index(agent) and "if" not in steps[clean], f"{where}: repo .mcp.json/.claude removed first"
+            step_run = str(steps[clean]["run"])
+            assert step_run.index("rm -rf work/.mcp.json") > step_run.index("tar -xzf"), f"{where}: removed after unpacking"
             setup = next(i for i, s in enumerate(steps) if "bubblewrap" in str(s.get("run", "")))
             assert setup < steps.index(agent) and "if" not in steps[setup], f"{where}: sandbox setup runs first, always"
             check = next(s for s in steps if s.get("name") == "Token check")
