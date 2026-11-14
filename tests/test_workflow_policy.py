@@ -174,11 +174,15 @@ def test_caller_runs_only_the_fork_push_job_on_pull_request_target():
 
 
 def test_no_job_has_actions_write():
+    # Sole exception (ADR-0059): the `verdict` job reruns earlier failed `verdict` jobs; it never cancels a run.
     for path in REAL:
         doc = policy.load_workflow(path.read_text())
         for name, job in (doc or {}).get("jobs", {}).items():
             perms = job.get("permissions")
-            assert not (isinstance(perms, dict) and perms.get("actions") == "write"), f"{path.name}:{name}"
+            if isinstance(perms, dict) and perms.get("actions") == "write":
+                assert (path.name, name) == ("ai-review.yml", "verdict"), f"{path.name}:{name}"
+                for step in job["steps"]:
+                    assert "/cancel" not in step["run"] and "/rerun\"" in step["run"], "rerun of single jobs only"
 
 
 # --- limits (ADR-0050): every agent step has a fixed time limit and a turn limit -------------------------------------
@@ -208,7 +212,7 @@ def test_verdict_job_is_read_only_and_reruns_on_reviews():
     assert doc[True]["pull_request_review"] == {"types": ["submitted", "dismissed"]}
     assert "ready_for_review" in doc[True]["pull_request"]["types"], "a draft made ready gets its verdict"
     job = doc["jobs"]["verdict"]
-    assert job["permissions"] == {"pull-requests": "read", "statuses": "write"}
+    assert job["permissions"] == {"pull-requests": "read", "statuses": "write", "actions": "write"}  # ADR-0059
     assert "pull_request_review" in job["if"] and "always()" in job["if"]
     assert "!github.event.pull_request.draft" in job["if"], "drafts are skipped (ADR-0055)"
     assert "review.state" not in job["if"], "a skipped required check counts as passing: filter review states in the step"
@@ -312,14 +316,15 @@ def test_verdict_waiting_names_the_commit_and_the_reason(tmp_path):
     assert rc == 1 and "state=pending" in posted and "Dependabot" in posted
 
 
-@pytest.mark.parametrize("current, ok", [("success", True), ("pending", False), ("failure", False), ("none", False)])
+@pytest.mark.parametrize("current", ["success", "pending", "failure", "none"])
 @pytest.mark.parametrize("state", ["commented"])
-def test_verdict_other_review_states_keep_the_answer(tmp_path, state, current, ok):
+def test_verdict_other_review_states_keep_the_answer(tmp_path, state, current):
+    # Green with no new status (ADR-0059): every run is its own check suite and a red suite still blocks the PR.
     if not shutil.which("jq"):
         pytest.skip("jq missing")
     rc, posted = _run_verdict(tmp_path, RV, "skipped", [_rv()], [], state, current)
     assert posted == "", "no new status"
-    assert (rc == 0) is ok
+    assert rc == 0
 
 
 APPROVAL = _st("success", "approved on new4567 by m")
