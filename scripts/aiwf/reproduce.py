@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from aiwf import config, triage
-from aiwf.ghapi import BOT
+from aiwf.ghapi import BOT, GhRunner
 
 MAX_ISSUE_BODY = 8_000
 MAX_COMMENT = 4_000
@@ -46,7 +46,7 @@ def build(issue: dict[str, Any], comments: list[dict[str, Any]], cfg: dict[str, 
     return "\n".join(lines)
 
 
-def comments(gh: triage.GhRunner, repo: str, number: int) -> list[dict[str, Any]]:
+def comments(gh: GhRunner, repo: str, number: int) -> list[dict[str, Any]]:
     out = gh(["api", "--paginate", f"repos/{repo}/issues/{number}/comments?per_page=100", "--jq", ".[]"])
     return [json.loads(line) for line in out.splitlines() if line.strip()]
 

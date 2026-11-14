@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Callable
+
+from aiwf.ghapi import GhRunner
 
 # command -> whether it takes text after it: None = ignored, "optional", "required"
 COMMANDS: dict[str, str | None] = {
@@ -21,8 +22,6 @@ COMMANDS: dict[str, str | None] = {
 ALLOWED_PERMISSIONS = {"admin", "write"}
 # Up to 3 leading spaces; 4+ spaces or a tab is a Markdown code block.
 COMMAND_RE = re.compile(r"^ {0,3}/([a-z][a-z-]*)(?:[ \t]+(.*?))?[ \t]*$")
-
-GhRunner = Callable[[list[str]], str]
 
 
 @dataclass(frozen=True)

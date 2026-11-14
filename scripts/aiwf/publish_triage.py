@@ -18,7 +18,7 @@ from typing import Any
 from urllib.parse import quote
 
 from aiwf import commands, guard, publish
-from aiwf.ghapi import get_or_none, remove_label, upsert_marker_comment
+from aiwf.ghapi import GhRunner, get_or_none, remove_label, upsert_marker_comment
 
 MARKER = "<!-- ai-workflows:triage -->"
 TYPE_LABELS = {"bug": "type: bug", "feature": "type: feature", "question": "type: question"}
@@ -63,7 +63,7 @@ def listed_sha(shown: dict[str, set[Any]], value: dict[str, Any]) -> str | None:
     return hits[0] if len(hits) == 1 else None
 
 
-def check_duplicate(gh: publish.GhRunner, repo: str, issue: int, number: int | None) -> dict[str, Any] | None:
+def check_duplicate(gh: GhRunner, repo: str, issue: int, number: int | None) -> dict[str, Any] | None:
     """The issue `number` when it is another real issue, open or closed as completed; else None."""
     if not number or number == issue:
         return None
@@ -75,7 +75,7 @@ def check_duplicate(gh: publish.GhRunner, repo: str, issue: int, number: int | N
     return other
 
 
-def check_commit(gh: publish.GhRunner, repo: str, branch: str, sha: str | None) -> dict[str, Any] | None:
+def check_commit(gh: GhRunner, repo: str, branch: str, sha: str | None) -> dict[str, Any] | None:
     """The commit when it exists and is on `branch` (the branch is ahead of it or at it); else None."""
     if not sha:
         return None
@@ -86,7 +86,7 @@ def check_commit(gh: publish.GhRunner, repo: str, branch: str, sha: str | None) 
     return commit if cmp and cmp.get("status") in {"ahead", "identical"} else None
 
 
-def check_pr(gh: publish.GhRunner, repo: str, branch: str, number: int) -> dict[str, Any] | None:
+def check_pr(gh: GhRunner, repo: str, branch: str, number: int) -> dict[str, Any] | None:
     """The pull request when it exists and was merged into `branch`; else None."""
     pr = get_or_none(gh, f"repos/{repo}/pulls/{number}")
     if not pr or not pr.get("merged_at") or (pr.get("base") or {}).get("ref") != branch:
@@ -94,7 +94,7 @@ def check_pr(gh: publish.GhRunner, repo: str, branch: str, number: int) -> dict[
     return pr
 
 
-def check_fix(gh: publish.GhRunner, repo: str, branch: str, ref: dict[str, Any] | None) -> dict[str, Any] | None:
+def check_fix(gh: GhRunner, repo: str, branch: str, ref: dict[str, Any] | None) -> dict[str, Any] | None:
     """The commit or merged PR the classifier names, when it is real and on the default branch; else None."""
     if not ref:
         return None
@@ -179,7 +179,7 @@ def goes_to_b2(data: dict[str, Any], duplicate: bool) -> bool:
     return data["type"] == "bug" and not duplicate and data["confidence"] != "low"
 
 
-def author_trusted(gh: publish.GhRunner, repo: str, issue: dict[str, Any]) -> bool:
+def author_trusted(gh: GhRunner, repo: str, issue: dict[str, Any]) -> bool:
     """ADR-0037 gate: the issue author passes the command-author check (ADR-0005)."""
     login = (issue.get("user") or {}).get("login") or ""
     maintainers = json.loads(os.environ.get("AIWF_CONFIG") or "{}").get("maintainers", [])
@@ -196,7 +196,7 @@ def start_reproduce() -> None:
             fh.write("reproduce=true\n")
 
 
-def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
+def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: GhRunner) -> None:
     item = get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}
     current = {lb["name"] for lb in item.get("labels", [])}
     branch = (get_or_none(gh, f"repos/{repo}") or {}).get("default_branch", "main")
@@ -235,7 +235,7 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
 CAPPED_TEXT = "Automatic triage limit reached for today; a maintainer can run `/retriage`."
 
 
-def publish_capped(repo: str, issue: int, gh: publish.GhRunner) -> None:
+def publish_capped(repo: str, issue: int, gh: GhRunner) -> None:
     """ADR-0058: a capped issue ran no agent. `triage: needs-human` and the sticky triage comment, fixed text only."""
     publish.add_labels(gh, repo, issue, NEEDS_HUMAN)
     upsert_marker_comment(gh, repo, issue, MARKER, f"{MARKER}\n**AI triage:** {CAPPED_TEXT}")
