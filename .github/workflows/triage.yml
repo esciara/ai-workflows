@@ -395,9 +395,10 @@ jobs:
 
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
-  # The reason names the failed jobs only.
+  # The reason names the failed jobs only. A failed chat alert (`notify`) is not an `ai: error`: triage itself worked,
+  # and the failed notify job shows in the run (aiwf-3ci).
   failed:
-    needs: [context, extract, candidates, classify, publish, notify, repro-context, reproduce, repro-publish]
+    needs: [context, extract, candidates, classify, publish, repro-context, reproduce, repro-publish]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5

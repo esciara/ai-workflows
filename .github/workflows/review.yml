@@ -321,7 +321,8 @@ jobs:
 
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
-  # The reason names the failed jobs only.
+  # The reason names the failed jobs only. A run whose PR head moved on (a newer push) reports nothing: the newer run
+  # owns the labels (aiwf-3ci).
   failed:
     needs: [gate, dependabot, start, context, pass, verify, publish]
     if: always() && contains(needs.*.result, 'failure')
@@ -342,6 +343,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ITEM: ${{ needs.gate.outputs.pr || github.event.pull_request.number || github.event.issue.number }}
+          HEAD_SHA: ${{ needs.gate.outputs.sha }}  # a run whose PR head moved on reports nothing (aiwf-3ci)
           AIWF_NEEDS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: ~/.aiwf-venv/bin/aiwf report-error --repo "$REPO" --issue "$ITEM" --run-url "$RUN_URL"
+        run: >-
+          ~/.aiwf-venv/bin/aiwf report-error --repo "$REPO" --issue "$ITEM" --run-url "$RUN_URL"
+          --head-sha "$HEAD_SHA"

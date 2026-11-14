@@ -1,6 +1,8 @@
 import json
+from pathlib import Path
 
 import pytest
+import yaml
 
 from aiwf import cli, config, ghapi, guard
 from aiwf import publish_review as pr
@@ -12,13 +14,18 @@ BOT = ghapi.BOT
 class FakeGh(RecordingGh):
     """Item labels and issue comments; records every call."""
 
-    def __init__(self, labels=(), comments=()):
+    def __init__(self, labels=(), comments=(), head=None):
         super().__init__()
         self.labels = list(labels)
         self.comments = list(comments)
+        self.head = head
 
     def respond(self, args):
         method, url = self.method(args), self.url(args)
+        if method == "GET" and "/pulls/" in url:
+            if self.head is None:
+                raise RuntimeError("404")
+            return json.dumps({"head": {"sha": self.head}})
         if method == "GET" and "/labels" in url:
             return json.dumps([{"name": n} for n in self.labels])
         if method == "GET" and url.endswith("/comments?per_page=100"):
@@ -74,6 +81,38 @@ def test_cmd_report_error_reason(monkeypatch):
     assert cli.main(["report-error", "--repo", "o/r", "--issue", "3", "--run-url", "https://run/1"]) == 0
     body = next(c for c in gh.writes() if c[3].endswith("/comments"))[-1]
     assert "(failed job: context)" in body
+
+
+def report(monkeypatch, gh, *extra):
+    monkeypatch.setattr(config, "run_gh", gh)
+    monkeypatch.setenv("AIWF_NEEDS", json.dumps({"context": {"result": "failure"}}))
+    return cli.main(["report-error", "--repo", "o/r", "--issue", "3", "--run-url", "https://run/1", *extra])
+
+
+def test_report_error_skips_a_run_whose_pr_head_moved(monkeypatch):
+    gh = FakeGh(head="new")
+    assert report(monkeypatch, gh, "--head-sha", "old") == 0
+    assert gh.writes() == []  # not even pending removed: the newer run owns the labels
+
+
+@pytest.mark.parametrize("head", ["same", None])  # unchanged head; unreadable PR reports as usual
+def test_report_error_reports_when_the_head_did_not_move(monkeypatch, head):
+    gh = FakeGh(head=head)
+    assert report(monkeypatch, gh, "--head-sha", "same") == 0
+    assert ["api", "-X", "POST", "repos/o/r/issues/3/labels", "-f", "labels[]=ai: error"] in gh.writes()
+
+
+def test_report_error_without_head_sha_does_not_look_up_the_pr(monkeypatch):
+    gh = FakeGh(head="new")
+    assert report(monkeypatch, gh) == 0
+    assert not any("/pulls/" in a for c in gh.calls for a in c)
+    assert ["api", "-X", "POST", "repos/o/r/issues/3/labels", "-f", "labels[]=ai: error"] in gh.writes()
+
+
+def test_review_failed_job_passes_the_gate_sha():
+    wf = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/review.yml").read_text())
+    step = wf["jobs"]["failed"]["steps"][-1]
+    assert step["env"]["HEAD_SHA"] == "${{ needs.gate.outputs.sha }}" and '--head-sha "$HEAD_SHA"' in step["run"]
 
 
 @pytest.mark.parametrize("item_off", [False, True])
