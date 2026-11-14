@@ -1,6 +1,6 @@
 # ADR-0059 · `verdict` reruns stale failed `verdict` runs on approval
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Deciders: maintainer
 - Alias: `D59`
@@ -25,7 +25,7 @@ Seen on PR #119 (head 9e3c1de): run 43529129510 (`pull_request`) failed while wa
 
 On `esciara/ai-workflows-playground` draft PR #135 (closed, `test-fixture`), a test workflow `rerun-exp` with `permissions: actions: write` on one job: run 43536038729 (`pull_request`) failed on purpose on attempt 1; a COMMENTED review by the agent App triggered run 43536078875 (`pull_request_review`, default `GITHUB_TOKEN`), which listed the runs of the same workflow on the head SHA and called `POST /actions/jobs/132265152439/rerun`: accepted. Run 43536038729 attempt 2 ran (triggering actor `github-actions[bot]`) and passed; the commit's latest `verdict` check run in that suite is now success (the failed one only shows with `filter=all`). So a `GITHUB_TOKEN` rerun does start the job, unlike most events made with `GITHUB_TOKEN`.
 
-Not tested: an approval as trigger (only the maintainer can approve; the token's permissions do not depend on the review state), and `mergeStateStatus` leaving BLOCKED because of a required check (the playground has no required checks; the PR stayed BLOCKED by REVIEW_REQUIRED and draft). The first real `human-review` PR after this lands is the check.
+Not tested: an approval as trigger (only the maintainer can approve; the token's permissions do not depend on the review state), and `mergeStateStatus` leaving BLOCKED because of a required check (the playground has no required checks; the PR stayed BLOCKED by REVIEW_REQUIRED and draft). The first real `human-review` PR after this lands is the check. After-merge check (open, aiwf-qhk): on the next real `human-review` PR, confirm that a stale red `verdict` reruns itself after the maintainer's approval and the PR leaves BLOCKED without a manual rerun.
 
 GitHub docs: fork PRs get a read-only `GITHUB_TOKEN` on `pull_request_review` too; workflows triggered by Dependabot get a read-only token, and a rerun keeps the original run's privileges.
 
