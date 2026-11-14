@@ -1,6 +1,8 @@
 import json
+from pathlib import Path
 
 import pytest
+import yaml
 
 from aiwf import cli, ghapi, publish, publish_triage as pt, triage
 
@@ -553,9 +555,6 @@ def test_no_alert_when_the_output_is_invalid(monkeypatch, tmp_path):
 
 
 def test_triage_workflow_sends_the_alert_for_new_issues_only():
-    from pathlib import Path
-
-    import yaml
     jobs = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/triage.yml").read_text())["jobs"]
     job = jobs["notify"]
     assert job["needs"] == "publish" and job["permissions"] == {}
