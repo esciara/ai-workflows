@@ -89,12 +89,13 @@ def escalate(gh: GhRunner, repo: str, issue: int, cfg: dict[str, Any], rounds: l
     upsert_marker_comment(gh, repo, issue, MARKER, body(logins, rounds, pr, why, bool(head), run_url))
     publish.add_labels(gh, repo, issue, NEEDS_MAINTAINER)
     people = [a for m in logins for a in ("-f", f"assignees[]={m}")]
+    reviewers = [a for m in logins for a in ("-f", f"reviewers[]={m}")]
     calls = [("assign the issue", f"#{issue}", ["api", "-X", "POST", f"repos/{repo}/issues/{issue}/assignees", *people])]
     if pr:
-        calls += [(what, f"#{pr['number']}", call) for what, call in (("assign the draft PR", ["api", "-X", "POST", f"repos/{repo}/issues/{pr['number']}/assignees",
-                                                     *people]),
-                           ("request review", ["api", "-X", "POST", f"repos/{repo}/pulls/{pr['number']}/requested_reviewers",
-                                               *[a for m in logins for a in ("-f", f"reviewers[]={m}")]]))]
+        n = pr["number"]
+        calls.append(("assign the draft PR", f"#{n}", ["api", "-X", "POST", f"repos/{repo}/issues/{n}/assignees", *people]))
+        calls.append(("request review", f"#{n}",
+                      ["api", "-X", "POST", f"repos/{repo}/pulls/{n}/requested_reviewers", *reviewers]))
     for what, where, call in calls if logins else []:
         try:
             gh(call)
