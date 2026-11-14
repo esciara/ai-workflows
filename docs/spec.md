@@ -180,7 +180,7 @@ The reusable workflow takes an optional list of extra labels an issue must also 
 - **Proposed fix:** approach, files to change, the regression test to keep, alternatives rejected.
 - **Confidence** (high, medium, low) and **size** (S, M, L).
 
-The orchestrator computes the **risk tier** from the files to change with A's path rules, and builds the file and line links itself, at the analysed commit, from the paths and lines the analyst returns; a path that is not in the tree gets no link. The analyst's text is posted cleaned, as B2's is: no mentions, HTML, markers, links or images. Every B2 run removes `triage: awaiting-maintainer` and `fix: declined`. When it reproduces, B3 updates the analysis comment, its status back to waiting (an earlier decision line, with its guidance, stays under it as "previously"), and B4 labels `triage: awaiting-maintainer` again; when it does not, B2 sets that comment's status to "superseded by <run link>; `/reproduce` to analyse again".
+The orchestrator computes the **risk tier** from the files to change with A's path rules, and builds the file and line links itself, at the analysed commit, from the paths and lines the analyst returns; a path that is not in the tree gets no link. The analyst's text is posted cleaned, as B2's is: no mentions, HTML, markers, links or images. Every B2 run that ends reproduced or not reproduced removes `triage: awaiting-maintainer` and `fix: declined` (a failed run, `ai: error`, changes neither). When it reproduces, B3 updates the analysis comment, its status back to waiting (an earlier decision line, with its guidance, stays under it as "previously"), and B4 labels `triage: awaiting-maintainer` again; when it does not, B2 sets that comment's status to "superseded by <run link>; `/reproduce` to analyse again".
 
 **B4 — Ask the maintainer.** Post the analysis as one issue comment (template below, found by its hidden marker and updated in place by a later B3) that mentions each of `maintainers`, label `triage: awaiting-maintainer`, and wait. Only commands accepted per Commands (ADR-0005: in `maintainers` and with write or admin permission) count, and only while the issue has `triage: awaiting-maintainer`, read live from the API by the run that handles the command; a command at any other time changes nothing:
 
@@ -188,7 +188,7 @@ The orchestrator computes the **risk tier** from the files to change with A's pa
 - `/fix <guidance>` — go ahead, with the guidance added to the implementer's brief.
 - `/no-fix <reason>` — label `fix: declined`, stop.
 
-On either command the orchestrator first removes `triage: awaiting-maintainer`, then sets the comment's status line to who decided, with a link to their comment and, for `/fix <guidance>`, the guidance (cleaned), where a later B5 finds it; `triage: reproduced` stays. `/fix` then starts B5. The "B4 analysis posted" chat alert is wired with the slice's notifications (WP11b), not here.
+On either command the orchestrator first removes `triage: awaiting-maintainer`, then sets the comment's status line to who decided, with a link to their comment and, for `/fix <guidance>`, the guidance (cleaned like the analyst's text), where a later B5 finds it, reading it only from that bot-authored comment, found by its marker; `triage: reproduced` stays. `/fix` then starts B5. The "B4 analysis posted" chat alert is wired with the slice's notifications (WP11b), not here.
 
 ```markdown
 <!-- ai-workflows:analysis -->
