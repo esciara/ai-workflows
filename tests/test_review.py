@@ -440,7 +440,7 @@ def passes(**by_pass):
 
 
 def verify(*decisions, previous=(), summary="Does what the issue asks.", suspicious=()):
-    return json.dumps({"summary": summary, "decisions": [dict(zip(("id", "verdict", "severity", "reason"), d))
+    return json.dumps({"summary": summary, "decisions": [{**dict(zip(("id", "verdict", "severity", "reason"), d)), "replacement_ok": True}
                                                          for d in decisions],
                        "previous": [dict(zip(("id", "status", "reason", "candidate"), p)) for p in previous],
                        "suspicious_instructions": list(suspicious)})
@@ -478,7 +478,24 @@ def test_unchecked_and_invented_ids_are_dropped():
     assert publish(gh, passes(correctness=[FINDING]), verify(("made-up-1", "confirmed", "blocking", "x")))
     body = gh.comments[0]["body"]
     assert "No findings." in body and "0 confirmed, 0 refuted, 0 duplicate, 1 not checked (dropped)." in body
+    assert state_of(gh)["verdict"] == "ai-review: human-review"  # FINDING is should-fix: unchecked forces a human
+    assert "did not check" in body
+
+
+def test_unchecked_nit_does_not_force_human_review():
+    gh = FakeGh()
+    assert publish(gh, passes(correctness=[dict(FINDING, severity="nit")]), verify())
     assert state_of(gh)["verdict"] == "ai-review: merge"
+
+
+def test_replacement_rejected_by_verifier_loses_its_suggestion():
+    cand = dict(FINDING, replacement="x = 1")
+    cands = {name: {"findings": [cand] if name == "correctness" else []} for name in review.PASSES}
+    dec = {"id": "correctness-1", "verdict": "confirmed", "severity": "should-fix", "reason": "r", "replacement_ok": True}
+    ok = {"decisions": [dec], "previous": []}
+    bad = {"decisions": [{**dec, "replacement_ok": False}], "previous": []}
+    assert pr.combine(cands, ok, [])[0][0]["replacement"] == "x = 1"
+    assert "replacement" not in pr.combine(cands, bad, [])[0][0]
 
 
 def test_rerun_marks_previous_findings_resolved_or_still_open_with_reason():
