@@ -143,7 +143,7 @@ def test_cli_writes_the_stale_inputs_before_pinging(tmp_path, monkeypatch):
 # --- after the stale step: a maintainer's reopen is final (aiwf-9ni) ---------------------------------------------------
 
 def test_closed_numbers_reads_numbers_only_and_skips_prs():
-    raw = json.dumps([{"number": 7, "title": "x\nstale_after=0"}, {"number": 9, "isPullRequest": True},
+    raw = json.dumps([{"number": 7, "title": "x\nstale_after=0"}, {"number": 9, "pull_request": {"url": "u"}},
                       {"number": 7, "title": "dup"}])
     assert s.closed_numbers(raw) == [7]
     assert s.closed_numbers("") == [] and s.closed_numbers("[]") == []
