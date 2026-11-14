@@ -80,6 +80,13 @@ def test_clean_neutralises_links_and_images():
     assert_inert(publish.clean(EVIL))
 
 
+def test_clean_escapes_backslash_so_escaping_is_not_bypassable():
+    for evil in (r"\[x](http://e.example)", r"\![x](http://e.example/p.png)", r"\\[x](u)"):
+        out = publish.clean(evil)
+        assert not re.search(r"[\[\]!]", re.sub(r"\\.", "", out))  # every bracket/bang is consumed by an escape pair
+    assert publish.clean(r"\[x]") == r"\\\[x\]"
+
+
 def test_triage_body_cleans_reason():
     from aiwf import publish_triage
     data = {"type": "bug", "confidence": "high", "reason": EVIL, "duplicate_of": {"confidence": "low"}}
