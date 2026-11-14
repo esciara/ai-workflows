@@ -27,16 +27,10 @@ on:
       TELEGRAM_CHAT_ID:
         required: false
 
-# One B1/B2 run per issue at a time (aiwf-kbc): runs that can start B1 or B2 (a new issue, an accepted `/retriage` or
-# `/reproduce`, or the reporter's reply, the same clause as repro-context's) queue in the issue's group and never
-# run beside each other, so no two reproducers run at once, the B2 request count is read and written by one run at a
-# time, and a reply sent during a run is read by the next one. A group keeps one pending run: a newer one replaces it
-# (cancelled, no comment). A replaced reply is read by the newer run; a replaced command of another kind is lost (e.g. a
-# pending `/retriage` replaced by `/reproduce`): rare, re-send it (bead aiwf-1q2; separate groups per command would let
-# B1 and B2 run beside each other). Every other run (it starts nothing) gets its own group, so it
-# never replaces a pending run (so a reporter's other comments cannot cancel a pending maintainer command). Scoped to
-# the caller workflow's name (two callers of one repo never replace each other's runs); the caller's own group has
-# another prefix (no deadlock).
+# One B1/B2 run per issue at a time (aiwf-kbc): runs that can start B1 or B2 (new issue, accepted `/retriage` or
+# `/reproduce`, the reporter's reply as in repro-context) queue per issue and caller workflow; all other runs get their
+# own group, so they never replace a pending run. A newer pending run replaces the older one: a replaced reply is read
+# by it, a replaced command of another kind is lost (aiwf-1q2). Prefix differs from the caller's group (no deadlock).
 concurrency:
   group: >-
     aiwf-triage-${{ github.workflow }}-${{ (github.event_name == 'issues'
