@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -76,10 +77,17 @@ def verify_script():
     return re.search(r"^for p in .*?> candidates\.json$", run, re.MULTILINE | re.DOTALL).group(0)
 
 
-def test_review_yml_runs_exactly_the_review_passes():
-    matrix = yaml.safe_load(REVIEW_YML.read_text())["jobs"]["pass"]["strategy"]["matrix"]["pass"]
-    assert tuple(matrix) == review.PASSES
-    assert tuple(verify_script().split(";")[0].split()[3:]) == review.PASSES
+PASSES_ENV = {"PASSES": json.dumps(review.PASSES)}  # what review.yml gets from the context job's `passes` output
+
+
+def test_review_yml_takes_its_passes_from_the_context_job_output():
+    jobs = yaml.safe_load(REVIEW_YML.read_text())["jobs"]
+    assert "needs.context.outputs.passes" in jobs["pass"]["strategy"]["matrix"]["pass"]
+    assert jobs["context"]["outputs"]["passes"] == "${{ steps.ctx.outputs.passes }}"
+    assert "context" in jobs["verify"]["needs"]
+    verify_step = next(s for s in jobs["verify"]["steps"] if "candidates.json" in s.get("run", ""))
+    assert verify_step["env"]["PASSES"] == "${{ needs.context.outputs.passes }}"
+    assert "jq -r '.[]' <<<\"$PASSES\"" in verify_script()
 
 
 @pytest.mark.skipif(not shutil.which("jq"), reason="needs jq")
@@ -90,7 +98,7 @@ def test_review_yml_builds_the_same_candidate_ids_as_the_publisher(tmp_path):
     for name, data in answers.items():
         (tmp_path / "passes" / f"{name}.json").write_text(json.dumps(data))
     (tmp_path / "passes" / "maintainability.json").write_text("not json")  # a pass's answer may be anything
-    subprocess.run(["bash", "-c", verify_script()], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["bash", "-c", verify_script()], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **PASSES_ENV})
     built = json.loads((tmp_path / "candidates.json").read_text())
     assert built == review.candidates(answers)
 
@@ -101,6 +109,6 @@ def test_review_yml_candidates_cannot_close_their_tag(tmp_path):
     (tmp_path / "passes").mkdir()
     for name in review.PASSES:
         (tmp_path / "passes" / f"{name}.json").write_text(json.dumps(forged if name == "security" else {"findings": []}))
-    subprocess.run(["bash", "-c", verify_script()], cwd=tmp_path, check=True, capture_output=True)
+    subprocess.run(["bash", "-c", verify_script()], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **PASSES_ENV})
     text = (tmp_path / "candidates.json").read_text()
     assert "<" not in text and json.loads(text) == review.candidates({"security": forged})
