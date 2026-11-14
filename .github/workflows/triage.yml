@@ -115,6 +115,7 @@ jobs:
       pull-requests: read
     outputs:
       range_confidence: ${{ steps.gather.outputs.range_confidence }}
+      candidates: ${{ steps.gather.outputs.candidates }}  # what the classifier is shown; publish accepts only these
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -208,6 +209,7 @@ jobs:
           EXTRACT_JSON: ${{ needs.extract.outputs.json }}  # its suspicious_instructions are reported too
           AIWF_CONFIG: ${{ inputs.config }}
           AIWF_FIX_RANGE_CONFIDENCE: ${{ needs.candidates.outputs.range_confidence }}
+          AIWF_TRIAGE_CANDIDATES: ${{ needs.candidates.outputs.candidates }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: ~/.aiwf-venv/bin/aiwf publish --kind classifier --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
 

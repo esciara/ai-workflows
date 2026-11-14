@@ -50,7 +50,10 @@ def test_writes_the_context_and_the_range_confidence(github, monkeypatch, tmp_pa
     ctx = (tmp_path / "ctx.md").read_text()
     assert "## Issue under triage" in ctx and "title: Total wrong" in ctx
     assert "commit 111111111111 fix #5 step 1 [fixes refs: #5]" in ctx  # fix refs to this issue are kept
-    assert out.read_text() == "range_confidence=low\n"  # no tag, no release: the fallback range
+    rc_line, cand_line = out.read_text().splitlines()
+    assert rc_line == "range_confidence=low"  # no tag, no release: the fallback range
+    listed = json.loads(cand_line.removeprefix("candidates="))  # what publish accepts (aiwf-wqn)
+    assert len(listed["commits"]) == 3 and all(len(s) == 40 for s in listed["commits"]) and listed["prs"] == []
     assert "3 commits" in capsys.readouterr().out
 
 
@@ -59,7 +62,7 @@ def test_github_output_falls_back_to_the_env_var(github, monkeypatch, tmp_path):
     out = tmp_path / "env_output"
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     assert triage.cmd_candidates(args_for(tmp_path)) == 0
-    assert out.read_text() == "range_confidence=low\n"
+    assert out.read_text().splitlines()[0] == "range_confidence=low"
 
 
 @pytest.mark.parametrize("raw", ["", "not json", "{}", json.dumps({**EXTRACT, "extra": 1})])
