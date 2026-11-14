@@ -249,3 +249,13 @@ def test_cli_repo_mode(monkeypatch, tmp_path):
     out = tmp_path / "out"
     assert cli.main(["config", "--repo", "o/r", "--github-output", str(out)]) == 0
     assert '"maintainers":["a"]' in out.read_text()
+
+
+def test_silence_days_accept_decimals_for_test_configs():
+    cfg = load_text("maintainers: [a]\nreporter_silence_days: {ping: 0.007, stale: 0.0105, close: 0.011}\n")
+    assert cfg["reporter_silence_days"] == {"ping": 0.007, "stale": 0.0105, "close": 0.011}
+
+
+@pytest.mark.parametrize("days", ["{ping: 0, stale: 1, close: 2}", "{ping: -1, stale: 1, close: 2}"])
+def test_silence_days_must_be_positive(days):
+    assert errors_of(f"maintainers: [a]\nreporter_silence_days: {days}\n")
