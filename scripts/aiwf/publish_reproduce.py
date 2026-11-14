@@ -127,6 +127,14 @@ def set_labels(gh: publish.GhRunner, repo: str, issue: int, current: set[str], a
     publish.add_labels(gh, repo, issue, add)
 
 
+SANDBOX_START_ERROR = re.compile(r"^\s*(apply-seccomp|bwrap):", re.MULTILINE)
+
+
+def sandbox_failed(cmds: list[dict[str, Any]]) -> bool:
+    """Every command failed with the sandbox's own start-up error (bubblewrap/seccomp), so nothing ran at all."""
+    return bool(cmds) and all(c["exit_code"] != 0 and SANDBOX_START_ERROR.search(c["output"]) for c in cmds)
+
+
 def publish_reproducer(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
     item = get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}
     current = {lb["name"] for lb in item.get("labels", [])}
@@ -139,6 +147,8 @@ def publish_reproducer(data: dict[str, Any], repo: str, issue: int, run_url: str
         upsert_marker_comment(gh, repo, issue, MARKER, reproduced_body(data, run_url))
         print(f"reproduced {repo}#{issue}")
         return
+    if sandbox_failed(data["commands"]):  # a runner problem, not the reporter's: ask them nothing
+        raise RuntimeError("the sandbox could not start: every command failed before running")  # job fails: ai: error
     cap = int(json.loads(os.environ.get("AIWF_CONFIG") or "{}").get("limits", {}).get("info_requests", 2))
     asked = requests_since_stop(all_comments(gh, repo, issue))
     if asked >= cap:

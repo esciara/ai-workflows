@@ -133,6 +133,27 @@ def test_reproduced_without_a_test_fails_the_job(monkeypatch):
         publish_answer(FakeGh(author="rep"), monkeypatch, reproduced=True)
 
 
+SANDBOX_DOWN = ("apply-seccomp: write /proc/self/setgroups (nested userns is capability-restricted; caller must "
+                "provide CAP_SYS_ADMIN): Permission denied")
+
+
+def test_sandbox_that_cannot_start_fails_the_job_and_asks_the_reporter_nothing(monkeypatch):
+    cmds = [{"command": c, "exit_code": 1, "output": SANDBOX_DOWN} for c in ("echo hello", "ls /")]
+    gh = FakeGh(author="rep")
+    with pytest.raises(RuntimeError, match="sandbox could not start"):
+        publish_answer(gh, monkeypatch, commands=cmds)
+    assert gh.comment_bodies() == [] and gh.added_labels() == []
+
+
+@pytest.mark.parametrize("cmds", [
+    [],
+    [{"command": "echo hi", "exit_code": 1, "output": SANDBOX_DOWN}, {"command": "true", "exit_code": 0, "output": ""}],
+    [{"command": "pytest", "exit_code": 1, "output": "AssertionError: expected apply-seccomp: x"}],
+])
+def test_sandbox_failure_needs_every_command_to_fail_at_start(cmds):
+    assert not pr.sandbox_failed(cmds)
+
+
 def test_not_reproduced_asks_the_reporter(monkeypatch):
     gh = FakeGh(author="rep", labels=("triage: needs-human", "triage: no-response"))
     publish_answer(gh, monkeypatch, questions=["Which <b>input</b> @esciara?"])
