@@ -14,7 +14,7 @@ Key:
 - Boxes:
   - solid dark box = done
   - pale box with thick solid border = in progress (or in review)
-  - very pale box with dotted border = not started or paused (WP6 says paused in its box)
+  - very pale box with dotted border = not started
 - Parent boxes (WP2, WP11, WP12) are the whole package; the split boxes (WP2a, WP2b, WP11a, WP11b, WP11b1, WP12a, WP12b) are its PRs.
 
 The box statuses are those of the snapshot's date. Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't work in your viewer, use the table below.
@@ -30,7 +30,7 @@ flowchart TD
   WP3["WP3 A formal review<br/>inline comments"]
   WP4["WP4 A fork PRs<br/>/review on command"]
   WP5["WP5 B classify<br/>dedup, already fixed?"]
-  WP6["WP6 B reproduce<br/>paused"]
+  WP6["WP6 B reproduce<br/>sandbox, needs-info"]
   WP7["WP7 B reporter silence<br/>ping, stale, close"]
   WP8["WP8 B analyse<br/>root cause, /fix"]
   WP9["WP9 B fix loop<br/>implement + review"]
@@ -134,15 +134,15 @@ flowchart TD
   class WP3 aDone
   class WP4 aDone
   class WP5 bDone
-  class WP6 b
-  class WP7 b
+  class WP6 bDone
+  class WP7 bWip
   class WP8 b
   class WP9 b
   class WP10 b
   class WP11 xWip
   class WP11a xDone
   class WP11b x
-  class WP11b1 xWip
+  class WP11b1 xDone
   class WP12 xDone
   class WP12a xDone
   class WP12b xDone
@@ -165,15 +165,15 @@ flowchart TD
 | WP3 | done | [docs/plan.md, line 39](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L39) |
 | WP4 | done | [docs/plan.md, line 40](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L40) |
 | WP5 | done | [docs/plan.md, line 41](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L41) |
-| WP6 | paused | [docs/plan.md, line 42](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L42) |
-| WP7 | todo | [docs/plan.md, line 43](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43) |
+| WP6 | done | [docs/plan.md, line 42](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L42) |
+| WP7 | in progress | [docs/plan.md, line 43](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43) |
 | WP8 | todo | [docs/plan.md, line 44](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44) |
 | WP9 | todo | [docs/plan.md, line 45](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45) |
 | WP10 | todo | [docs/plan.md, line 46](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46) |
 | WP11 | in progress | [docs/plan.md, line 47](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L47) |
 | WP11a | done | [docs/plan.md, line 48](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L48) |
 | WP11b | todo | [docs/plan.md, line 49](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L49) |
-| WP11b1 | in progress | [docs/plan.md, line 50](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50) |
+| WP11b1 | done | [docs/plan.md, line 50](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50) |
 | WP12 | done | [docs/plan.md, line 51](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L51) |
 | WP12a | done | [docs/plan.md, line 52](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L52) |
 | WP12b | done | [docs/plan.md, line 53](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L53) |
@@ -187,7 +187,7 @@ flowchart TD
 
 Milestones: see [docs/plan.md](plan.md#slices-and-test-setup).
 
-Not started, so no flow diagram yet: WP7, WP8, WP9, WP10, WP11b (other events), WP13, WP17, WP18, WP19. WP6 is paused.
+Not started, so no flow diagram yet: WP8, WP9, WP10, WP11b (other events), WP13, WP17, WP18, WP19. WP7 is in progress with only its spec text and e2e test merged, no code yet, so no flow diagram either.
 
 ## WP1 — Shared runtime
 
@@ -197,9 +197,9 @@ Done when ([docs/plan.md, line 35](https://github.com/esciara/ai-workflows/blob/
 flowchart TD
   C["Comment on target repo"] --> P{"config.yml parses it once<br/>known command, author in maintainers<br/>AND write access?"}
   P -- no --> I["command = ''<br/>review and triage jobs skip"]
-  P -- yes --> O["command = review / retriage / fix / no-fix<br/>in config output"]
+  P -- yes --> O["command = review / retriage / reproduce / fix / no-fix<br/>in config output"]
   O --> RV["review.yml gate<br/>runs on 'review'"]
-  O --> TR["triage.yml<br/>runs B1 on 'retriage'"]
+  O --> TR["triage.yml<br/>runs B1 on 'retriage', B2 on 'reproduce'"]
   D["workflow_dispatch on the caller<br/>(once after install)"] --> L["labels.yml<br/>creates all labels"]
 ```
 
@@ -300,11 +300,11 @@ flowchart TD
   V -- no --> E["Label 'ai: error'"]
   V -- yes --> R{"References exist?<br/>duplicate issue; commit on / PR merged into<br/>the default branch"}
   R -- duplicate, high or medium --> D["type label + 'triage: duplicate'<br/>link; never closed"]
-  R -- possible fix --> F["'possibly fixed by' link in the comment<br/>B2 reproduction would confirm (WP6, paused)"]
+  R -- possible fix --> F["'possibly fixed by' link in the comment<br/>B2 reproduction would confirm (WP6)"]
   R -- none --> L{"Confidence low?"}
   D & F --> L
   L -- yes --> H["type label + 'triage: needs-human'"]
-  L -- no --> T["type label<br/>a bug waits for B2 (WP6, paused)"]
+  L -- no --> T["type label<br/>a trusted author's bug, not a duplicate, goes to B2 (WP6)<br/>an outsider's non-duplicate bug: + 'triage: needs-human', waits for /reproduce"]
   H & T --> S["One triage comment<br/>updated in place"]
   S -. new issue only .-> AL["Chat alert (WP11b1)"]
 ```
@@ -327,6 +327,31 @@ flowchart TD
   PB --> MN["Maintainer runs /retriage when wanted<br/>no automatic retry, no chat alert"]
 ```
 
+## WP6 — B2 · reproduce (ADR-0037)
+
+Done when ([docs/plan.md, line 42](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L42)): Clear bug → `triage: reproduced` + test; vague bug → `triage: needs-info`; after `/reproduce`, the reporter's reply reruns it
+
+```mermaid
+flowchart TD
+  B1["B1 publish (WP5)<br/>bug, not duplicate, not low confidence"] --> TA{"issue author in maintainers<br/>AND write access?"}
+  TA -- no --> NH["'triage: needs-human' + note<br/>waits for a maintainer's /reproduce"]
+  TA -- yes --> RC
+  NH -.-> RP["Maintainer '/reproduce'<br/>(config.yml accepted it)"]
+  RP --> RC
+  RY["Reporter's reply, no command<br/>while 'triage: needs-info'"] --> RC
+  RC["repro-context job, read-only token<br/>issue + reporter/maintainer/own comments,<br/>setup + test commands, default-branch code as tarball"]
+  RC -- artifact --> AG["reproduce agent job, no GitHub token<br/>only the model token, env scrubbed<br/>Bash in bubblewrap sandbox, egress only allowed_domains<br/>sandbox setup fails: job fails"]
+  AG --> TC{"token check<br/>token in answer or transcript?"}
+  TC -- yes --> FL["job fails: 'ai: error'"]
+  TC -- no --> PU{"repro-publish job, the only writer<br/>matches the reproducer schema?"}
+  PU -- "no, or reproduced without test,<br/>or every command hit a sandbox start error" --> FL
+  PU -- "reproduced" --> RD["'triage: reproduced'<br/>sticky comment: failing test, output, commands"]
+  PU -- "not reproduced, requests left" --> NI["'triage: needs-info'<br/>comment @reporter: tried, happened, 2-4 questions"]
+  PU -- "not reproduced, info_requests reached" --> ST["'triage: needs-human' + stop comment<br/>/reproduce restarts"]
+  NI -.-> RY
+  NI -. "silence: WP7" .-> WS["ping, stale, close"]
+```
+
 ## WP11a — Notification senders
 
 Done when ([docs/plan.md, line 48](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L48)): A `workflow_dispatch` test event sends one message with a working link, on both channels
@@ -345,7 +370,7 @@ flowchart TD
 
 ## WP11b1 — Notification: issue triaged
 
-Status in the plan: in progress (code merged; the plan row flips when its e2e is accepted). Done when ([docs/plan.md, line 50](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50)): A new issue triaged on the playground sends one message naming the issue and its type, with a working link to the issue, on both channels (`tests/e2e/test_wp11b.py`)
+Done when ([docs/plan.md, line 50](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50)): A new issue triaged on the playground sends one message naming the issue and its type, with a working link to the issue, on both channels (`tests/e2e/test_wp11b.py`)
 
 ```mermaid
 flowchart TD
@@ -373,6 +398,8 @@ flowchart TD
   W -- no --> P["Orchestrator publishes<br/>via gh api"]
   J -- "a job fails<br/>(agent error, turn or time limit)" --> F["'failed' job"]
   F --> R["Label 'ai: error'<br/>+ one sticky error comment with run link<br/>no retry"]
+  F -. "PR run whose head moved on<br/>(same-repo, not a draft)" .-> SU["Nothing reported<br/>the newer run reports"]
+  P -. "a later run publishes" .-> CL["Sticky error comment<br/>marked cleared"]
 ```
 
 ## WP12b — Guardrails: injection, budgets
@@ -382,6 +409,9 @@ Done when ([docs/plan.md, line 53](https://github.com/esciara/ai-workflows/blob/
 ```mermaid
 flowchart TD
   T["Issue or PR event<br/>text is untrusted data"] --> A["Agents: extract, classify<br/>or 4 review passes + verify<br/>no tools, no secrets"]
+  T --> RA["Reproducer (WP6, ADR-0037)<br/>sandboxed Bash, model token only"]
+  RA --> B
+  RA --> J
   A -- "each agent" --> B["--max-turns + fixed step timeout-minutes<br/>(ADR-0050)"]
   B -- "limit hit: the job fails" --> F["'failed' job: 'ai: error'<br/>+ one sticky error comment, no retry"]
   A --> J["JSON with suspicious_instructions<br/>schema-checked"]
