@@ -52,8 +52,11 @@ jobs:
   # not run, Dependabot), on `changes-requested` and on a failed review. It also posts a commit status `verdict` for
   # the text in the merge box; that status does not gate (ADR-0055, playground result). Drafts are skipped
   # (ready_for_review runs it). On pull_request_review events the labels may belong to an older head commit: a comment
-  # review keeps a green answer only, and other states count only an owner approval of the head SHA, else restore
-  # the AI verdict from the newest non-approval `verdict` status. Never approves anything.
+  # review ends green with no new status (each run is its own check suite and a red suite blocks, so a green one opens
+  # nothing, ADR-0059), and other states count only an owner approval of the head SHA, else restore the AI verdict
+  # from the newest non-approval `verdict` status. On an owner approval of the current head of a same-repo PR it
+  # reruns the failed `verdict` jobs of earlier runs on that head (ADR-0059; `actions: write` is for this only); each
+  # rerun re-evaluates with this same logic. Never approves anything.
   verdict:
     needs: review
     if: always() && !github.event.pull_request.draft && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review')
@@ -62,12 +65,16 @@ jobs:
     permissions:
       pull-requests: read
       statuses: write
+      actions: write   # rerun earlier failed `verdict` jobs on the head SHA only (ADR-0059)
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
           EVENT: ${{ github.event_name }}
           REVIEW_STATE: ${{ github.event.review.state }}
@@ -85,11 +92,29 @@ jobs:
           # the Actions integration); the pending status still names the reason in the merge box.
           hold() { status pending "$1"; echo "::error title=waiting for maintainer approval::$1"; exit 1; }
           waiting() { hold "waiting for maintainer approval of $short ($1)"; }
+          # Earlier failed `verdict` jobs on this head SHA, each in its own check suite, keep the required check red even
+          # after this run is green (ADR-0059). After an owner approval, rerun them: each rerun re-evaluates with this
+          # logic, so a rerun turns green only on that same approval. Not fatal: fork and Dependabot runs get a read-only
+          # token (rerun by hand), and a moved head makes these runs irrelevant.
+          rerun_stale() {
+            if [ "$EVENT" != pull_request_review ] || [ "$RUN_ATTEMPT" != 1 ]; then return 0; fi
+            if [ "$HEAD_REPO" != "$REPO" ]; then echo "fork PR: no rerun of earlier verdict runs (read-only token)"; return 0; fi
+            if [ "$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)" != "$HEAD_SHA" ]; then echo "head moved: no rerun"; return 0; fi
+            wf=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq .workflow_id) \
+              || { echo "::warning title=verdict::could not list earlier verdict runs; rerun red ones by hand"; return 0; }
+            for run in $(gh api --paginate "repos/$REPO/actions/workflows/$wf/runs?head_sha=$HEAD_SHA&status=completed&per_page=100" \
+                --jq '.workflow_runs[] | select((.id | tostring) != $ENV.RUN_ID) | .id'); do
+              for job in $(gh api --paginate "repos/$REPO/actions/runs/$run/jobs?filter=latest&per_page=100" --jq '.jobs[]
+                  | select(.name == "verdict" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")) | .id'); do
+                if gh api -X POST "repos/$REPO/actions/jobs/$job/rerun" >/dev/null; then echo "reran verdict job $job of run $run"
+                else echo "::warning title=verdict::could not rerun verdict job $job of run $run; rerun it by hand"; fi
+              done
+            done
+          }
           if [ "$EVENT" = pull_request_review ] && [ "$REVIEW_STATE" = commented ]; then
-            current=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses?per_page=100" --jq '[.[] | select(.context == "verdict" and .creator.login == "github-actions[bot]")][0].state // "none"')
-            echo "review state $REVIEW_STATE ignored; verdict status of $short stays $current"
-            if [ "$current" = success ]; then exit 0; fi
-            exit 1
+            # Green, no new status: the other runs on this head keep their answers, and a red one still blocks (ADR-0059).
+            echo "review state $REVIEW_STATE ignored; the other verdict runs of $short keep their answers" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
           # Latest review per user, kept when APPROVED on the head commit by the repository owner.
           reviews=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" --jq '.[]' | jq -s .)
@@ -97,7 +122,7 @@ jobs:
             map(select(.state != "COMMENTED" and .state != "PENDING")) | group_by(.user.login) | map(last)
             | map(select(.state == "APPROVED" and .commit_id == $sha and .author_association == "OWNER"))
             | map(.user.login) | join(",")' <<<"$reviews")
-          if [ -n "$approved" ]; then status success "approved on $short by $approved"; exit 0; fi
+          if [ -n "$approved" ]; then status success "approved on $short by $approved"; rerun_stale; exit 0; fi
           if [ "$EVENT" != pull_request ]; then
             # No owner approval: restore the AI verdict of the head SHA, the newest `verdict` status this workflow posted
             # that is not an approval (statuses are listed newest first). None yet: waiting.
