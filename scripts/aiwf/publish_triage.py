@@ -80,7 +80,7 @@ def is_duplicate(data: dict[str, Any], dup: dict[str, Any] | None) -> bool:
 
 def body(data: dict[str, Any], dup: dict[str, Any] | None, fix: dict[str, Any] | None, fix_conf: str,
          run_url: str, suspicious: list[str] | None = None, waits: bool = False) -> str:
-    lines = [MARKER, f"**AI triage:** {data['type']} ({data['confidence']} confidence). {data['reason']}"]
+    lines = [MARKER, f"**AI triage:** {data['type']} ({data['confidence']} confidence). {publish.clean(data['reason'])}"]
     if is_duplicate(data, dup):
         lines += ["", f"Duplicate of #{dup['number']} ({data['duplicate_of']['confidence']} confidence). Labelled "
                   f"`{DUPLICATE}`; a person takes over. Not closed."]

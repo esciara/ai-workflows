@@ -47,9 +47,10 @@ def validate(kind: str, raw: str | None) -> dict[str, Any]:
 
 
 def clean(text: str, limit: int = 600) -> str:
-    """One table-safe line: no mentions, HTML, markers or pipes."""
+    """One table-safe line: no mentions, HTML, markers, pipes, links or images."""
     text = " ".join(str(text).split())[:limit]
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")\
+        .replace("[", "\\[").replace("]", "\\]").replace("!", "\\!")
 
 
 def injection_line(quotes: list[str]) -> str:
