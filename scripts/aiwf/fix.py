@@ -188,7 +188,8 @@ class BranchMoved(Exception):
 def push(gh: GhRunner, repo: str, tree: Path, paths: list[tuple[str, str, str]], parent: str, expected: str,
          branch: str, message: str) -> str:
     """One commit with the tree's content on `parent`, then the branch moved to it: created when `expected` is '',
-    fast-forwarded from `expected` otherwise. GitHub refuses both when the branch is not as expected: BranchMoved."""
+    fast-forwarded from `expected` otherwise. GitHub refuses both with 422 (or 409) when the branch is not as
+    expected: BranchMoved. Any other refusal (permission, outage) is raised as is and fails the job (`ai: error`)."""
     entries = []
     for status, path, mode in paths:
         if status == "D":
@@ -210,6 +211,8 @@ def push(gh: GhRunner, repo: str, tree: Path, paths: list[tuple[str, str, str]],
         else:
             post_json(gh, "POST", f"repos/{repo}/git/refs", {"ref": f"refs/heads/{branch}", "sha": commit})
     except RuntimeError as exc:
+        if not re.search(r"HTTP (409|422)", str(exc)):
+            raise
         raise BranchMoved(str(exc)[:200]) from None
     return commit
 
@@ -316,7 +319,6 @@ def cmd_push(args: argparse.Namespace) -> int:
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
         cli.write_outputs(out, {"head": record["head"], "next": str(record["next"]).lower(),
-                                "approved": str(record["outcome"] == "approved").lower(),
                                 "escalate": str(record["escalate"]).lower()})
     return 0
 
