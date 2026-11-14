@@ -242,7 +242,7 @@ def test_every_agent_step_has_a_time_and_turn_limit():
         assert isinstance(turns, int) and turns > 0, where
         minutes = step.get("timeout-minutes")
         assert isinstance(minutes, int) and 0 < minutes < job["timeout-minutes"], where  # a step timeout fails
-    assert seen >= 5  # extract, classify, review pass, verify, reproduce
+    assert seen >= 11  # extract, classify, review pass, verify, reproduce, analyse, B5 implement and review x3
     assert yaml.safe_load(AGENT_ACTION_YML.read_text())["inputs"]["max-turns"]["required"] is True
     assert "--max-turns $MAX_TURNS" in _args_run()
 
@@ -347,7 +347,12 @@ def test_command_running_agents_are_sandboxed_and_scrubbed():
             check = next(s for s in steps if s.get("name") == "Token check")
             assert steps.index(check) > steps.index(agent), where
             assert "token-check.outcome == 'success'" in job["outputs"]["json"], f"{where}: answer only after the check"
-    assert seen >= 1  # the reproducer (B2); the implementer (B5) joins in WP9
+            # B5: a diff the agent's work produced leaves the job only after the token check scanned it too
+            for s in steps[steps.index(agent):]:
+                if str(s.get("uses", "")).startswith("actions/upload-artifact@"):
+                    assert "steps.token-check.outcome == 'success'" in str(s.get("if", "")), f"{where}: upload gated"
+                    assert f"grep -qF -- \"$TOKEN\" {s['with']['path']}" in str(check["run"]), f"{where}: upload scanned"
+    assert seen >= 4  # the reproducer (B2) and the implementer of each B5 round
 
 
 # --- verdict check (ADR-0053, states ADR-0055): check-run plus a `verdict` commit status of the same name -----------

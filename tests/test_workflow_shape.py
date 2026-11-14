@@ -22,11 +22,16 @@ def jobs(name):
     return yaml.safe_load((WORKFLOWS / name).read_text())["jobs"]
 
 
-@pytest.mark.parametrize("name,agents", [("review.yml", {"pass", "verify"}),
-                                         ("triage.yml", {"extract", "classify", "reproduce", "analyse"})])
-def test_every_agent_job_fetches_with_the_one_shared_step(name, agents):
+FIX_AGENTS = {f"round-{k}-{j}" for k in (1, 2, 3) for j in ("implement", "review")}
+
+
+# `written`: agent jobs whose steps are spelled out; the other B5 rounds reuse round 1's steps (YAML anchor).
+@pytest.mark.parametrize("name,agents,written", [
+    ("review.yml", {"pass", "verify"}, 2),
+    ("triage.yml", {"extract", "classify", "reproduce", "analyse"} | FIX_AGENTS, 6)])
+def test_every_agent_job_fetches_with_the_one_shared_step(name, agents, written):
     text = (WORKFLOWS / name).read_text()
-    assert text.count("&fetch-aiwf") == 1 and text.count("*fetch-aiwf") == len(agents) - 1
+    assert text.count("&fetch-aiwf") == 1 and text.count("*fetch-aiwf") == written - 1
     found = set()
     for job_name, job in jobs(name).items():
         steps = job.get("steps", [])

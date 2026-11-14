@@ -22,6 +22,24 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Priority: P3, before an org-owned repo adopts the rule.
 - ADR: [ADR-0053](adr/0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md)
 
+### B5's check job has open network egress
+
+- Date: 2026-11-14
+- What: B5's check job (WP9a) runs the round's agent-written diff (`setup`, `test`, reproduction command) as an unprivileged user with no secret and no token scope, but with unrestricted network egress; the implementer runs the same code limited to `allowed_domains` (ADR-0037).
+- Why it matters: on a private repo, agent-written code could send the source out, or use the runner for up to 40 minutes.
+- Current mitigation: no secret or token in the job; the code only runs after a maintainer's `/fix`. Fix: restrict the check user's egress to `allowed_domains` (e.g. an iptables owner match), or accept the risk.
+- Priority: P2, before a private repo enables B5.
+- ADR: [ADR-0037](adr/0037-command-running-agents-sandbox-scrub-and-trusted-gate.md)
+
+### Upgrading the caller pin past WP9 needs wider `triage` permissions
+
+- Date: 2026-11-14
+- What: from WP9a, triage.yml has jobs asking for `contents: write` and `pull-requests: write` (B5 push and escalation). A caller that bumps its pin but keeps the old `triage` job permissions (`contents: read`, `pull-requests: read`) fails at startup on every triage event, B1 included.
+- Why it matters: installed repos (the playground's normal caller, esciara/pyteleinfo) break on their next upgrade unless they also copy the new permissions from templates/caller.yml.
+- Current mitigation: templates/caller.yml has the new permissions; the release note must say so.
+- Priority: P2, at the next release.
+- ADR: [ADR-0040](adr/0040-code-ref-and-pinning-consolidated.md)
+
 ## Accepted risks
 
 ### Unreviewed code on `e2e-target-<n>` runs with playground secrets

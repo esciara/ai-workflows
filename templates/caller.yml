@@ -76,16 +76,17 @@ jobs:
     permissions:
       pull-requests: write
 
-  # Workflow B (WP5: B1 classify on new issues and /retriage). Review-only install: delete this job.
+  # Workflow B (B1 to B5). Review-only install: delete this job.
   triage:
     needs: config
     if: needs.config.outputs.triage == 'true' && (github.event_name == 'issues' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
     uses: esciara/ai-workflows/.github/workflows/triage.yml@bd6bbbd8b7d425d9dd7ff4f1f0a722166d6df090 # v0.2.0
-    # B1 reads the repo and PRs, writes only issue labels and comments. Widen when fixes (B5/B6) ship.
+    # Issue labels and comments; B5's push job writes `ai-fix/issue-<n>` (never `.github/`) and its escalation job opens
+    # a draft PR (which also needs the repo setting that lets GitHub Actions create pull requests).
     permissions:
-      contents: read
+      contents: write
       issues: write
-      pull-requests: read
+      pull-requests: write
     with:
       config: ${{ needs.config.outputs.config }}
     secrets:

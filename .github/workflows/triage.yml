@@ -3,6 +3,8 @@
 # WP6: B2 reproduce (ADR-0037), after B1 for a trusted author's bug, on a maintainer's `/reproduce`, or on the reporter's
 # reply while the issue has `triage: needs-info`. The reproducer runs project commands: sandboxed Bash only, env scrubbed.
 # WP8: B3 analyse after a reproducing B2 (no tools, code in its prompt), B4 analysis comment, `/fix` and `/no-fix`.
+# WP9: B5 fix loop after a recorded `/fix`: up to 3 rounds of implementer (sandboxed as B2), the orchestrator's own check,
+# adversarial reviewer, push to `ai-fix/issue-<n>` (the push job's `contents: write` only); escalation to a draft PR.
 # B1 runs two agent passes (ADR-0035): pass 1 reads the issue and returns what to search for; the orchestrator gathers
 # duplicate candidates (issue search, all issues) and possible fixes (commits and merged PRs since the reported
 # version's tag) with a read-only token; pass 2 classifies. Issue and comment text are untrusted: they reach scripts
@@ -508,7 +510,7 @@ jobs:
 
   # B4 commands (spec B4): `/fix [guidance]` or `/no-fix <reason>` from a maintainer (config.yml checked the author,
   # ADR-0005). Acts only while the issue has `triage: awaiting-maintainer`, read live; records the decision in the
-  # analysis comment's status line. WP9 makes `/fix` start B5.
+  # analysis comment's status line. A recorded `/fix` outputs `fix=true`: B5 starts in this run.
   decide:
     if: github.event_name == 'issue_comment' && !github.event.issue.pull_request && (fromJSON(inputs.config).command == 'fix' || fromJSON(inputs.config).command == 'no-fix')
     concurrency:  # one decision at a time per issue: the label check and its removal are not atomic
@@ -518,6 +520,8 @@ jobs:
     timeout-minutes: 5
     permissions:
       issues: write
+    outputs:
+      fix: ${{ steps.decide.outputs.fix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -526,20 +530,497 @@ jobs:
           path: .ai-workflows
           persist-credentials: false
       - uses: ./.ai-workflows/.github/actions/aiwf-setup
-      - env:
+      - id: decide
+        env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
           AIWF_CONFIG: ${{ inputs.config }}
         run: aiwf decide --repo "$REPO" --issue "$ISSUE"
 
+  # B5 context (spec B5): starts only when the bot's analysis comment's status line is this run's `/fix` approval and
+  # `ai-fix/issue-<n>` does not exist (else one comment saying so, and no round). The brief (project commands, guidance
+  # from that status line only, the issue and relevant comments, B2's and B3's bot comments found by author and marker)
+  # and the default branch's code (no token in the tarball's .git) go to every round as a same-run artifact.
+  fix-context:
+    needs: decide
+    if: needs.decide.outputs.fix == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write  # the "branch exists" comment only
+    outputs:
+      start: ${{ steps.context.outputs.start }}
+      sha: ${{ steps.context.outputs.sha }}  # the base commit every round's diff applies to
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: target
+          persist-credentials: false
+      - id: context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AIWF_CONFIG: ${{ inputs.config }}
+        run: |
+          mkdir -p fix
+          aiwf fix-context --repo "$REPO" --issue "$ISSUE" --out fix
+          echo "sha=$(git -C target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          tar -czf fix/target.tgz -C target .
+      - if: steps.context.outputs.start == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fix-input
+          path: |
+            fix/brief.md
+            fix/meta.json
+            fix/target.tgz
+          retention-days: 7
+
+  # B5 rounds (spec B5), up to `limits.fix_rounds` (1 to 3); round k+1 runs only when round k's push job says so
+  # (rejected, loop not stopped, k < fix_rounds). Each round is four jobs, their steps shared through YAML anchors:
+  # - implement: the implementer (ADR-0037, as the reproducer: sandboxed Bash only, env scrubbed, repo .mcp.json and
+  #   .claude removed and ignored, token check) edits the base tree plus the previous round's diff; the job turns the
+  #   tree into the round's cumulative diff (against a pristine copy of the base, so nothing the agent does to .git
+  #   counts), which the token check also scans. It holds the model token and no GitHub token scope.
+  # - check: the orchestrator's exit condition, with no secret and no token scope. It applies the diff and runs the
+  #   config's `setup`, `test` and the reproduction test's command as an unprivileged user (output to a file, never to
+  #   the job log, so it cannot set outputs or issue workflow commands). A failure fails the job (continue-on-error: the
+  #   run goes on) and rejects the round; `ok` alone decides.
+  # - review: the adversarial reviewer, no tools, fresh context: brief and diff inline, never the implementer's answer.
+  #   Runs only after a passing check.
+  # - push (`contents: write`): `aiwf fix-push` checks both answers against their schemas and pushes the cumulative diff
+  #   to `ai-fix/issue-<n>` through the Git data API, rejected rounds too, unless it touches `.github/`, the status line
+  #   changed or the branch head is not the commit pushed last.
+  round-1-implement:
+    name: round-1 / implement
+    needs: fix-context
+    if: ${{ !cancelled() && needs.fix-context.outputs.start == 'true' }}
+    runs-on: ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
+    timeout-minutes: 45
+    permissions: {}
+    env:
+      ROUND: "1"
+      PREV: "0"
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"  # ADR-0037: no credential in any Bash command's environment
+      CLAUDE_WORKING_DIR: ${{ github.workspace }}/work
+    outputs: &implement-outputs
+      json: ${{ steps.token-check.outcome == 'success' && steps.claude.outputs.structured_output || '' }}
+    steps: &implement-steps
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-input
+          path: fix
+      - if: env.PREV != '0'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-diff-${{ env.PREV }}
+          path: prev
+      - if: env.PREV != '0'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-round-${{ env.PREV }}
+          path: prev
+      - *fetch-aiwf
+      - env:
+          DOMAINS: ${{ toJSON(fromJSON(inputs.config).allowed_domains) }}
+        run: |
+          { cat .ai-workflows/prompts/implementer.md; echo; cat fix/brief.md
+            if [ -f prev/findings.md ]; then echo; cat prev/findings.md; fi; } > prompt.md
+          mkdir work && tar -xzf fix/target.tgz -C work
+          if [ -s prev/patch.diff ]; then git -C work apply --binary "$GITHUB_WORKSPACE/prev/patch.diff"; fi
+          rm -rf work/.mcp.json work/.claude  # the repo's MCP servers, settings and hooks never load (aiwf-zzn)
+          deny='[]'
+          for d in "$RUNNER_TEMP" "$HOME/.claude" /home/runner/runners /home/runner/actions-runner /opt/actions-runner; do
+            if [ -e "$d" ]; then deny=$(jq -c --arg d "$d" '. + [$d]' <<< "$deny"); fi
+          done
+          jq -n --argjson domains "$DOMAINS" --argjson deny "$deny" '{sandbox: {enabled: true, failIfUnavailable: true,
+            allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: true, network: {allowedDomains: $domains},
+            filesystem: {denyRead: $deny}}}' > settings.json
+      - name: Sandbox setup
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - id: claude
+        timeout-minutes: 30  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
+        uses: ./.ai-workflows/.github/actions/aiwf-agent
+        with:
+          oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt-file: ${{ github.workspace }}/prompt.md
+          schema: ${{ github.workspace }}/.ai-workflows/schema/implementer.json
+          max-turns: 60
+          model: ${{ fromJSON(inputs.config).model || '' }}
+          sandbox-settings: ${{ github.workspace }}/settings.json
+      # The cumulative diff against a pristine base (the .git from the tarball, not the agent's), without the repo's
+      # .mcp.json and .claude (removed above, never part of a fix).
+      - name: Diff
+        if: steps.claude.outcome == 'success'
+        run: |
+          set -euo pipefail
+          mkdir pristine && tar -xzf fix/target.tgz -C pristine
+          cd work
+          git --git-dir=../pristine/.git --work-tree=. add -A -- . ':(exclude).mcp.json' ':(exclude).claude'
+          git --git-dir=../pristine/.git --work-tree=. diff --cached --binary HEAD > ../patch.diff
+          echo "diff: $(wc -c < ../patch.diff) bytes"
+      - name: Token check
+        id: token-check
+        if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+          ANSWER: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          [ -n "$TOKEN" ] || { echo "::error::no token to check against"; exit 1; }
+          found=0
+          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ] && grep -qF -- "$TOKEN" "$EXEC_FILE"; then found=1; fi
+          if printf '%s' "$ANSWER" | grep -qF -- "$TOKEN"; then found=1; fi
+          if [ -f patch.diff ] && grep -qF -- "$TOKEN" patch.diff; then found=1; fi
+          if [ "$found" = 1 ]; then echo "::error title=Token check::the model token appears in the agent's output"; exit 1; fi
+          echo "token check passed"
+      - if: steps.token-check.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fix-diff-${{ env.ROUND }}
+          path: patch.diff
+          if-no-files-found: error
+          retention-days: 7
+
+  round-1-check:
+    name: round-1 / check
+    needs: [fix-context, round-1-implement]
+    if: ${{ !cancelled() && needs.round-1-implement.result == 'success' }}
+    runs-on: ubuntu-24.04  # same image as the implementer, so both run the commands alike
+    timeout-minutes: 45
+    continue-on-error: true  # a failed check rejects the round; the run goes on
+    permissions: {}
+    env:
+      ROUND: "1"
+    outputs: &check-outputs
+      ok: ${{ steps.check.outputs.ok }}
+    steps: &check-steps
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-input
+          path: fix
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-diff-${{ env.ROUND }}
+          path: diff
+      - id: check
+        timeout-minutes: 40
+        env:
+          SETUP: ${{ fromJSON(inputs.config).setup || '' }}
+          TEST: ${{ fromJSON(inputs.config).test || '' }}
+        run: |
+          set -uo pipefail
+          ok=true
+          : > check.log
+          repro=$(jq -r '.repro_command // ""' fix/meta.json)
+          home=/home/aiwfcheck
+          mkdir work && tar -xzf fix/target.tgz -C work
+          if [ ! -s diff/patch.diff ]; then echo "The round changed nothing." >> check.log; ok=false
+          elif ! git -C work apply --binary "$PWD/diff/patch.diff" >> check.log 2>&1; then
+            echo "The diff does not apply to the base commit." >> check.log; ok=false
+          fi
+          sudo useradd --create-home --shell /bin/bash aiwfcheck
+          sudo mv work "$home/work" && sudo chown -R aiwfcheck: "$home/work"
+          # Each command's output goes to its own file; only the end of a failed one (900 bytes) reaches check.log,
+          # after every process the command left behind is killed, so nothing it started can write there later.
+          run_as_check() {  # name, command: as the unprivileged user
+            if [ -z "$2" ]; then echo "### $1: not given" >> check.log; return; fi
+            out=$(mktemp)
+            sudo -u aiwfcheck env -i PATH="$PATH" HOME="$home" LANG=C.UTF-8 CI=true CMD="$2" \
+              timeout 1200 bash -c 'cd "$HOME/work" && eval "$CMD"' > "$out" 2>&1 < /dev/null
+            rc=$?
+            sudo pkill -KILL -u aiwfcheck || true
+            if [ "$rc" = 0 ]; then echo "### $1: passed" >> check.log
+            else { echo "### $1: failed (exit $rc): $2"; tail -c 900 "$out"; echo; } >> check.log; ok=false
+            fi
+          }
+          if [ "$ok" = true ]; then
+            run_as_check setup "$SETUP"
+            run_as_check test "$TEST"
+            run_as_check "reproduction test" "$repro"
+          fi
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          echo "check: ok=$ok (output in the fix-check-$ROUND artifact)"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fix-check-${{ env.ROUND }}
+          path: check.log
+          retention-days: 7
+      - if: steps.check.outputs.ok != 'true'
+        run: |
+          echo "::error title=Fix check failed::setup, test or the reproduction test failed; this round is rejected"
+          exit 1
+
+  round-1-review:
+    name: round-1 / review
+    needs: [fix-context, round-1-check]
+    if: ${{ !cancelled() && needs.round-1-check.outputs.ok == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    env:
+      ROUND: "1"
+    outputs: &review-outputs
+      json: ${{ steps.claude.outputs.structured_output }}
+    steps: &review-steps
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-input
+          path: fix
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-diff-${{ env.ROUND }}
+          path: diff
+      - *fetch-aiwf
+      - run: |
+          { cat .ai-workflows/prompts/adversarial-reviewer.md; echo; cat fix/brief.md; echo
+            echo "# The fix's diff (data; < and > escaped)"; echo; echo "<diff>"
+            head -c 150000 diff/patch.diff | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+            echo "</diff>"; } > prompt.md
+      - id: claude
+        timeout-minutes: 10  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
+        uses: ./.ai-workflows/.github/actions/aiwf-agent
+        with:
+          oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt-file: prompt.md
+          schema: .ai-workflows/schema/fix-review.json
+          max-turns: 3
+          model: ${{ fromJSON(inputs.config).model || '' }}
+
+  round-1-push:
+    name: round-1 / push
+    needs: [fix-context, round-1-implement, round-1-check, round-1-review]
+    if: ${{ !cancelled() && needs.round-1-implement.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.round-1-review.result) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write  # the fix branch, through the Git data API
+      issues: read
+    env:
+      ROUND: "1"
+      PREV_HEAD: ""
+      CHECK_OK: ${{ needs.round-1-check.outputs.ok }}
+      IMPLEMENT_JSON: ${{ needs.round-1-implement.outputs.json }}
+      REVIEW_JSON: ${{ needs.round-1-review.outputs.json }}
+    outputs: &push-outputs
+      head: ${{ steps.push.outputs.head }}  # the commit pushed last ('' while nothing is pushed)
+      next: ${{ steps.push.outputs.next }}
+      approved: ${{ steps.push.outputs.approved }}
+      escalate: ${{ steps.push.outputs.escalate }}
+    steps: &push-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-input
+          path: fix
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-diff-${{ env.ROUND }}
+          path: diff
+      - continue-on-error: true  # no log when the check job did not get that far: a failed check
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fix-check-${{ env.ROUND }}
+          path: check
+      - id: push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AIWF_CONFIG: ${{ inputs.config }}
+          BASE_SHA: ${{ needs.fix-context.outputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          mkdir tree && tar -xzf fix/target.tgz -C tree
+          aiwf fix-push --repo "$REPO" --issue "$ISSUE" --round "$ROUND" --meta fix/meta.json --tree tree \
+            --patch diff/patch.diff --check-log check/check.log --out round
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fix-round-${{ env.ROUND }}
+          path: |
+            round/round.json
+            round/findings.md
+          retention-days: 7
+
+  round-2-implement:
+    name: round-2 / implement
+    needs: round-1-push
+    if: ${{ !cancelled() && needs.round-1-push.outputs.next == 'true' }}
+    runs-on: ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
+    timeout-minutes: 45
+    permissions: {}
+    env:
+      ROUND: "2"
+      PREV: "1"
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"  # ADR-0037: no credential in any Bash command's environment
+      CLAUDE_WORKING_DIR: ${{ github.workspace }}/work
+    outputs: *implement-outputs
+    steps: *implement-steps
+
+  round-2-check:
+    name: round-2 / check
+    needs: [fix-context, round-2-implement]
+    if: ${{ !cancelled() && needs.round-2-implement.result == 'success' }}
+    runs-on: ubuntu-24.04  # same image as the implementer, so both run the commands alike
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions: {}
+    env:
+      ROUND: "2"
+    outputs: *check-outputs
+    steps: *check-steps
+
+  round-2-review:
+    name: round-2 / review
+    needs: [fix-context, round-2-check]
+    if: ${{ !cancelled() && needs.round-2-check.outputs.ok == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    env:
+      ROUND: "2"
+    outputs: *review-outputs
+    steps: *review-steps
+
+  round-2-push:
+    name: round-2 / push
+    needs: [fix-context, round-1-push, round-2-implement, round-2-check, round-2-review]
+    if: ${{ !cancelled() && needs.round-2-implement.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.round-2-review.result) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write  # the fix branch, through the Git data API
+      issues: read
+    env:
+      ROUND: "2"
+      PREV_HEAD: ${{ needs.round-1-push.outputs.head }}
+      CHECK_OK: ${{ needs.round-2-check.outputs.ok }}
+      IMPLEMENT_JSON: ${{ needs.round-2-implement.outputs.json }}
+      REVIEW_JSON: ${{ needs.round-2-review.outputs.json }}
+    outputs: *push-outputs
+    steps: *push-steps
+
+  round-3-implement:
+    name: round-3 / implement
+    needs: round-2-push
+    if: ${{ !cancelled() && needs.round-2-push.outputs.next == 'true' }}
+    runs-on: ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
+    timeout-minutes: 45
+    permissions: {}
+    env:
+      ROUND: "3"
+      PREV: "2"
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"  # ADR-0037: no credential in any Bash command's environment
+      CLAUDE_WORKING_DIR: ${{ github.workspace }}/work
+    outputs: *implement-outputs
+    steps: *implement-steps
+
+  round-3-check:
+    name: round-3 / check
+    needs: [fix-context, round-3-implement]
+    if: ${{ !cancelled() && needs.round-3-implement.result == 'success' }}
+    runs-on: ubuntu-24.04  # same image as the implementer, so both run the commands alike
+    timeout-minutes: 45
+    continue-on-error: true
+    permissions: {}
+    env:
+      ROUND: "3"
+    outputs: *check-outputs
+    steps: *check-steps
+
+  round-3-review:
+    name: round-3 / review
+    needs: [fix-context, round-3-check]
+    if: ${{ !cancelled() && needs.round-3-check.outputs.ok == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    env:
+      ROUND: "3"
+    outputs: *review-outputs
+    steps: *review-steps
+
+  round-3-push:
+    name: round-3 / push
+    needs: [fix-context, round-2-push, round-3-implement, round-3-check, round-3-review]
+    if: ${{ !cancelled() && needs.round-3-implement.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.round-3-review.result) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write  # the fix branch, through the Git data API
+      issues: read
+    env:
+      ROUND: "3"
+      PREV_HEAD: ${{ needs.round-2-push.outputs.head }}
+      CHECK_OK: ${{ needs.round-3-check.outputs.ok }}
+      IMPLEMENT_JSON: ${{ needs.round-3-implement.outputs.json }}
+      REVIEW_JSON: ${{ needs.round-3-review.outputs.json }}
+    outputs: *push-outputs
+    steps: *push-steps
+
+  # B5 escalation (spec B5): the loop ended without an approved round (cap reached, or stopped by a guard). Draft PR of
+  # the last pushed work (none when nothing was pushed; a refused PR is reported in the comment and the log only), one
+  # comment that mentions each maintainer with every round's findings, `fix: needs-maintainer`, the maintainers
+  # assigned to the issue and the PR and requested as reviewers. An exit, not an `ai: error`.
+  escalate:
+    needs: [fix-context, round-1-push, round-2-push, round-3-push]
+    if: ${{ !cancelled() && (needs.round-1-push.outputs.escalate == 'true' || needs.round-2-push.outputs.escalate == 'true' || needs.round-3-push.outputs.escalate == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write  # the draft PR, its assignees and review request
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: fix-round-*
+          path: records
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AIWF_CONFIG: ${{ inputs.config }}
+          FIX_HEAD: ${{ needs.round-3-push.outputs.head || needs.round-2-push.outputs.head || needs.round-1-push.outputs.head }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: aiwf fix-escalate --repo "$REPO" --issue "$ISSUE" --records records
+
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
-  # The reason names the failed jobs only. A failed chat alert (`notify`) is not an `ai: error`: triage itself worked,
+  # The reason names the failed jobs only. A round's check job is left out: its failure rejects the round (spec B5). A failed chat alert (`notify`) is not an `ai: error`: triage itself worked,
   # and the failed notify job shows in the run (aiwf-3ci).
   failed:
     needs: [context, extract, candidates, classify, publish, repro-context, reproduce, repro-publish, analyse-context,
-            analyse, analyse-publish, decide]
+            analyse, analyse-publish, decide, fix-context, round-1-implement, round-1-review, round-1-push,
+            round-2-implement, round-2-review, round-2-push, round-3-implement, round-3-review, round-3-push, escalate]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
