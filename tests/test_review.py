@@ -822,7 +822,14 @@ def test_diff_406_falls_back_to_file_patches_and_counts_as_truncated(tmp_path):
 
 
 def test_other_diff_errors_still_raise(tmp_path):
+    answers = {"pulls/1": {"title": "t", "body": "", "additions": 2, "deletions": 0}, "files": [[]],
+               "graphql": {"data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": []}}}}}}
+
     def gh(args):
-        raise RuntimeError("HTTP 500")
-    with pytest.raises(RuntimeError):
+        if any("diff" in a for a in args):  # only the diff request fails; every other call answers normally
+            raise RuntimeError("HTTP 500: server error")
+        key = "graphql" if "graphql" in args else "files" if any("/files" in a for a in args) else "pulls/1"
+        return json.dumps(answers[key])
+
+    with pytest.raises(RuntimeError, match="HTTP 500"):
         review.gather(gh, "o/r", 1, "s" * 40, tmp_path, {"risk_paths": {}, "limits": {"human_review_lines": 400}})
