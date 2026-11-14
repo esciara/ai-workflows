@@ -90,9 +90,13 @@ jobs:
       config: ${{ needs.config.outputs.config }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # "New issue triaged" chat alert (WP11b1); unused with `notify: none`.
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
   # Chat notification test event (ADR-0024): a manual run sends one test message per channel in the config's `notify`.
-  # The only job given the Slack/Telegram secrets. Delete it if `notify: none`.
+  # Delete it if `notify: none`.
   notify:
     needs: config
     if: needs.config.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && fromJSON(needs.config.outputs.config).notify != 'none'

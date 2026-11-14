@@ -1,4 +1,7 @@
 """Publishers for Workflow B (issue triage). B1: labels and one triage comment from the classifier's checked JSON.
+It also writes the "New issue triaged" chat alert (spec: Chat notifications) to $GITHUB_OUTPUT as `alert_text` and
+`alert_url`; triage.yml's notify job sends it for new issues only. The alert holds only fields the orchestrator checked
+(type, checked duplicate number, labels) and the repo name, never the issue title or other agent text.
 
 The classifier's references (duplicate issue, fixing commit or PR) are checked against the repo before they are linked:
 an unknown or invalid reference is dropped, never posted. A fix is only "possibly fixed by" (ADR-0035): reproducing the
@@ -115,6 +118,24 @@ def labels_for(data: dict[str, Any], duplicate: bool) -> list[str]:
     return out
 
 
+def alert(repo: str, issue: int, kind: str, duplicate_of: int | None, needs_human: bool, server: str
+          ) -> tuple[str, str]:
+    """The "New issue triaged" alert: `#n triaged as <type>`, plus `duplicate of #k` / `needs a person`; its link."""
+    parts = [f"[{repo}] #{issue} triaged as {kind}"]
+    if duplicate_of:
+        parts.append(f"duplicate of #{duplicate_of}")
+    if needs_human:
+        parts.append("needs a person")
+    return ", ".join(parts), f"{server}/{repo}/issues/{issue}"
+
+
+def write_alert(text: str, url: str) -> None:
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as fh:
+            fh.write(f"alert_text={text}\nalert_url={url}\n")
+
+
 def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: publish.GhRunner) -> None:
     current = {lb["name"] for lb in (get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}).get("labels", [])}
     branch = (get_or_none(gh, f"repos/{repo}") or {}).get("default_branch", "main")
@@ -135,6 +156,8 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
     publish.add_labels(gh, repo, issue, *want)
     upsert_marker_comment(gh, repo, issue, MARKER, body(data, dup, fix, fix_conf, run_url, suspicious_instructions(data)))
     print(f"triaged {repo}#{issue}: {', '.join(want)}")
+    write_alert(*alert(repo, issue, data["type"], dup["number"] if DUPLICATE in want else None, NEEDS_HUMAN in want,
+                       os.environ.get("GITHUB_SERVER_URL", "https://github.com")))
 
 
 CAPPED_TEXT = "Automatic triage limit reached for today; a maintainer can run `/retriage`."

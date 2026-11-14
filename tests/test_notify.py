@@ -61,8 +61,8 @@ def test_one_message_per_channel_with_the_link():
     assert slack["text"] == f"Hello <{LINK}|Open on GitHub>"
     assert telegram["chat_id"] == CHAT and telegram["text"] == f"Hello\n{LINK}" and "parse_mode" not in telegram
     assert results == [
-        {"channel": "slack", "status": 200, "body": "ok", "links": [LINK]},
-        {"channel": "telegram", "ok": True, "message_id": 7, "links": [LINK]},
+        {"channel": "slack", "status": 200, "body": "ok", "links": [LINK], "text": "Hello"},
+        {"channel": "telegram", "ok": True, "message_id": 7, "links": [LINK], "text": "Hello"},
     ]
 
 
@@ -109,7 +109,7 @@ def test_cli_prints_result_lines_and_fails_on_any_error(monkeypatch, capsys):
     assert n.cmd_notify(type("A", (), {"channels": "slack,telegram"})()) == 1
     out, err = capsys.readouterr()
     lines = [json.loads(line[len(n.RESULT_PREFIX):]) for line in out.splitlines() if line.startswith(n.RESULT_PREFIX)]
-    assert lines == [{"channel": "telegram", "ok": True, "message_id": 7, "links": [LINK], "aiwf_sha": "abc"}]
+    assert lines == [{"channel": "telegram", "ok": True, "message_id": 7, "links": [LINK], "aiwf_sha": "abc", "text": "hi"}]
     assert "::error title=notify::slack: Slack answered HTTP 500" in err
     assert "SECRET" not in out + err
 
