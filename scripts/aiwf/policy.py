@@ -19,6 +19,7 @@ SECRET_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 EVENT_EXPR_RE = re.compile(r"\$\{\{[^}]*\bgithub\.(?:event\.|head_ref)")
 CHECKOUT_ACTION = "actions/checkout"
 AGENT_ACTION = "anthropics/claude-code-action"
+AGENT_LOCAL_ACTION = "/.github/actions/aiwf-agent"  # the shared agent action (wraps AGENT_ACTION), by local path
 ALLOWED_AGENT_SECRET = "CLAUDE_CODE_OAUTH_TOKEN"
 OWN_REUSABLE_PREFIX = "esciara/ai-workflows/"
 OWN_WORKFLOWS_DIR = Path(__file__).resolve().parents[2] / ".github" / "workflows"
@@ -86,7 +87,8 @@ def has_write(perms: Any) -> bool:
 
 def is_agent_job(job: dict[str, Any], raw: str) -> bool:
     for step in job.get("steps") or []:
-        if isinstance(step, dict) and str(step.get("uses", "")).startswith(AGENT_ACTION):
+        uses = str(step.get("uses", "")) if isinstance(step, dict) else ""
+        if uses.startswith(AGENT_ACTION) or uses.rstrip("/").endswith(AGENT_LOCAL_ACTION):
             return True
     return bool(AGENT_MARKER_RE.search(raw))
 

@@ -1,0 +1,12 @@
+on: push
+permissions: {}
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: ./.ai-workflows/.github/actions/aiwf-agent
+        with:
+          oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        env:
+          GH_TOKEN: ${{ github.token }}

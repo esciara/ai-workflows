@@ -19,14 +19,6 @@ on:
 # Least privilege by default (ADR-0038); each job grants what it needs.
 permissions: {}
 
-env:
-  # Per-run metrics (spec: Usage per run, ADR-0052): an agent job keeps only the numbers of claude-code-action's last
-  # `result` message; the agent's text never leaves the job this way.
-  USAGE_JQ: >-
-    [[.[] | select(.type == "result")] | last | select(. != null)
-    | {type, duration_ms, num_turns, total_cost_usd, usage: ((.usage // {})
-    | {input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens})}]
-
 jobs:
   # Which PR head to review, if any (ADR-0044): PR events of same-repo non-draft PRs, or `/review` from a maintainer
   # (ADR-0005) on any open PR. Fork PR events never start a review; their code is only ever read as text.
@@ -182,18 +174,17 @@ jobs:
           git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
           git -C .ai-workflows checkout --quiet FETCH_HEAD
           { cat .ai-workflows/prompts/review.md ".ai-workflows/prompts/review-$PASS.md"; echo; cat context.md; } > prompt.md
-          echo "SCHEMA=$(jq -c 'del(."$schema")' .ai-workflows/schema/review.json)" >> "$GITHUB_ENV"
       - id: claude
         timeout-minutes: 10  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
-        uses: anthropics/claude-code-action/base-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1.0.271
+        uses: ./.ai-workflows/.github/actions/aiwf-agent
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt_file: prompt.md
-          claude_args: >-
-            --max-turns 3
-            --tools StructuredOutput
-            --json-schema '${{ env.SCHEMA }}'
-            ${{ fromJSON(inputs.config).model && format('--model {0}', fromJSON(inputs.config).model) || '' }}
+          oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt-file: prompt.md
+          schema: .ai-workflows/schema/review.json
+          max-turns: 3
+          model: ${{ fromJSON(inputs.config).model || '' }}
+          usage-name: ${{ matrix.pass }}
+          usage-artifact: review-usage-${{ matrix.pass }}
       - if: always()
         env:
           PASS: ${{ matrix.pass }}
@@ -204,18 +195,6 @@ jobs:
         with:
           name: review-pass-${{ matrix.pass }}
           path: out/
-          retention-days: 7
-      - if: always()
-        env:
-          AGENT: ${{ matrix.pass }}
-          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
-        run: mkdir -p usage && { jq -c "$USAGE_JQ" "$EXECUTION_FILE" > "usage/$AGENT.json" || rm -f "usage/$AGENT.json"; }
-      - if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: review-usage-${{ matrix.pass }}
-          path: usage/
-          if-no-files-found: ignore
           retention-days: 7
 
   # Step 6 (and the agent half of step 9): one fresh agent tries to refute each candidate and marks the last run's
@@ -253,29 +232,17 @@ jobs:
           { cat .ai-workflows/prompts/review-verify.md; echo; cat context.md; echo
             printf '\n<candidates>\n'; cat candidates.json; printf '</candidates>\n\n<previous_findings>\n'
             cat previous.json; printf '\n</previous_findings>\n'; } > prompt.md
-          echo "SCHEMA=$(jq -c 'del(."$schema")' .ai-workflows/schema/review-verify.json)" >> "$GITHUB_ENV"
       - id: claude
         timeout-minutes: 10  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
-        uses: anthropics/claude-code-action/base-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1.0.271
+        uses: ./.ai-workflows/.github/actions/aiwf-agent
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt_file: prompt.md
-          claude_args: >-
-            --max-turns 3
-            --tools StructuredOutput
-            --json-schema '${{ env.SCHEMA }}'
-            ${{ fromJSON(inputs.config).model && format('--model {0}', fromJSON(inputs.config).model) || '' }}
-      - if: always()
-        env:
-          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
-        run: mkdir -p usage && { jq -c "$USAGE_JQ" "$EXECUTION_FILE" > usage/verify.json || rm -f usage/verify.json; }
-      - if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: review-usage-verify
-          path: usage/
-          if-no-files-found: ignore
-          retention-days: 7
+          oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt-file: prompt.md
+          schema: .ai-workflows/schema/review-verify.json
+          max-turns: 3
+          model: ${{ fromJSON(inputs.config).model || '' }}
+          usage-name: verify
+          usage-artifact: review-usage-verify
 
   # Steps 6-9, orchestrator side: validate the 5 answers, keep confirmed findings, verdict, the one summary comment
   # (found by its marker), the verdict label. The passes' answers are read as data, after schema validation.

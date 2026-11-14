@@ -30,6 +30,7 @@ EXPECTED = {
     "agent-write-permissions.yml": "agent-permissions:",
     "agent-read-permissions.yml": "agent-permissions:",
     "agent-marker-token.yml": "agent-secrets:",
+    "agent-local-action-token.yml": "agent-secrets:",
     "pull-request-target-head.yml": "pull-request-target:",
     "pull-request-target-checkout.yml": "pull-request-target:",
     "pull-request-target-run-text.yml": "pull-request-target:",
@@ -51,7 +52,7 @@ def test_real_workflow_passes_policy(path):
 @pytest.mark.parametrize("path", sorted((ROOT / ".github" / "actions").glob("*/action.yml")), ids=lambda p: p.parent.name)
 def test_composite_actions_pin_their_actions(path):
     assert policy.pin_errors(path.read_text()) == []
-    assert policy.pin_errors(path.read_text().replace("@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0", "@v7"))
+    assert policy.pin_errors(re.sub(r"@[0-9a-f]{40}", "@v7", path.read_text(), count=1))
 
 
 def test_every_fixture_has_an_expectation():
@@ -196,20 +197,75 @@ def test_no_job_has_actions_write():
 # --- limits (ADR-0050): every agent step has a fixed time limit and a turn limit -------------------------------------
 
 
-def test_every_agent_step_has_a_time_and_turn_limit():
-    seen = 0
+AGENT_ACTION_YML = ROOT / ".github" / "actions" / "aiwf-agent" / "action.yml"
+AGENT_USES = "./.ai-workflows/.github/actions/aiwf-agent"
+
+
+def _agent_steps():
     for path in REAL:
         doc = policy.load_workflow(path.read_text())
         for name, job in (doc or {}).get("jobs", {}).items():
             for step in job.get("steps", []):
-                if "anthropics/claude-code-action" not in str(step.get("uses", "")):
-                    continue
-                seen += 1
-                where = f"{path.relative_to(ROOT)}:{name}"
-                assert "--max-turns " in step["with"]["claude_args"], where
-                minutes = step.get("timeout-minutes")
-                assert isinstance(minutes, int) and 0 < minutes < job["timeout-minutes"], where  # a step timeout fails
+                yield f"{path.relative_to(ROOT)}:{name}", job, step
+
+
+def test_every_agent_step_has_a_time_and_turn_limit():
+    seen = 0
+    for where, job, step in _agent_steps():
+        if str(step.get("uses", "")) != AGENT_USES:
+            continue
+        seen += 1
+        turns = step["with"]["max-turns"]
+        assert isinstance(turns, int) and turns > 0, where
+        minutes = step.get("timeout-minutes")
+        assert isinstance(minutes, int) and 0 < minutes < job["timeout-minutes"], where  # a step timeout fails
     assert seen >= 4  # extract, classify, review pass, verify
+    action = yaml.safe_load(AGENT_ACTION_YML.read_text())
+    assert action["inputs"]["max-turns"]["required"] is True
+    assert "--max-turns $MAX_TURNS" in action["runs"]["steps"][0]["run"]
+
+
+# --- one shared agent action (CP8): agents run claude-code-action only through aiwf-agent ----------------------------
+
+
+def test_agents_run_claude_code_action_only_through_the_shared_action():
+    for where, _job, step in _agent_steps():
+        assert policy.AGENT_ACTION not in str(step.get("uses", "")), f"{where}: use {AGENT_USES}"
+
+
+def test_shared_agent_action_reads_no_github_token_and_no_secret():
+    text = AGENT_ACTION_YML.read_text()
+    assert not policy.TOKEN_RE.search(text) and not policy.SECRET_RE.search(text)
+    steps = yaml.safe_load(text)["runs"]["steps"]
+    agent = [s for s in steps if str(s.get("uses", "")).startswith(policy.AGENT_ACTION + "/base-action@")]
+    assert len(agent) == 1 and set(agent[0]["with"]) == {"claude_code_oauth_token", "prompt_file", "claude_args"}
+
+
+@pytest.mark.parametrize("path", sorted((ROOT / "schema").glob("*.json")), ids=lambda p: p.name)
+def test_schemas_have_no_single_quote(path):
+    # The schema goes to --json-schema single-quoted inside claude_args (shell-quote split): a ' would end the quote.
+    assert "'" not in path.read_text()
+
+
+@pytest.mark.parametrize("schema,model", [("{\"description\": \"it's\"}", ""), ("{}", "x' --tools 'Bash"), ("{}", "a\nb")])
+def test_shared_agent_action_refuses_quotes(tmp_path, schema, model):
+    (tmp_path / "s.json").write_text(schema)
+    out = tmp_path / "out"
+    run = yaml.safe_load(AGENT_ACTION_YML.read_text())["runs"]["steps"][0]["run"]
+    env = {**os.environ, "SCHEMA_FILE": str(tmp_path / "s.json"), "MAX_TURNS": "3", "MODEL": model, "GITHUB_OUTPUT": str(out)}
+    assert subprocess.run(["bash", "-c", run], env=env, capture_output=True).returncode == 1
+    assert not out.exists()
+
+
+def test_shared_agent_action_builds_the_claude_args(tmp_path):
+    (tmp_path / "s.json").write_text(json.dumps({"$schema": "x", "type": "object", "description": "a $b"}))
+    out = tmp_path / "out"
+    run = yaml.safe_load(AGENT_ACTION_YML.read_text())["runs"]["steps"][0]["run"]
+    for model, tail in (("", ""), ("claude-sonnet-4-5", " --model 'claude-sonnet-4-5'")):
+        env = {**os.environ, "SCHEMA_FILE": str(tmp_path / "s.json"), "MAX_TURNS": "3", "MODEL": model, "GITHUB_OUTPUT": str(out)}
+        subprocess.run(["bash", "-c", run], env=env, check=True)
+        want = """claude_args=--max-turns 3 --tools StructuredOutput --json-schema '{"type":"object","description":"a $b"}'"""
+        assert out.read_text().splitlines()[-1] == want + tail
 
 
 # --- verdict check (ADR-0053, states ADR-0055): check-run plus a `verdict` commit status of the same name -----------
