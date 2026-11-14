@@ -181,8 +181,16 @@ def test_no_job_has_actions_write():
             perms = job.get("permissions")
             if isinstance(perms, dict) and perms.get("actions") == "write":
                 assert (path.name, name) == ("ai-review.yml", "verdict"), f"{path.name}:{name}"
-                for step in job["steps"]:
-                    assert "/cancel" not in step["run"] and "/rerun\"" in step["run"], "rerun of single jobs only"
+                allowed = (r'repos/\$REPO/statuses/\$HEAD_SHA', r'repos/\$REPO/actions/jobs/\$job/rerun')
+                calls = 0
+                for step in job.get("steps", []):
+                    run = step.get("run", "")
+                    assert not re.search(r"gh\s+run\b|--method\b|workflow_dispatch|/cancel", run), "no other write path"
+                    for method, endpoint in re.findall(r'-X\s+(\w+)\s+"([^"]+)"', run):
+                        calls += 1
+                        assert method == "POST" and any(re.fullmatch(a, endpoint) for a in allowed), (method, endpoint)
+                    assert len(re.findall(r"-X\b", run)) == len(re.findall(r'-X\s+\w+\s+"', run)), "unparsed -X call"
+                assert calls >= 1
 
 
 # --- limits (ADR-0050): every agent step has a fixed time limit and a turn limit -------------------------------------
