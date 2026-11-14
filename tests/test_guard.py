@@ -147,3 +147,23 @@ def test_review_publish_only_removes_pending_when_off(monkeypatch, tmp_path):
     args = type("A", (), {"repo": "o/r", "pr": 5, "run_url": "", "passes_dir": str(tmp_path)})
     assert pr.cmd_review_publish(args) == 0
     assert gh.writes() == [["api", "-X", "DELETE", "repos/o/r/issues/5/labels/ai-review%3A%20pending"]]
+
+
+def test_clear_error_marks_our_comment_cleared_once():
+    own = {"id": 6, "user": {"login": BOT}, "body": guard.ERROR_MARKER + "\n⚠️ old error"}
+    forged = {"id": 5, "user": {"login": "mallory"}, "body": guard.ERROR_MARKER + " fake"}
+    gh = FakeGh(comments=[forged, own])
+    guard.clear_error(gh, "o/r", 3, "https://run/2")
+    [patch] = gh.writes()
+    assert patch[3] == "repos/o/r/issues/comments/6"
+    body = patch[-1].removeprefix("body=")
+    assert body.startswith(f"{guard.ERROR_MARKER}\n{guard.CLEARED}") and "https://run/2" in body
+    own["body"] = body
+    guard.clear_error(gh, "o/r", 3, "https://run/3")
+    assert len(gh.writes()) == 1  # already cleared: no second edit
+
+
+def test_clear_error_without_an_error_comment_writes_nothing():
+    gh = FakeGh(comments=[{"id": 5, "user": {"login": "mallory"}, "body": guard.ERROR_MARKER}])
+    guard.clear_error(gh, "o/r", 3, "")
+    assert gh.writes() == []
