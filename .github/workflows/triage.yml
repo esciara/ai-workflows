@@ -58,12 +58,12 @@ jobs:
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
           AIWF_CONFIG: ${{ inputs.config }}
-        run: ~/.aiwf-venv/bin/aiwf triage-cap --repo "$REPO" --issue "$ISSUE"
+        run: aiwf triage-cap --repo "$REPO" --issue "$ISSUE"
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
-        run: ~/.aiwf-venv/bin/aiwf triage-issue --repo "$REPO" --issue "$ISSUE" --out issue.md
+        run: aiwf triage-issue --repo "$REPO" --issue "$ISSUE" --out issue.md
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: triage-issue
@@ -84,14 +84,19 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: triage-issue
-      - env:
+      # ai-workflows at job.workflow_sha, fetched without credentials (ADR-0040): prompts, schemas and the aiwf-agent
+      # action come from the commit this workflow file came from. Defined once per file (YAML anchor), reused by every
+      # agent job; it cannot be a composite action, since the action would have to be fetched first.
+      - &fetch-aiwf
+        name: Fetch ai-workflows
+        env:
           AIWF_REPO: ${{ job.workflow_repository }}
           AIWF_SHA: ${{ job.workflow_sha }}
         run: |
-          # Prompt and schema come from the commit this workflow file came from (ADR-0040), fetched without credentials.
           git init --quiet .ai-workflows
           git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
           git -C .ai-workflows checkout --quiet FETCH_HEAD
+      - run: |
           { cat .ai-workflows/prompts/extractor.md; echo; cat issue.md; } > prompt.md
       - id: claude
         timeout-minutes: 5  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
@@ -131,7 +136,7 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           AIWF_CONFIG: ${{ inputs.config }}
           EXTRACT_JSON: ${{ needs.extract.outputs.json }}
-        run: ~/.aiwf-venv/bin/aiwf triage-candidates --repo "$REPO" --issue "$ISSUE" --out context.md
+        run: aiwf triage-candidates --repo "$REPO" --issue "$ISSUE" --out context.md
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: triage-context
@@ -151,14 +156,8 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: triage-context
-      - env:
-          AIWF_REPO: ${{ job.workflow_repository }}
-          AIWF_SHA: ${{ job.workflow_sha }}
-        run: |
-          # Prompt and schema come from the commit this workflow file came from (ADR-0040), fetched without credentials.
-          git init --quiet .ai-workflows
-          git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
-          git -C .ai-workflows checkout --quiet FETCH_HEAD
+      - *fetch-aiwf
+      - run: |
           { cat .ai-workflows/prompts/classifier.md; echo; cat context.md; } > prompt.md
       - id: claude
         timeout-minutes: 10  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
@@ -198,7 +197,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
-        run: ~/.aiwf-venv/bin/aiwf triage-capped --repo "$REPO" --issue "$ISSUE"
+        run: aiwf triage-capped --repo "$REPO" --issue "$ISSUE"
       - id: publish
         if: needs.context.outputs.capped != 'true'
         env:
@@ -211,7 +210,7 @@ jobs:
           AIWF_FIX_RANGE_CONFIDENCE: ${{ needs.candidates.outputs.range_confidence }}
           AIWF_TRIAGE_CANDIDATES: ${{ needs.candidates.outputs.candidates }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: ~/.aiwf-venv/bin/aiwf publish --kind classifier --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
+        run: aiwf publish --kind classifier --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
 
   # "New issue triaged" chat alert (spec: Chat notifications, WP11b1) to the config's `notify` channels: new issues only,
   # never on `/retriage`. Only a published classifier result sets the alert (a capped issue has none, ADR-0058); its
@@ -239,7 +238,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: ~/.aiwf-venv/bin/aiwf notify --channels "$CHANNELS"
+        run: aiwf notify --channels "$CHANNELS"
 
   # B2 context with a read-only token: the issue and the comments that matter, the project's commands, and the default
   # branch's code (persist-credentials false: no token is left in the tarball's .git). Pattern: docs/patterns.md.
@@ -281,7 +280,7 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
           AIWF_CONFIG: ${{ inputs.config }}
         run: |
-          ~/.aiwf-venv/bin/aiwf repro-context --repo "$REPO" --issue "$ISSUE" --out issue.md
+          aiwf repro-context --repo "$REPO" --issue "$ISSUE" --out issue.md
           tar -czf target.tgz -C target .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -314,15 +313,10 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: repro-input
+      - *fetch-aiwf
       - env:
-          AIWF_REPO: ${{ job.workflow_repository }}
-          AIWF_SHA: ${{ job.workflow_sha }}
           DOMAINS: ${{ toJSON(fromJSON(inputs.config).allowed_domains) }}
         run: |
-          # Prompt and schema come from the commit this workflow file came from (ADR-0019), fetched without credentials.
-          git init --quiet .ai-workflows
-          git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
-          git -C .ai-workflows checkout --quiet FETCH_HEAD
           { cat .ai-workflows/prompts/reproducer.md; echo; cat issue.md; } > prompt.md
           mkdir work && tar -xzf target.tgz -C work && rm target.tgz
           # Sandbox settings (ADR-0037), merged by base-action into the user settings that --setting-sources user loads.
@@ -391,7 +385,7 @@ jobs:
           AGENT_JSON: ${{ needs.reproduce.outputs.json }}
           AIWF_CONFIG: ${{ inputs.config }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: ~/.aiwf-venv/bin/aiwf publish --kind reproducer --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
+        run: aiwf publish --kind reproducer --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
 
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
@@ -418,4 +412,4 @@ jobs:
           ITEM: ${{ github.event.issue.number }}
           AIWF_NEEDS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: ~/.aiwf-venv/bin/aiwf report-error --repo "$REPO" --issue "$ITEM" --run-url "$RUN_URL"
+        run: aiwf report-error --repo "$REPO" --issue "$ITEM" --run-url "$RUN_URL"

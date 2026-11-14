@@ -164,15 +164,21 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: review-context
-      - env:
+      # ai-workflows at job.workflow_sha, fetched without credentials (ADR-0040): prompts, schemas and the aiwf-agent
+      # action come from the commit this workflow file came from. Defined once per file (YAML anchor), reused by every
+      # agent job; it cannot be a composite action, since the action would have to be fetched first.
+      - &fetch-aiwf
+        name: Fetch ai-workflows
+        env:
           AIWF_REPO: ${{ job.workflow_repository }}
           AIWF_SHA: ${{ job.workflow_sha }}
-          PASS: ${{ matrix.pass }}
         run: |
-          # Prompts and schema come from the commit this workflow file came from (ADR-0040), fetched without credentials.
           git init --quiet .ai-workflows
           git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
           git -C .ai-workflows checkout --quiet FETCH_HEAD
+      - env:
+          PASS: ${{ matrix.pass }}
+        run: |
           { cat .ai-workflows/prompts/review.md ".ai-workflows/prompts/review-$PASS.md"; echo; cat context.md; } > prompt.md
       - id: claude
         timeout-minutes: 10  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
@@ -214,13 +220,8 @@ jobs:
           pattern: review-pass-*
           merge-multiple: true
           path: passes
-      - env:
-          AIWF_REPO: ${{ job.workflow_repository }}
-          AIWF_SHA: ${{ job.workflow_sha }}
-        run: |
-          git init --quiet .ai-workflows
-          git -C .ai-workflows fetch --quiet --depth 1 "https://github.com/$AIWF_REPO.git" "$AIWF_SHA"
-          git -C .ai-workflows checkout --quiet FETCH_HEAD
+      - *fetch-aiwf
+      - run: |
           # Candidate ids `<pass>-<n>`, as review.candidates() rebuilds them; a pass's answer that is not JSON is
           # skipped here and fails validation in the publish job. `<` is written as \u003c (same JSON, as previous.json),
           # so a pass's answer cannot close `<candidates>` or fake another tag (review.fence).
@@ -350,5 +351,5 @@ jobs:
           AIWF_NEEDS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: >-
-          ~/.aiwf-venv/bin/aiwf report-error --repo "$REPO" --issue "$ITEM" --run-url "$RUN_URL"
+          aiwf report-error --repo "$REPO" --issue "$ITEM" --run-url "$RUN_URL"
           --head-sha "$HEAD_SHA"
