@@ -50,10 +50,17 @@ def was_shown(shown: dict[str, set[Any]], name: str, value: Any) -> bool:
     """`duplicate_of` number or `possibly_fixed_by` ref was in pass 2's candidates (a commit by its listed prefix)."""
     if name == "duplicate_of":
         return isinstance(value, int) and value in shown["issues"]
-    ref = str(value.get("ref") or "")
     if value.get("kind") == "commit":
-        return len(ref) >= 7 and any(sha.startswith(ref) for sha in shown["commits"])
+        return listed_sha(shown, value) is not None
+    ref = str(value.get("ref") or "")
     return ref.isdigit() and int(ref) in shown["prs"]
+
+
+def listed_sha(shown: dict[str, set[Any]], value: dict[str, Any]) -> str | None:
+    """The one listed full SHA a commit ref (7+ chars) is a prefix of; None when none or several match."""
+    ref = str(value.get("ref") or "")
+    hits = [sha for sha in shown["commits"] if len(ref) >= 7 and sha.startswith(ref)]
+    return hits[0] if len(hits) == 1 else None
 
 
 def check_duplicate(gh: publish.GhRunner, repo: str, issue: int, number: int | None) -> dict[str, Any] | None:
@@ -73,7 +80,7 @@ def check_commit(gh: publish.GhRunner, repo: str, branch: str, sha: str | None) 
     if not sha:
         return None
     commit = get_or_none(gh, f"repos/{repo}/commits/{sha}")
-    if not commit:
+    if not commit or not str(commit.get("sha", "")).startswith(sha):  # a branch or tag name resolves to another SHA
         return None
     cmp = get_or_none(gh, f"repos/{repo}/compare/{commit['sha']}...{quote(branch, safe='')}")
     return commit if cmp and cmp.get("status") in {"ahead", "identical"} else None
@@ -197,10 +204,13 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
     dup_ref = (data.get("duplicate_of") or {}).get("number")
     dup = check_duplicate(gh, repo, issue, dup_ref) if dup_ref and was_shown(shown, "duplicate_of", dup_ref) else None
     fix_ref = data.get("possibly_fixed_by") if data["type"] == "bug" else None
+    if fix_ref and fix_ref.get("kind") == "commit" and was_shown(shown, "possibly_fixed_by", fix_ref):
+        fix_ref = {**fix_ref, "ref": listed_sha(shown, fix_ref)}  # look up the listed SHA, never a branch or tag name
     fix = check_fix(gh, repo, branch, fix_ref) if fix_ref and was_shown(shown, "possibly_fixed_by", fix_ref) else None
     for name, value, ok in (("duplicate_of", dup_ref, dup), ("possibly_fixed_by", data.get("possibly_fixed_by"), fix)):
         if value and not ok:
-            print(f"::warning title=Classifier reference dropped::{name}={json.dumps(value)} is not a valid reference")
+            why = "not among the candidates shown" if not was_shown(shown, name, value) else "not valid on the repo"
+            print(f"::warning title=Classifier reference dropped::{name}={json.dumps(value)} is {why}")
     fix_conf = fix_confidence(data, os.environ.get(RANGE_ENV, "")) if fix else ""
     to_b2 = goes_to_b2(data, is_duplicate(data, dup))
     trusted = to_b2 and author_trusted(gh, repo, item)
