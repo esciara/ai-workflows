@@ -169,10 +169,12 @@ def open_issue(title: str, body: str, *, e2e: bool, as_tester: bool = False) -> 
 
 
 def reusable_issue(title: str, body: str, *, e2e: bool) -> dict[str, Any]:
-    """The open test-fixture issue with this exact title, created once and reused (never deleted)."""
+    """The open test-fixture issue with this exact title (and, when `e2e`, the held slot's `e2e-target-<n>` label, so
+    its comments reach that slot's caller), created once per slot and reused (never deleted)."""
     found = api(f"repos/{REPO}/issues?labels={FIXTURE_LABEL}&state=open&per_page=100")
     for issue in found:
-        if issue["title"] == title and "pull_request" not in issue:
+        has_slot = not e2e or e2eslot.label(held_slot()) in {lb["name"] for lb in issue["labels"]}
+        if issue["title"] == title and "pull_request" not in issue and has_slot:
             return {"number": issue["number"], "title": issue["title"]}
     return open_issue(title, body, e2e=e2e)
 
