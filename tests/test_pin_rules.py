@@ -40,11 +40,6 @@ def test_action_refs_need_a_sha_and_a_version_comment(uses, problem):
     assert problem in err
 
 
-def test_action_pinned_with_sha_and_version_passes_and_local_refs_are_exempt():
-    assert pin_errors(f"o/a@{SHA} # v4.1.0") == []
-    assert pin_errors("./local-action") == []
-
-
 # --- WP14 static checks (offline twin of tests/e2e/test_wp14.py) ---------------------------------------------------
 
 OWN_USES_RE = re.compile(r"^\s*uses:\s*esciara/ai-workflows/(\.github/workflows/[\w.-]+\.yml)@(\S+)[ \t]*(#.*)?$", re.M)

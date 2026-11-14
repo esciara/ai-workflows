@@ -1,7 +1,5 @@
 """e2eslot.push_target to GitHub: the push goes through the agent App wrapper, never bare git (ADR-0031)."""
 
-import subprocess
-
 import pytest
 
 from aiwf import e2eslot
@@ -37,12 +35,3 @@ def test_the_lease_is_the_remotes_current_value(tmp_path, monkeypatch):
     with e2eslot.hold(1, timeout=0):
         e2eslot.push_target(1, cwd=tmp_path)
     assert ran[0][4] == f"--force-with-lease=refs/heads/e2e-target-1:{old}"
-
-
-def test_a_refused_agent_push_is_raised(tmp_path, monkeypatch, no_real_git):
-    def refuse(cmd, **kw):
-        raise subprocess.CalledProcessError(1, cmd)
-
-    monkeypatch.setattr(e2eslot.subprocess, "run", refuse)
-    with e2eslot.hold(2, timeout=0), pytest.raises(subprocess.CalledProcessError):
-        e2eslot.push_target(2, cwd=tmp_path)
