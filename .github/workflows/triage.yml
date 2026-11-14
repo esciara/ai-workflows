@@ -295,9 +295,11 @@ jobs:
   # with no fallback to unsandboxed commands. Tools: Bash and StructuredOutput only (Read, Edit, Write and WebFetch run
   # outside the sandbox); `--setting-sources user` ignores the target repo's .claude settings and hooks. No repo code runs
   # outside the agent in this job. The token check fails the job, without printing anything, if the token value appears
-  # in the agent's answer or transcript; the answer is passed on only when that check succeeded.
+  # in the agent's answer or transcript; the answer is passed on only when that check succeeded. The `if` is required:
+  # without a status check GitHub skips the job when any earlier job was skipped, e.g. `publish` on a `/reproduce`.
   reproduce:
     needs: repro-context
+    if: ${{ !cancelled() && needs.repro-context.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions: {}

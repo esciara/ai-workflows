@@ -194,6 +194,24 @@ def test_no_job_has_actions_write():
                 assert calls >= 1
 
 
+# --- job chains: GitHub skips a job without a status check when any earlier job in its chain was skipped --------------
+
+
+def test_job_after_a_status_checked_job_has_its_own_status_check():
+    # A need whose `if` uses always()/!cancelled() can succeed after its own needs were skipped; a job that follows it
+    # with the implicit success() is then skipped too (WP6: `reproduce` after `repro-context` on a `/reproduce`).
+    # Exempt: `notify` alerts only after a full triage of a new issue, so skipping it then is intended.
+    status = re.compile(r"always\(\)|cancelled\(\)|failure\(\)|success\(\)")
+    for path in REAL:
+        jobs = (policy.load_workflow(path.read_text()) or {}).get("jobs", {})
+        for name, job in jobs.items():
+            needs = job.get("needs") or []
+            needs = [needs] if isinstance(needs, str) else needs
+            if status.search(str(job.get("if", ""))) or (path.name, name) == ("triage.yml", "notify"):
+                continue
+            assert not [n for n in needs if status.search(str(jobs[n].get("if", "")))], f"{path.name}:{name}"
+
+
 # --- limits (ADR-0050): every agent step has a fixed time limit and a turn limit -------------------------------------
 
 
