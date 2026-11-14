@@ -18,9 +18,10 @@ pytestmark = pytest.mark.skipif(not shutil.which("jq"), reason="jq missing")
 
 
 def _run(tmp_path, runs, jobs, state="approved", reviews=None, head_repo="o/r", pr_head=HEAD, attempt="1",
-         event="pull_request_review", rerun_rc=0, threads=None, labels=(), review="skipped", statuses=()):
+         event="pull_request_review", rerun_rc=0, threads=None, labels=(), review="skipped", statuses=(),
+         more_threads=False):
     """Runs the verdict step. `runs`: completed runs of the workflow on HEAD; `jobs`: {run id: [(name, conclusion)]};
-    `threads`: isResolved of each review thread (None: the GraphQL query fails)."""
+    `threads`: isResolved of each review thread (None: the GraphQL query fails); `more_threads`: a next page exists."""
     step = policy.load_workflow((ROOT / ".github/workflows/ai-review.yml").read_text())["jobs"]["verdict"]["steps"][0]
     reviews = [{"state": "APPROVED", "commit_id": HEAD, "user": {"login": "m"}, "author_association": "OWNER",
                 "body": ""}] if reviews is None else reviews
@@ -29,7 +30,7 @@ def _run(tmp_path, runs, jobs, state="approved", reviews=None, head_repo="o/r", 
         "statuses": list(statuses),
         "labels": [{"name": n} for n in labels],
         "threads": {"data": {"repository": {"pullRequest": {"reviewThreads": {
-            "nodes": [{"isResolved": r} for r in threads or []]}}}}},
+            "pageInfo": {"hasNextPage": more_threads}, "nodes": [{"isResolved": r} for r in threads or []]}}}}},
         "pull": {"head": {"sha": pr_head}},
         "run": {"id": ME, "workflow_id": 7},
         "runs": {"workflow_runs": [{"id": r} for r in runs]},
@@ -151,3 +152,19 @@ def test_restored_status_gets_a_fresh_count_and_fits_140_characters(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     state, desc = _status(calls)
     assert state == "success" and desc == "x" * 108 + "; 1 unresolved thread at new4567" and len(desc) == 140
+
+
+def test_more_than_one_page_of_threads_counts_as_n_plus(tmp_path):
+    proc, _, calls = _run(tmp_path, [], {}, event="pull_request", state="", reviews=[], review="success",
+                          labels=["ai-review: merge"], threads=[False] * 3, more_threads=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert _status(calls) == ("success", "ai-review: merge on new4567; 3+ unresolved threads at new4567")
+
+
+def test_restored_hold_annotation_drops_the_old_count(tmp_path):
+    old = {"context": "verdict", "creator": {"login": "github-actions[bot]"}, "state": "pending",
+           "description": "waiting for maintainer approval of new4567 (x); 5 unresolved threads at new4567"}
+    proc, _, calls = _run(tmp_path, [], {}, state="dismissed", reviews=[], statuses=[old], threads=[False])
+    assert proc.returncode == 1
+    assert "::error title=waiting for maintainer approval::waiting for maintainer approval of new4567 (x)\n" in proc.stdout
+    assert _status(calls)[1].endswith("(x); 1 unresolved thread at new4567")

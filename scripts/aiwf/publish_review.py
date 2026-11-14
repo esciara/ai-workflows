@@ -45,9 +45,10 @@ THREAD_ID_RE = re.compile(r"#discussion_r(\d+)\Z")  # the thread's first comment
 RESOLVED_PREFIX = "resolved in "
 THREADS_Q = ("query($o:String!,$n:String!,$p:Int!,$c:String){repository(owner:$o,name:$n){pullRequest(number:$p){"
              "reviewThreads(first:100,after:$c){pageInfo{hasNextPage endCursor}"
-             "nodes{id isResolved comments(first:100){nodes{databaseId body}}}}}}}")
+             "nodes{id isResolved comments(first:100){nodes{databaseId body author{login}}}}}}}}")
 RESOLVE_M = "mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}"
 MAX_THREAD_PAGES = 10
+BOT_LOGIN = BOT.removesuffix("[bot]")  # GraphQL names a GitHub App by its slug, without "[bot]"
 CHANGES = labels.CHANGES_REQUESTED
 
 
@@ -109,8 +110,9 @@ def combine(passes: dict[str, dict[str, Any]], verify: dict[str, Any], prev_open
 
 
 def since_last(prev: dict[str, Any] | None, history: list[dict[str, Any]], counts: dict[str, int],
-               threads_open: int | None = None) -> list[str]:
-    """The "Since last run" line, ending with the PR's unresolved review threads when they could be counted."""
+               threads_open: int | str | None = None) -> list[str]:
+    """The "Since last run" line, ending with the PR's unresolved review threads when they could be counted (a
+    string such as "1000+" when there were too many to page through)."""
     tail = "" if threads_open is None else f" · {threads_open} thread{'' if threads_open == 1 else 's'} open"
     if prev is None:
         return [f"**Since last run:** first run{tail}."]
@@ -311,8 +313,9 @@ def send_review(gh: GhRunner, repo: str, number: int, facts: dict[str, Any], lab
     return notes
 
 
-def review_threads(gh: GhRunner, repo: str, number: int) -> list[dict[str, Any]]:
-    """The PR's review threads: {id (node id), resolved, first (first comment's id), bodies}. Raises RuntimeError."""
+def review_threads(gh: GhRunner, repo: str, number: int) -> tuple[list[dict[str, Any]], bool]:
+    """The PR's review threads: {id (node id), resolved, first (first comment's id), replies (later comments as
+    (author login, body))}, and whether all pages were read (False past MAX_THREAD_PAGES). Raises RuntimeError."""
     owner, name = repo.split("/")
     out: list[dict[str, Any]] = []
     cursor: str | None = None
@@ -327,17 +330,21 @@ def review_threads(gh: GhRunner, repo: str, number: int) -> list[dict[str, Any]]
         for t in page["nodes"]:
             comments = t["comments"]["nodes"]
             out.append({"id": t["id"], "resolved": t["isResolved"], "first": comments[0]["databaseId"] if comments else None,
-                        "bodies": [c.get("body") or "" for c in comments]})
+                        "replies": [((c.get("author") or {}).get("login"), c.get("body") or "") for c in comments[1:]]})
         if not page["pageInfo"]["hasNextPage"]:
-            break
+            return out, True
         cursor = page["pageInfo"]["endCursor"]
-    return out
+    print(f"::warning title=Threads truncated::read only the first {len(out)} review threads")
+    return out, False
 
 
-def open_threads(gh: GhRunner, repo: str, number: int) -> int | None:
-    """Unresolved review threads on the PR, A's and others'; None (and a warning) when GitHub does not answer."""
+def open_threads(gh: GhRunner, repo: str, number: int) -> int | str | None:
+    """Unresolved review threads on the PR, A's and others; "N+" when not all pages were read; None (and a warning)
+    when GitHub does not answer."""
     try:
-        return sum(not t["resolved"] for t in review_threads(gh, repo, number))
+        threads, complete = review_threads(gh, repo, number)
+        n = sum(not t["resolved"] for t in threads)
+        return n if complete else f"{n}+"
     except RuntimeError as exc:
         print(f"::warning title=Threads not counted::{str(exc)[:300]}")
         return None
@@ -354,7 +361,7 @@ def close_threads(gh: GhRunner, repo: str, number: int, sha: str, history: list[
         return []
     note = "Could not reply to or resolve {} thread(s) of fixed findings; see the run log."
     try:
-        threads = {t["first"]: t for t in review_threads(gh, repo, number) if t["first"] is not None}
+        threads = {t["first"]: t for t in review_threads(gh, repo, number)[0] if t["first"] is not None}
     except RuntimeError as exc:
         print(f"::warning title=Threads not closed::{str(exc)[:300]}")
         return [note.format(len(todo))]
@@ -363,7 +370,7 @@ def close_threads(gh: GhRunner, repo: str, number: int, sha: str, history: list[
         t = threads.get(cid)
         if t is None or t["resolved"]:
             continue  # deleted, or already resolved (by someone, or by an earlier run)
-        if not any(b.startswith(RESOLVED_PREFIX) for b in t["bodies"][1:]):
+        if not any(a == BOT_LOGIN and b.startswith(RESOLVED_PREFIX) for a, b in t["replies"]):
             body = f"{RESOLVED_PREFIX}{sha[:7]}: {clean(h['reason'], 300) or 'fixed'}"
             try:
                 gh(["api", "-X", "POST", f"repos/{repo}/pulls/{number}/comments/{cid}/replies", "-f", f"body={body}"])
@@ -430,8 +437,9 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
     data["notes"] = closed
     data["threads_open"] = open_threads(gh, repo, number)  # after the replies and resolves
     comment_id, summary_url = upsert(comment_id)
+    had = {f["id"] for f in findings if f.get("thread")}
     notes = send_review(gh, repo, number, facts, label, findings, summary_url)
-    new_threads = any(f.get("thread") and not f["still_open"] for f in findings)
+    new_threads = any(f.get("thread") and f["id"] not in had for f in findings)  # incl. a still-open one now inline
     if notes or new_threads:
         data["notes"] = closed + notes
         if new_threads:

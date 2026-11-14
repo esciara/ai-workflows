@@ -401,13 +401,14 @@ def test_clean_neutralises_mentions_html_markers_and_pipes():
 class FakeGh(RecordingGh):
     """GitHub for the publisher: issue comments, reviews (with inline comments) and dismissals."""
 
-    def __init__(self, comments=(), reviews=(), refuse=(), threads=(), fail=()):
+    def __init__(self, comments=(), reviews=(), refuse=(), threads=(), fail=(), page_size=100):
         super().__init__()
         self.comments = list(comments)
         self.reviews = list(reviews)  # {"id", "user", "state", "event", "comments"}
         self.refuse = list(refuse)  # error messages for the next review POSTs
-        self.threads = list(threads)  # review threads: {"id", "isResolved", "comments": [{"databaseId", "body"}]}
+        self.threads = list(threads)  # {"id", "isResolved", "comments": [{"databaseId", "body", "author"}]}
         self.fail = set(fail)  # "threads", "reply", "resolve": these calls fail
+        self.page_size = page_size  # reviewThreads per GraphQL page; the cursor is the next index
 
     def graphql(self, args):
         query = next(a for a in args if a.startswith("query="))
@@ -419,9 +420,15 @@ class FakeGh(RecordingGh):
             return "{}"
         if "threads" in self.fail:
             raise RuntimeError("HTTP 502")
-        nodes = [{"id": t["id"], "isResolved": t["isResolved"], "comments": {"nodes": t["comments"]}} for t in self.threads]
+        start = int(next((a[2:] for a in args if a.startswith("c=")), "0"))
+        end = start + self.page_size
+        nodes = [{"id": t["id"], "isResolved": t["isResolved"],
+                  "comments": {"nodes": [{"databaseId": c["databaseId"], "body": c["body"],
+                                          "author": {"login": c.get("author", "someone")}} for c in t["comments"]]}}
+                 for t in self.threads[start:end]]
+        more = end < len(self.threads)
         return json.dumps({"data": {"repository": {"pullRequest": {"reviewThreads": {
-            "pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": nodes}}}}})
+            "pageInfo": {"hasNextPage": more, "endCursor": str(end) if more else None}, "nodes": nodes}}}}})
 
     def respond(self, args):
         if args[1] == "graphql":
@@ -432,7 +439,7 @@ class FakeGh(RecordingGh):
                 raise RuntimeError("HTTP 403")
             cid = int(url.split("/comments/")[1].split("/")[0])
             next(t for t in self.threads if t["comments"][0]["databaseId"] == cid)["comments"].append(
-                {"databaseId": 1, "body": args[-1][5:]})
+                {"databaseId": 1, "body": args[-1][5:], "author": pr.BOT_LOGIN})
             return "{}"
         if url.endswith("/reviews") and method == "POST":
             if self.refuse:
@@ -442,7 +449,7 @@ class FakeGh(RecordingGh):
             comments = [dict(c, html_url=f"https://github.com/o/r/pull/5#discussion_r{rid}{i}")
                         for i, c in enumerate(payload["comments"])]
             self.threads += [{"id": f"T{rid}{i}", "isResolved": False,
-                              "comments": [{"databaseId": int(f"{rid}{i}"), "body": c["body"]}]}
+                              "comments": [{"databaseId": int(f"{rid}{i}"), "body": c["body"], "author": pr.BOT_LOGIN}]}
                              for i, c in enumerate(payload["comments"])]
             state = {"REQUEST_CHANGES": "CHANGES_REQUESTED", "COMMENT": "COMMENTED"}[payload["event"]]
             self.reviews.append({"id": rid, "user": {"login": pr.BOT}, "state": state, "payload": payload,
@@ -946,7 +953,8 @@ def test_rerun_never_replies_twice():
     gh = FakeGh()
     blocking_run(gh)
     fid = state_of(gh)["open"][0]["id"]
-    gh.threads[0]["comments"].append({"databaseId": 2, "body": "resolved in bbbbbbb: fixed"})  # reply sent, resolve failed
+    gh.threads[0]["comments"].append({"databaseId": 2, "body": "resolved in bbbbbbb: fixed",  # reply sent, resolve failed
+                                      "author": pr.BOT_LOGIN})
     prev_state = gh.comments[0]["body"]
     publish(gh, passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40})
     assert gh.threads[0]["isResolved"] and len(gh.threads[0]["comments"]) == 2  # resolved, no second reply
@@ -954,6 +962,50 @@ def test_rerun_never_replies_twice():
     publish(gh, passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40})
     assert len(gh.threads[0]["comments"]) == 2
     assert "· 0 threads open." in gh.comments[0]["body"]
+
+
+def test_someone_elses_resolved_in_reply_does_not_stop_a_from_replying():
+    gh = FakeGh()
+    blocking_run(gh)
+    fid = state_of(gh)["open"][0]["id"]
+    gh.threads[0]["comments"].append({"databaseId": 2, "body": "resolved in 1234567: trust me", "author": "mallory"})
+    publish(gh, passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40})
+    assert gh.threads[0]["isResolved"] and gh.threads[0]["comments"][-1]["body"].startswith("resolved in bbbbbbb: ")
+
+
+def test_threads_are_paged_a_thread_on_page_two_is_resolved_and_counted():
+    others = [{"id": f"TX{i}", "isResolved": False, "comments": [{"databaseId": 100 + i, "body": "human"}]}
+              for i in range(3)]
+    gh = FakeGh(threads=others, page_size=2)
+    blocking_run(gh)  # A's thread is the 4th: page 2
+    assert "· 4 threads open." in gh.comments[0]["body"]
+    fid = state_of(gh)["open"][0]["id"]
+    publish(gh, passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40})
+    assert gh.threads[3]["id"] == "T9000" and gh.threads[3]["isResolved"]
+    assert "· 3 threads open." in gh.comments[0]["body"]
+
+
+def test_threads_past_the_page_cap_are_counted_as_n_plus_with_a_warning(monkeypatch, capsys):
+    monkeypatch.setattr(pr, "MAX_THREAD_PAGES", 2)
+    others = [{"id": f"TX{i}", "isResolved": False, "comments": [{"databaseId": 100 + i, "body": "human"}]}
+              for i in range(5)]
+    gh = FakeGh(threads=others, page_size=2)
+    assert pr.open_threads(gh, "o/r", 5) == "4+"
+    assert "::warning title=Threads truncated::" in capsys.readouterr().out
+    assert pr.since_last(None, [], {}, "4+") == ["**Since last run:** first run · 4+ threads open."]
+
+
+def test_still_open_finding_newly_placed_inline_gets_its_thread_recorded():
+    gh = FakeGh()
+    raw = passes(correctness=[dict(FINDING, severity="blocking", line=9)])
+    assert publish(gh, raw, verify(("correctness-1", "confirmed", "blocking", "r")), PFACTS)
+    (f,) = state_of(gh)["open"]
+    assert "thread" not in f and not gh.threads  # line 9 is not in the diff: no inline comment
+    wider = {**PFACTS, "sha": "b" * 40, "commentable": {"src/x.py": [[1, 12]]}}
+    publish(gh, passes(), verify(previous=[(f["id"], "still-open", "still there", None)]), wider)
+    (t,) = gh.threads
+    assert state_of(gh)["open"][0]["thread"].endswith(f"#discussion_r{t['comments'][0]['databaseId']}")
+    assert "· 1 thread open." in gh.comments[0]["body"]
 
 
 @pytest.mark.parametrize("fail", ["reply", "resolve", "threads"])

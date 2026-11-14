@@ -13,7 +13,8 @@ One scenario, three runs on one PR:
    the summary still says 1 thread open.
 3. A push that fixes the bug: the bot replies in its own thread with `resolved in <short sha>: <reason>`, the thread is
    resolved, and the summary's count equals the real number of unresolved threads (other genuine findings on the seeded
-   PR may stay open, so it need not be 0).
+   PR may stay open, so it need not be 0). Every pre-fix bot thread whose finding A's final state no longer lists as
+   open is resolved.
 
 Verified at build: the GraphQL mutation `resolveReviewThread` needs `contents: write` on the publish job (and the
 caller's review job) besides `pull-requests: write` (ADR-0057 amendment). A matches a finding to its thread by the
@@ -32,6 +33,7 @@ from test_wp3 import (BUG_LINE, CART, FIX_LINE, bot_review_comments, head_sha, p
                       review_run, seeded_pr, summary)
 
 THREADS_OPEN_RE = re.compile(r"(\d+) threads? open")
+STATE_RE = re.compile(r"<!-- ai-review:state (\{.*?\}) -->\s*\Z", re.S)  # A's state block ends the summary
 RESOLVED_RE = re.compile(r"^resolved in ([0-9a-f]{7,40}): \S")
 THREADS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!) {
@@ -121,7 +123,10 @@ def test_a_fixing_push_gets_a_reply_and_the_thread_resolved_a_non_fixing_push_le
         assert counted >= 1, "the summary says 0 threads open while the bug thread is open"
         print(f"non-fixing push {sha2[:7]}: thread still open, no reply, summary {counted} open")
 
-        # 3. Fixing push: the bot replies in its own thread, resolves it; the summary says 0 threads open.
+        # 3. Fixing push: the bot replies in its own thread and resolves it; every other pre-fix bot thread whose finding
+        # the final state no longer lists as open is resolved too; the summary's count is the real one.
+        bot = t1["comments"][0]["author"]
+        pre_fix = {t["id"] for t in threads(number) if t["comments"] and t["comments"][0]["author"] == bot}
         cart, cart_sha = read_file(CART, pr["branch"])
         assert BUG_LINE in cart, "the seeded bug line is gone before the fixing push"
         sha3, at = push(number, pr["branch"], CART, cart.replace(BUG_LINE, FIX_LINE), cart_sha,
@@ -138,5 +143,9 @@ def test_a_fixing_push_gets_a_reply_and_the_thread_resolved_a_non_fixing_push_le
         left = [t for t in threads(number) if not t["resolved"]]
         for t in left:
             print(f"unresolved after fix: {t['id']} {t['path']} {brief(t)}")
+        state = json.loads(STATE_RE.search(summary(number)).group(1))
+        kept = {int(m.group(1)) for f in state["open"] if (m := re.search(r"#discussion_r(\d+)$", f.get("thread") or ""))}
+        not_closed = [t for t in left if t["id"] in pre_fix and t["comments"][0]["id"] not in kept]
+        assert not not_closed, f"bot threads of findings no longer open are unresolved: {[brief(t) for t in not_closed]}"
         counted = threads_open(number)
         assert counted == len(left), (counted, len(left))  # other real findings may stay open; the count must be true
