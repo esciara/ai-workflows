@@ -875,7 +875,7 @@ jobs:
       PREV: "1"
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"  # ADR-0037: no credential in any Bash command's environment
       CLAUDE_WORKING_DIR: ${{ github.workspace }}/work
-    outputs: *implement-outputs
+    outputs: *implement-outputs  # anchored in round-1-implement
     steps: *implement-steps
 
   round-2-check:
@@ -888,7 +888,7 @@ jobs:
     permissions: {}
     env:
       ROUND: "2"
-    outputs: *check-outputs
+    outputs: *check-outputs  # anchored in round-1-check
     steps: *check-steps
 
   round-2-review:
@@ -900,7 +900,7 @@ jobs:
     permissions: {}
     env:
       ROUND: "2"
-    outputs: *review-outputs
+    outputs: *review-outputs  # anchored in round-1-review
     steps: *review-steps
 
   round-2-push:
@@ -918,7 +918,7 @@ jobs:
       CHECK_OK: ${{ needs.round-2-check.outputs.ok }}
       IMPLEMENT_JSON: ${{ needs.round-2-implement.outputs.json }}
       REVIEW_JSON: ${{ needs.round-2-review.outputs.json }}
-    outputs: *push-outputs
+    outputs: *push-outputs  # anchored in round-1-push
     steps: *push-steps
 
   round-3-implement:
@@ -933,7 +933,7 @@ jobs:
       PREV: "2"
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"  # ADR-0037: no credential in any Bash command's environment
       CLAUDE_WORKING_DIR: ${{ github.workspace }}/work
-    outputs: *implement-outputs
+    outputs: *implement-outputs  # anchored in round-1-implement
     steps: *implement-steps
 
   round-3-check:
@@ -946,7 +946,7 @@ jobs:
     permissions: {}
     env:
       ROUND: "3"
-    outputs: *check-outputs
+    outputs: *check-outputs  # anchored in round-1-check
     steps: *check-steps
 
   round-3-review:
@@ -958,7 +958,7 @@ jobs:
     permissions: {}
     env:
       ROUND: "3"
-    outputs: *review-outputs
+    outputs: *review-outputs  # anchored in round-1-review
     steps: *review-steps
 
   round-3-push:
@@ -976,7 +976,7 @@ jobs:
       CHECK_OK: ${{ needs.round-3-check.outputs.ok }}
       IMPLEMENT_JSON: ${{ needs.round-3-implement.outputs.json }}
       REVIEW_JSON: ${{ needs.round-3-review.outputs.json }}
-    outputs: *push-outputs
+    outputs: *push-outputs  # anchored in round-1-push
     steps: *push-steps
 
   # B5 escalation (spec B5): the loop ended without an approved round (cap reached, or stopped by a guard). Draft PR of
