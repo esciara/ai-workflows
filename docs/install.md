@@ -87,6 +87,8 @@ Set `linked_issue: issue-or-plan-ref` if your PRs reference a work package or pl
 
 Each release is a tag `v0.x.y` on esciara/ai-workflows. To upgrade, in `.github/workflows/ai-workflows.yml` replace the SHA and the tag comment on every `uses: esciara/ai-workflows/…` line together, with the new tag's commit SHA (`git ls-remote https://github.com/esciara/ai-workflows refs/tags/v0.x.y`). Compare the new `templates/caller.yml` with yours for new jobs or permissions. Dependabot or Renovate can propose these bumps.
 
+Upgrading to the release with WP18 (review thread replies and resolves, ADR-0057): first set `contents: write` on the `review` job of your caller (before, or in the same commit as, the pin bump). A caller that still grants `contents: read` makes GitHub refuse the whole run, not just the resolve, so a Dependabot or Renovate bump alone breaks the review.
+
 ## Turning Workflow B on
 
 Put the `triage` and `silence` jobs back from `templates/caller.yml` and set `workflows.triage: true` in `.github/ai-workflows.yml`. Workflow B classifies new issues; it fixes bugs only after a maintainer comments `/fix`.

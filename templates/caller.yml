@@ -58,7 +58,8 @@ jobs:
     if: needs.config.outputs.review == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
     uses: esciara/ai-workflows/.github/workflows/review.yml@bd6bbbd8b7d425d9dd7ff4f1f0a722166d6df090 # v0.2.0
     permissions:
-      contents: write  # the publish job resolves A's fixed threads (ADR-0057); the agents get none of it
+      contents: write  # the publish job resolves A's fixed threads (ADR-0057); the agents get none of it. Set it
+      # before bumping the pin to a release with WP18: with contents: read GitHub refuses the whole run (docs/install.md).
       pull-requests: write
       issues: write
       checks: read

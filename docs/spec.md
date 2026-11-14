@@ -85,7 +85,7 @@ Four passes review the PR at once; only findings that survive the refute step co
 
 **Tests:** repro test fails on base, passes on head.
 **Not reviewed:** generated files, lockfiles.
-**Since last run:** 2 resolved, 1 still open · 1 thread open.
+**Since last run:** 2 resolved, 1 still open, 0 new · 1 thread open.
 ```
 
 **Where review comments go.** Each confirmed finding is placed by these rules; every finding also appears in the summary table, linked to its inline thread when it has one.
