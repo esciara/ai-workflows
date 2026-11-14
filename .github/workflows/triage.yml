@@ -736,12 +736,13 @@ jobs:
           sudo useradd --create-home --shell /bin/bash aiwfcheck
           sudo mv work "$home/work" && sudo chown -R aiwfcheck: "$home/work"
           # Each command's output goes to its own file; only the end of a failed one (900 bytes) reaches check.log,
-          # after every process the command left behind is killed, so nothing it started can write there later.
+          # after every process the command left behind is killed, so nothing it started can write there later. 13 min
+          # each keeps the three commands inside the step's 40 min, so a slow one still reports its own output.
           run_as_check() {  # name, command: as the unprivileged user
             if [ -z "$2" ]; then echo "### $1: not given" >> check.log; return; fi
             out=$(mktemp)
             sudo -u aiwfcheck env -i PATH="$PATH" HOME="$home" LANG=C.UTF-8 CI=true CMD="$2" \
-              timeout 1200 bash -c 'cd "$HOME/work" && eval "$CMD"' > "$out" 2>&1 < /dev/null
+              timeout 780 bash -c 'cd "$HOME/work" && eval "$CMD"' > "$out" 2>&1 < /dev/null
             rc=$?
             sudo pkill -KILL -u aiwfcheck || true
             if [ "$rc" = 0 ]; then echo "### $1: passed" >> check.log
