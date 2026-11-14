@@ -1,6 +1,6 @@
 """WP8 acceptance test. Done when: a reproduced bug gets one analysis comment and `triage: awaiting-maintainer`;
-`/fix <guidance>` and `/no-fix <reason>` do what the spec says; a non-maintainer's `/fix` changes nothing
-(spec: B3, B4).
+`/fix <guidance>` (now asserted in test_wp9) and `/no-fix <reason>` do what the spec says; a non-maintainer's `/fix`
+changes nothing (spec: B3, B4).
 
 Runs against the playground (AIWF_E2E=1) with an e2e slot (AIWF_E2E_SLOT=1|2|3|any, ADR-0056). Issues carry the held
 slot's `e2e-target-<n>` at creation, so its caller-e2e-<n>.yml runs triage.yml at the commit under test with the
@@ -11,21 +11,18 @@ the slot callers already pass every issue comment to triage.yml.
 
 Both bugs are real bugs in the playground's minicart, reported clearly so B2 reproduces them:
 
-1. `/fix <guidance>`: the coupon discount kept after an item is removed. After `/reproduce`, the run's analyst job
-   succeeds: `triage: reproduced` and `triage: awaiting-maintainer`, and one analysis comment (hidden marker) that
-   mentions each of `maintainers`, links the run, has the root cause with a line link into the faulty module at a
-   full commit SHA, the blast radius, the proposed fix, risk tier `low` (the e2e config's only high path is
-   `.github/**`), a confidence and a size, the three commands, and the status "waiting". The maintainer's
-   `/fix <guidance>` removes `triage: awaiting-maintainer`, adds no `fix: declined`, keeps `triage: reproduced`, and
-   sets the same comment's status to "fix approved" by the maintainer, linking their comment and carrying the guidance.
+1. `/fix <guidance>`, the coupon discount kept after an item is removed: moved to `tests/e2e/test_wp9.py` (scenario 1)
+   with all its assertions, since WP9 makes that `/fix` run B5 (longer than COMMAND_TIMEOUT, and it leaves an
+   `ai-fix/issue-<n>` branch to clean up). The analysis checks it shared with scenario 2 stay in
+   `reproduce_and_analyse`; the bug and guidance constants stay here, test_wp9 imports them.
 2. `/no-fix <reason>` and the permission check: a percent tax rate crashes with decimal.InvalidOperation. After the
    analysis, the tester App's `/fix` changes nothing (labels and status as before). The maintainer's `/no-fix <reason>`
    labels `fix: declined`, removes `triage: awaiting-maintainer`, and sets the status to "fix declined" with the reason.
 
-Whether `/fix` starts B5 is WP9's test, not asserted here; WP9 updates this file (its `/fix` run then runs B5, longer
-than COMMAND_TIMEOUT, and leaves an `ai-fix/issue-<n>` branch to clean up). Plain `/fix` (no guidance), a command on
-an issue without `triage: awaiting-maintainer`, the risk-tier and link rules (a path not in the tree gets no link), the
-path rules for the analyst's code, a B3 rerun updating the same comment (earlier decision kept as "previously") and a
+Whether `/fix` starts B5 is WP9's test (`tests/e2e/test_wp9.py`), not asserted here; the tester App's `/fix` below is
+not a command, so it starts nothing. Plain `/fix` (no guidance), a command on an issue without
+`triage: awaiting-maintainer`, the risk-tier and link rules (a path not in the tree gets no link), the path rules
+for the analyst's code, a B3 rerun updating the same comment (earlier decision kept as "previously") and a
 non-reproducing B2 marking it superseded are left to the build PR's unit tests (none exist yet: this file is the gate).
 """
 
@@ -145,22 +142,6 @@ def reproduce_and_analyse(issue: dict[str, Any], files: str) -> str:
         assert cmd in body, f"the analysis does not offer {cmd}"
     assert status(body).lower().startswith("waiting"), status(body)
     return body
-
-
-def test_reproduced_bug_is_analysed_and_fix_with_guidance_is_accepted(e2e_target, tag, opened):
-    issue = open_as_reporter("fix", COUPON_BUG, tag, opened)
-    reproduce_and_analyse(issue, COUPON_FILES)
-
-    c, run = command(issue, GUIDANCE)
-    assert run["conclusion"] == "success", run["jobs"]
-    got = labels(issue["number"])
-    print(f"#{issue['number']}: labels {sorted(got)}")
-    assert REPRODUCED in got and not got & {AWAITING, DECLINED, ERROR}, sorted(got)
-    line = status(analysis(issue["number"]))
-    print(line)
-    assert re.match(rf"fix approved by @{re.escape(c['user'])}\b", line, re.I), line
-    assert f"issuecomment-{c['id']}" in line, "the status does not link the maintainer's /fix comment"
-    assert GUIDANCE_TEXT in line, "the status does not carry the /fix guidance"
 
 
 def test_no_fix_declines_and_a_non_maintainer_fix_changes_nothing(e2e_target, tag, opened):
