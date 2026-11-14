@@ -115,7 +115,7 @@ The two highlighted steps are the only places the flow waits on a person, apart 
 | Step | What it does | Exit when it can't go on | Waits on |
 | --- | --- | --- | --- |
 | B1 Classify | Labels bug, feature or question; spots duplicates | Not a bug: label, stop | — |
-| B2 Reproduce | Turns the report into a failing test in a sandbox | No repro: ask the reporter; ping at day 4, stale at 14, closed at 21 | Reporter (an outsider's bug: first the maintainer's `/reproduce`) |
+| B2 Reproduce | Turns the report into a failing test in a sandbox | No repro: ask the reporter; ping, stale and close after `reporter_silence_days` (defaults 4/14/21) | Reporter (an outsider's bug: first the maintainer's `/reproduce`) |
 | B3 Analyse | Root cause, blast radius, fix plan, risk and size | — | — |
 | B4 Ask the maintainer | Posts the analysis, waits for a command | `/no-fix`: `fix: declined`, stop | Maintainer |
 | B5 Fix loop | Implementer, then adversarial reviewer, up to 3 rounds | Round 3 rejected: draft PR, `fix: needs-maintainer` | — |
@@ -138,11 +138,11 @@ The two highlighted steps are the only places the flow waits on a person, apart 
 
 **Reporter silence.** Counted from the agent's last `triage: needs-info` comment. Any reply from the reporter stops the clock, removes `triage: no-response` and `stale`, and restarts B2. A maintainer can exempt an issue with `keep-open`: no ping, no `stale`, no close; `ai: off` and `ai: error` (a B2 rerun that failed, so a person looks first) exempt it the same way. The days come from `reporter_silence_days` (defaults 4, 14, 21, shown in the table below); they may be decimals, so a test config can shorten them to minutes. `actions/stale` reads `close − stale` as whole days, rounded down: under one day (test configs only) it closes the issue in the same run that labels it `stale`, after the stale comment. The stale and close days count from the issue's last update by anyone, so a maintainer's comment also pushes them back.
 
-| Day | What happens | Done by |
+| Day (default) | What happens | Done by |
 | --- | --- | --- |
-| 4 | Comment mentioning the maintainer: no reply from the reporter, decide whether the bug is worth pursuing without them; label `triage: no-response` | Orchestrator's daily scheduled job |
-| 14 | Label `stale`, comment: closes in 7 days unless the requested details arrive | GitHub `actions/stale` |
-| 21 | Close as *not planned*, comment saying how to get it reopened | GitHub `actions/stale` |
+| `ping` (4) | Comment mentioning each of `maintainers`: no reply from the reporter, decide whether the bug is worth pursuing without them; label `triage: no-response` | Orchestrator's daily scheduled job |
+| `stale` (14) | Label `stale`, comment: closes in `close − stale` days (7) unless the requested details arrive | GitHub `actions/stale` |
+| `close` (21) | Close as *not planned*, comment saying how to get it reopened | GitHub `actions/stale` |
 
 **Where it runs.** No agent and no model token: the caller's daily schedule (and a manual run) calls a reusable workflow of this repo, whose two jobs hold only `issues: write` (no `actions: write`, so `actions/stale` keeps no state between runs) and run in this order in the same run. It runs only when `workflows.triage` is on and nothing stops runs (repo-level switch); each run has its own concurrency group, so runs never cancel each other:
 
@@ -214,7 +214,7 @@ The reusable workflow takes an optional list of extra labels an issue must also 
 | Label | Set by | Meaning |
 | --- | --- | --- |
 | `type: bug` / `feature` / `question` | B1 | Issue class |
-| `triage: needs-info` | B2 | Waiting on the reporter; maintainer pinged at day 4 (triage: no-response), stale at 14, closed at 21 |
+| `triage: needs-info` | B2 | Waiting on the reporter; `maintainers` pinged at `ping` days (triage: no-response), stale at `stale`, closed at `close` (defaults 4/14/21) |
 | `triage: reproduced` | B2 | Repro test stored |
 | `triage: awaiting-maintainer` | B4 | Analysis posted, waiting for `/fix` |
 | `triage: needs-human` / `duplicate` | B1, B2 | Agent stopped; a person takes over |
