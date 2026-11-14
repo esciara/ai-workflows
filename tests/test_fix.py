@@ -35,9 +35,10 @@ REPRO = (f"{pr.MARKER}\n## Reproduced\n\n**Test** `tests/test_repro.py`, run wit
 class Gh(RecordingGh):
     """Comments, labels, the fix branch and the Git data API; posted JSON bodies recorded in `posted`."""
 
-    def __init__(self, comments=(), labels=(), head=None, fail=()):
+    def __init__(self, comments=(), labels=(), head=None, fail=(), code=403):
         super().__init__()
         self.comments, self.labels, self.head, self.fail = list(comments), set(labels), head, set(fail)
+        self.code = code
         self.posted: list[tuple[str, str, dict]] = []
         self.n = 0
 
@@ -48,7 +49,7 @@ class Gh(RecordingGh):
             self.posted.append((method, url, body))
         for key in self.fail:
             if key in url and method != "GET":
-                raise RuntimeError(f"HTTP 403: refused {key}\nmore")
+                raise RuntimeError(f"gh: refused {key} (HTTP {self.code})\nmore")
         if "--paginate" in args:
             return "\n".join(json.dumps(c) for c in self.comments)
         if url.endswith("/labels?per_page=100"):
@@ -318,9 +319,11 @@ def test_a_later_round_fast_forwards_the_branch_and_a_refused_move_stops(base):
     assert commit["parents"] == [prev]
     [ref] = [(m, u, b) for m, u, b in gh.posted if "/git/refs/heads/" in u]
     assert ref == ("PATCH", f"repos/{REPO}/git/refs/heads/ai-fix/issue-1", {"sha": rec["head"], "force": False})
-    gh = Gh(comments=[comment(ANALYSIS)], head=prev, fail=["/git/refs/heads/"])
+    gh = Gh(comments=[comment(ANALYSIS)], head=prev, fail=["/git/refs/heads/"], code=422)
     rec = round_(gh, *base(FIXED), k=2, prev=prev)
     assert rec["outcome"] == "stopped" and rec["head"] == prev
+    with pytest.raises(RuntimeError, match="HTTP 403"):  # a permission or outage error is not "someone else pushed"
+        round_(Gh(comments=[comment(ANALYSIS)], head=prev, fail=["/git/refs/heads/"]), *base(FIXED), k=2, prev=prev)
 
 
 def test_deleted_files_are_pushed_as_deletions(base):
@@ -362,7 +365,7 @@ def test_push_cli_writes_the_record_and_outputs(monkeypatch, tmp_path, base):
     assert code == 0
     record = json.loads((tmp_path / "round/round.json").read_text())
     assert record["outcome"] == "rejected" and record["escalate"] and "forced failure" in record["check_output"]
-    assert f"head={record['head']}\nnext=false\napproved=false\nescalate=true" in out
+    assert f"head={record['head']}\nnext=false\nescalate=true" in out
     assert "forced failure (e2e)" in (tmp_path / "round/findings.md").read_text()
 
 
@@ -414,7 +417,7 @@ def test_a_refused_draft_pr_still_comments_labels_and_assigns_the_issue(capsys):
     gh = Gh(fail=[f"repos/{REPO}/pulls"])
     assert esc.escalate(gh, REPO, 1, CFG, [rec(1)], "h" * 40, RUN) == "escalated #1: draft PR none"
     [body] = gh.comment_bodies()
-    assert "could not be opened (HTTP 403: refused" in body and "the work is on its branch" in body
+    assert "could not be opened (gh: refused" in body and "the work is on its branch" in body
     assert esc.NEEDS_MAINTAINER in str(gh.writes())
     assert [gh.url(c) for c in gh.writes("POST") if gh.url(c).endswith("/assignees")] == [
         f"repos/{REPO}/issues/1/assignees"]
