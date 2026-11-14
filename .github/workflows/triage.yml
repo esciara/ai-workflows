@@ -493,6 +493,9 @@ jobs:
   # analysis comment's status line. WP9 makes `/fix` start B5.
   decide:
     if: github.event_name == 'issue_comment' && !github.event.issue.pull_request && (fromJSON(inputs.config).command == 'fix' || fromJSON(inputs.config).command == 'no-fix')
+    concurrency:  # one decision at a time per issue: the label check and its removal are not atomic
+      group: aiwf-decide-${{ github.repository }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

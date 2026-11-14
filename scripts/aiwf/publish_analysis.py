@@ -165,12 +165,14 @@ def decide(gh: GhRunner, repo: str, issue: int, name: str, text: str, event: dic
             publish.add_labels(gh, repo, issue, DECLINED)
         recorded = set_status(gh, repo, issue, decision_status(name, login, url, text))
     except Exception:
-        try:  # not recorded: undo, so the maintainer can send the command again
-            if name == "no-fix":
-                remove_label(gh, repo, issue, DECLINED)
-            publish.add_labels(gh, repo, issue, AWAITING)
-        except Exception as undo:
-            print(f"::warning::could not restore '{AWAITING}' on #{issue}: {undo}")
+        undo = [lambda: publish.add_labels(gh, repo, issue, AWAITING)]  # not recorded: the maintainer can resend
+        if name == "no-fix":
+            undo.append(lambda: remove_label(gh, repo, issue, DECLINED))
+        for step in undo:  # each on its own, so one failing call does not skip the other
+            try:
+                step()
+            except Exception as exc:
+                print(f"::warning::could not undo a label change on #{issue}: {exc}")
         raise
     if not recorded:
         return f"/{name} by {login} recorded on #{issue}; no analysis comment to update"
