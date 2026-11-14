@@ -352,6 +352,7 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
         data["notes"] = notes
         upsert(comment_id)  # now with links to the new inline threads, and any notes
     set_verdict_label(gh, repo, number, label)
+    guard.clear_error(gh, repo, number, run_url)  # an earlier run's sticky error comment no longer applies
     if os.environ.get("GITHUB_OUTPUT"):  # for the metrics line (spec: Usage per run)
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
             fh.write(f"verdict={label}\n")

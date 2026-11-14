@@ -4,6 +4,8 @@
 - `report_error`: label `ai: error` plus one sticky error comment with the run link and a reason built from job names
   only (never agent text). Nothing re-runs: the maintainer reads the log, removes the label and re-runs if wanted.
 - An agent that hits its time or turn limit (ADR-0050) fails its job, so it goes through `report_error` too.
+- `clear_error`: a later run that publishes its result marks the sticky error comment as cleared (aiwf-3ci), so an
+  old error no longer reads as current; the marker stays, so a new error updates the same comment.
 - A stale PR run reports nothing (aiwf-3ci): with `--head-sha`, when the PR's head is no longer that commit (a push
   after the gate chose it, e.g. "PR head moved"), the run for the new head owns the labels and reports its own result.
 """
@@ -16,7 +18,7 @@ import os
 from typing import Any
 
 from aiwf import labels
-from aiwf.ghapi import GhRunner, get_or_none, remove_label, upsert_marker_comment
+from aiwf.ghapi import GhRunner, find_marker_comment, get_or_none, remove_label, upsert_marker_comment
 
 OFF_LABEL = "ai: off"
 ERROR_LABEL = labels.ERROR
@@ -64,6 +66,17 @@ def report_error(gh: GhRunner, repo: str, number: int, run_url: str, reason: str
     upsert_marker_comment(gh, repo, number, ERROR_MARKER, error_body(run_url, reason))
     print(f"{repo}#{number}: {ERROR_LABEL} ({reason})")
     return True
+
+
+CLEARED = "✅ **An earlier ai-workflows error is cleared:** a later run finished."
+
+
+def clear_error(gh: GhRunner, repo: str, number: int, run_url: str) -> None:
+    """Mark our sticky error comment as cleared, when there is one not yet cleared; fixed text only."""
+    found = find_marker_comment(gh, repo, number, ERROR_MARKER)
+    if found and not found["body"].startswith(f"{ERROR_MARKER}\n{CLEARED}"):
+        body = f"{ERROR_MARKER}\n{CLEARED}" + (f" [Run log]({run_url})" if run_url else "")
+        gh(["api", "-X", "PATCH", f"repos/{repo}/issues/comments/{found['id']}", "-f", f"body={body}"])
 
 
 def head_moved(gh: GhRunner, repo: str, number: int, sha: str) -> bool:
