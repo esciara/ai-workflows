@@ -20,7 +20,7 @@ Both bugs are real bugs in the playground's minicart, reported clearly so B2 rep
    sets the same comment's status to "fix approved" by the maintainer, linking their comment and carrying the guidance.
 2. `/no-fix <reason>` and the permission check: a percent tax rate crashes with decimal.InvalidOperation. After the
    analysis, the tester App's `/fix` changes nothing (labels and status as before). The maintainer's `/no-fix <reason>`
-   labels `fix: declined`, removes `triage: awaiting-maintainer`, and sets the status to "fix declined".
+   labels `fix: declined`, removes `triage: awaiting-maintainer`, and sets the status to "fix declined" with the reason.
 
 Whether `/fix` starts B5 is WP9's test, not asserted here; WP9 updates this file (its `/fix` run then runs B5, longer
 than COMMAND_TIMEOUT, and leaves an `ai-fix/issue-<n>` branch to clean up). Plain `/fix` (no guidance), a command on
@@ -65,7 +65,8 @@ TAX_BUG = (
 TAX_FILES = r"src/minicart/(cart|money)\.py"
 GUIDANCE_TEXT = "keep the public signature of Cart.total unchanged"
 GUIDANCE = f"/fix {GUIDANCE_TEXT}"
-REASON = "/no-fix not worth changing before the 1.0 release"
+REASON_TEXT = "not worth changing before the 1.0 release"
+REASON = f"/no-fix {REASON_TEXT}"
 
 
 @pytest.fixture
@@ -182,3 +183,4 @@ def test_no_fix_declines_and_a_non_maintainer_fix_changes_nothing(e2e_target, ta
     print(line)
     assert re.match(rf"fix declined by @{re.escape(c['user'])}\b", line, re.I), line
     assert f"issuecomment-{c['id']}" in line, "the status does not link the maintainer's /no-fix comment"
+    assert REASON_TEXT in line, "the status does not carry the /no-fix reason"
