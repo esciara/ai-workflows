@@ -175,6 +175,7 @@ def reusable_issue(title: str, body: str, *, e2e: bool) -> dict[str, Any]:
     deleted)."""
     if e2e:
         title = f"{title} (slot {held_slot()})"
+        body = f"{body}\n\n(fixture for e2e slot {held_slot()})"  # distinct body too: dedup compares bodies, not only titles
     found = api(f"repos/{REPO}/issues?labels={FIXTURE_LABEL}&state=open&per_page=100")
     for issue in found:
         has_slot = not e2e or e2eslot.label(held_slot()) in {lb["name"] for lb in issue["labels"]}
