@@ -606,6 +606,18 @@ def test_fix_not_among_the_listed_fixes_is_dropped(monkeypatch, ref):
     gh = FakeGh(commits={SHA: {"sha": SHA, "html_url": URL}}, pulls={12: pr})
     run(gh, possibly_fixed_by=ref)
     assert "Possibly fixed" not in gh.comment_bodies()[0]
+    assert not any("/commits/" in a or "/pulls/" in a for c in gh.calls for a in c)  # not even looked up
+
+
+@pytest.mark.parametrize("kind,ref,ok", [
+    ("commit", SHA[:6], False),  # under the 7-char minimum, even though it prefixes a listed SHA
+    ("commit", SHA[:7], True), ("commit", SHA[:12], True), ("commit", SHA, True),
+    ("commit", SHA[:11] + "9", False),  # longer than 7 but not a prefix of a listed SHA
+    ("pr", "12", True), ("pr", "3", False), ("pr", "12a", False),
+])
+def test_was_shown_commit_prefix_and_pr_number(kind, ref, ok):
+    shown = {"issues": set(), "commits": {SHA}, "prs": {12}}
+    assert pt.was_shown(shown, "possibly_fixed_by", {"kind": kind, "ref": ref}) is ok
 
 
 @pytest.mark.parametrize("value", [None, "", "not json", "[7]", '{"issues": "7"}', '{"issues": [true, "7"]}'])
