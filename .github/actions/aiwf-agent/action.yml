@@ -1,0 +1,84 @@
+# One agent run (ADR-0039): claude-code-action's base-action with no built-in tools but StructuredOutput, a turn limit
+# (ADR-0050) and structured output checked against a schema by the orchestrator later. Every agent job uses it, right
+# after fetching ai-workflows at job.workflow_sha into .ai-workflows (ADR-0040) and writing its prompt:
+# `uses: ./.ai-workflows/.github/actions/aiwf-agent`. A local path, so it runs from that same commit.
+# The calling step sets `timeout-minutes` (ADR-0050); the job keeps `permissions: {}` and passes only the OAuth token.
+# No GitHub token is read here: base-action has no token input (ADR-0039).
+# The schema reaches --json-schema single-quoted inside claude_args, which base-action splits with shell-quote: a `'`
+# in the schema or the model would end the quote, so both are refused here (and schemas are checked by the policy
+# tests); inside single quotes `$` and spaces stay literal.
+name: aiwf agent
+description: Run one ai-workflows agent with structured output, a turn limit and no tools
+inputs:
+  oauth-token:
+    description: CLAUDE_CODE_OAUTH_TOKEN (the only secret an agent job holds)
+    required: true
+  prompt-file:
+    description: Path of the prompt file
+    required: true
+  schema:
+    description: Path of the agent's JSON Schema; its draft 2020-12 `$schema` key is dropped (Claude rejects it)
+    required: true
+  max-turns:
+    description: Turn limit (ADR-0050)
+    required: true
+  model:
+    description: Model override from the config's `model` key; empty for the default
+    required: false
+    default: ''
+  usage-name:
+    description: Per-run metrics (spec Usage per run, ADR-0052); when set, writes usage/<name>.json and uploads it as artifact usage-artifact
+    required: false
+    default: ''
+  usage-artifact:
+    description: Artifact name for the usage file
+    required: false
+    default: ''
+outputs:
+  structured_output:
+    description: The agent's JSON answer (unchecked; the orchestrator validates it)
+    value: ${{ steps.claude.outputs.structured_output }}
+  execution_file:
+    description: Path of claude-code-action's execution log
+    value: ${{ steps.claude.outputs.execution_file }}
+runs:
+  using: composite
+  steps:
+    - id: args
+      shell: bash
+      env:
+        SCHEMA_FILE: ${{ inputs.schema }}
+        MAX_TURNS: ${{ inputs.max-turns }}
+        MODEL: ${{ inputs.model }}
+      run: |
+        schema="$(jq -c 'del(."$schema")' "$SCHEMA_FILE")"
+        case "$schema" in *"'"*) echo "::error::$SCHEMA_FILE contains a ' (breaks --json-schema quoting)"; exit 1;; esac
+        case "$MODEL" in *"'"*|*$'\n'*|*$'\r'*) echo "::error::config model contains a quote or a line break"; exit 1;; esac
+        [[ "$MAX_TURNS" =~ ^[1-9][0-9]*$ ]] || { echo "::error::max-turns must be a positive integer"; exit 1; }
+        args="--max-turns $MAX_TURNS --tools StructuredOutput --json-schema '$schema'"
+        if [ -n "$MODEL" ]; then args="$args --model '$MODEL'"; fi
+        echo "claude_args=$args" >> "$GITHUB_OUTPUT"
+    - id: claude
+      uses: anthropics/claude-code-action/base-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1.0.271
+      with:
+        claude_code_oauth_token: ${{ inputs.oauth-token }}
+        prompt_file: ${{ inputs.prompt-file }}
+        claude_args: ${{ steps.args.outputs.claude_args }}
+    # Only the numbers of the last `result` message; the agent's text never leaves the job this way.
+    - if: always() && inputs.usage-name != ''
+      shell: bash
+      env:
+        AGENT: ${{ inputs.usage-name }}
+        EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        USAGE_JQ: >-
+          [[.[] | select(.type == "result")] | last | select(. != null)
+          | {type, duration_ms, num_turns, total_cost_usd, usage: ((.usage // {})
+          | {input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens})}]
+      run: mkdir -p usage && { jq -c "$USAGE_JQ" "$EXECUTION_FILE" > "usage/$AGENT.json" || rm -f "usage/$AGENT.json"; }
+    - if: always() && inputs.usage-name != ''
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.usage-artifact }}
+        path: usage/
+        if-no-files-found: ignore
+        retention-days: 7

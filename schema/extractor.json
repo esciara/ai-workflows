@@ -7,7 +7,7 @@
       "type": ["string", "null"],
       "maxLength": 64,
       "pattern": "^[A-Za-z0-9._+-]*$",
-      "description": "The version the reporter runs (e.g. 1.4.2 or v1.4.2), or null when the report does not say. 'main' or a branch name is not a version."
+      "description": "The version the reporter runs (e.g. 1.4.2 or v1.4.2), or null when the report does not say. `main` or a branch name is not a version."
     },
     "search_phrases": {
       "type": "array",

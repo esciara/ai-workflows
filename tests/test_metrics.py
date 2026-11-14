@@ -25,13 +25,14 @@ def test_usage_without_result_or_with_junk():
 
 
 def test_workflow_jq_reduces_the_execution_file(tmp_path):
-    """The jq filter in review.yml keeps the numbers and drops the agent's text; metrics reads its output."""
+    """The jq filter in the aiwf-agent action keeps the numbers and drops the agent's text; metrics reads its output."""
     import yaml
     from pathlib import Path
-    wf = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/review.yml").read_text())
+    action = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/actions/aiwf-agent/action.yml").read_text())
+    usage_jq = next(s["env"]["USAGE_JQ"] for s in action["runs"]["steps"] if "USAGE_JQ" in s.get("env", {}))
     src = tmp_path / "exec.json"
     src.write_text(json.dumps([{"type": "system"}, RESULT]))
-    out = subprocess.run(["jq", "-c", wf["env"]["USAGE_JQ"], str(src)], capture_output=True, text=True, check=True)
+    out = subprocess.run(["jq", "-c", usage_jq, str(src)], capture_output=True, text=True, check=True)
     assert "agent text" not in out.stdout
     (tmp_path / "verify.json").write_text(out.stdout)
     assert metrics.agents(tmp_path) == [{"agent": "verify", **metrics.usage_from_execution([RESULT])}]
