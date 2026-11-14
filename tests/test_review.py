@@ -796,3 +796,33 @@ def test_gather_skips_symlinks_but_reads_normal_files(tmp_path):
     assert "NORMALCONTENT" in context
     assert context.count("NORMALCONTENT") == 1  # not repeated through the in-checkout link
     assert "OUTSIDESECRET" not in context
+
+
+def gather_when_diff_refused(tmp_path, files):
+    answers = {"pulls/1": {"title": "t", "body": "", "additions": 2, "deletions": 0}, "files": [files],
+               "graphql": {"data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": []}}}}}}
+
+    def gh(args):
+        if any("diff" in a for a in args):
+            raise RuntimeError("HTTP 406: Sorry, the diff exceeded the maximum number of lines (20000)")
+        key = "graphql" if "graphql" in args else "files" if any("/files" in a for a in args) else "pulls/1"
+        return json.dumps(answers[key])
+
+    cfg = {"risk_paths": {}, "limits": {"human_review_lines": 400}}
+    return review.gather(gh, "o/r", 1, "s" * 40, tmp_path, cfg)
+
+
+def test_diff_406_falls_back_to_file_patches_and_counts_as_truncated(tmp_path):
+    files = [{"filename": "a.py", "status": "modified", "additions": 1, "deletions": 0, "patch": "@@ -1 +1,2 @@\n x\n+y"},
+             {"filename": "package-lock.json", "status": "modified", "additions": 1, "deletions": 0, "patch": "@@ -1 +1 @@\n+L"}]
+    context, facts = gather_when_diff_refused(tmp_path, files)
+    assert facts["truncated"] is True
+    assert "diff --git a/a.py b/a.py" in context and "+y" in context and "+L" not in context
+    assert facts["commentable"].get("a.py")
+
+
+def test_other_diff_errors_still_raise(tmp_path):
+    def gh(args):
+        raise RuntimeError("HTTP 500")
+    with pytest.raises(RuntimeError):
+        review.gather(gh, "o/r", 1, "s" * 40, tmp_path, {"risk_paths": {}, "limits": {"human_review_lines": 400}})

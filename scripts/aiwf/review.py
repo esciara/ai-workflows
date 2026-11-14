@@ -211,6 +211,17 @@ def without_generated(diff: str) -> str:
     return "".join(keep)
 
 
+def diff_from_files(files: list[dict[str, Any]]) -> str:
+    """Git-format diff built from the `patch` fields of the PR files list (files without a patch are left out)."""
+    out = []
+    for f in files:
+        if not f.get("patch"):
+            continue
+        old = f.get("previous_filename") or f["filename"]
+        out.append(f"diff --git a/{old} b/{f['filename']}\n--- a/{old}\n+++ b/{f['filename']}\n{f['patch']}\n")
+    return "".join(out)
+
+
 def fence(text: str) -> str:
     """Untrusted text with every opening or closing context tag defused (`<diff>` -> `&lt;diff>`), so it cannot close
     or fake the tags that frame it. Same escape as triage.neutral (ADR-0039), but only before our tag names: the
@@ -240,7 +251,13 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
     files = json.loads(gh(["api", "--paginate", "--slurp", f"repos/{repo}/pulls/{number}/files?per_page=100"]))
     files = [f for page in files for f in page]
     paths = sorted({f["filename"] for f in files} | {f["previous_filename"] for f in files if f.get("previous_filename")})
-    diff = gh(["api", f"repos/{repo}/pulls/{number}", "-H", "Accept: application/vnd.github.diff"])
+    diff_cut = False
+    try:
+        diff = gh(["api", f"repos/{repo}/pulls/{number}", "-H", "Accept: application/vnd.github.diff"])
+    except RuntimeError as exc:
+        if "406" not in str(exc) and "too_large" not in str(exc):
+            raise
+        diff, diff_cut = diff_from_files(files), True  # GitHub refuses the full diff of a huge PR: review what the files list gives
     skipped = [f for f in files if is_generated(f["filename"]) and (not f.get("previous_filename") or is_generated(f["previous_filename"]))]
     diff = without_generated(diff)
     files = [f for f in files if f not in skipped]
@@ -277,7 +294,7 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
         "linked_issues": [i["number"] for i in issues],
         "plan_ref": plan_mode and bool(PLAN_REF_RE.search(f"{pr['title']}\n{pr.get('body') or ''}")),
         "wp_no_run_ids": plan_mode and bool(WP_BRANCH_RE.match(branch)) and not RUN_ID_RE.search(pr.get("body") or ""),
-        "truncated": truncated or too_big,  # the agents saw part of the context only: they lack context to judge (spec)
+        "truncated": truncated or too_big or diff_cut,  # the agents saw part of the context only: they lack context to judge (spec)
     }
     return context, facts
 
