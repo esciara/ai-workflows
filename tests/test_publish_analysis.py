@@ -226,7 +226,7 @@ def test_reproduced_clears_the_decision_and_hands_on_to_b3(monkeypatch, tmp_path
     assert "reproduced=true" in b2(gh, monkeypatch, tmp_path, **{k: repro()[k] for k in ("reproduced", "test")})
     assert {pa.AWAITING, pa.DECLINED} <= set(gh.removed())
     [patch] = [w for w in gh.writes("PATCH") if w[3].endswith("/comments/5")]  # B3 replaces it next
-    assert pa.status_lines(patch[-1]) == (f"re-analysing in [run]({RUN}).",
+    assert pa.status_lines(patch[-1]) == (f"re-analysing in [run]({RUN}); if that run fails, `/reproduce` to analyse again.",
                                           "fix approved by @esciara ([comment](u)); guidance: g")
 
 
