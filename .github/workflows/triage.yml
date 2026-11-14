@@ -300,10 +300,7 @@ jobs:
   reproduce:
     needs: repro-context
     if: ${{ !cancelled() && needs.repro-context.result == 'success' }}
-    # Pinned: on ubuntu-26.04 (ubuntu-latest since 2026-11) the sandbox cannot start any command ("apply-seccomp: write
-    # /proc/self/setgroups ... nested userns is capability-restricted"), even with the sysctl below. Unpin once the
-    # 26.04 kernel/AppArmor requirement is found (follow-up bead); the sandbox settings stay as they are (ADR-0037).
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
     timeout-minutes: 25
     permissions: {}
     env:
