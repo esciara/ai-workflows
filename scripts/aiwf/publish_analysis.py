@@ -134,7 +134,8 @@ def set_status(gh: GhRunner, repo: str, issue: int, status: str) -> bool:
 
 def reanalyse(gh: GhRunner, repo: str, issue: int, run_url: str) -> None:
     """A B2 that reproduced again: any earlier decision no longer stands until B3 posts the new analysis."""
-    set_status(gh, repo, issue, f"re-analysing in {f'[run]({run_url})' if run_url else 'a later run'}.")
+    run = f"[run]({run_url})" if run_url else "a later run"
+    set_status(gh, repo, issue, f"re-analysing in {run}; if that run fails, `/reproduce` to analyse again.")
 
 
 def supersede(gh: GhRunner, repo: str, issue: int, run_url: str) -> None:
