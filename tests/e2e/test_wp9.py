@@ -137,6 +137,7 @@ def test_fix_with_guidance_runs_the_fix_loop_to_an_approved_branch(e2e_target, t
     done = rounds(run)
     cap = e2e_config().get("limits", {}).get("fix_rounds", 3)
     assert done and max(done) <= cap and sorted(done) == list(range(1, max(done) + 1)), done
+    assert done[max(done)].get("check") == "success", done
     assert done[max(done)].get("review") == "success", done
     assert run["jobs"].get(ESCALATE_JOB) in (None, "skipped"), run["jobs"]
     assert NEEDS_MAINTAINER not in labels(issue["number"])
