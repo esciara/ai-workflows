@@ -609,6 +609,25 @@ def test_fix_not_among_the_listed_fixes_is_dropped(monkeypatch, ref):
     assert not any("/commits/" in a or "/pulls/" in a for c in gh.calls for a in c)  # not even looked up
 
 
+def test_short_commit_ref_is_looked_up_by_its_listed_full_sha():
+    gh = FakeGh(commits={SHA: {"sha": SHA, "html_url": URL}})
+    run(gh, possibly_fixed_by=fixed(ref=SHA[:7]))
+    assert "Possibly fixed" in gh.comment_bodies()[0]
+    assert [c[1] for c in gh.calls if "/commits/" in c[1]] == [f"repos/{REPO}/commits/{SHA}"]
+
+
+def test_ambiguous_prefix_or_a_ref_resolving_elsewhere_is_dropped(monkeypatch):
+    other = SHA[:7] + "f" * 33
+    monkeypatch.setenv(pt.CANDIDATES_ENV, json.dumps({"issues": [], "commits": [SHA, other], "prs": []}))
+    gh = FakeGh(commits={SHA: {"sha": SHA, "html_url": URL}})
+    run(gh, possibly_fixed_by=fixed(ref=SHA[:7]))  # prefixes two listed SHAs
+    assert "Possibly fixed" not in gh.comment_bodies()[0]
+    monkeypatch.setenv(pt.CANDIDATES_ENV, json.dumps({"issues": [], "commits": [SHA], "prs": []}))
+    gh = FakeGh(commits={SHA: {"sha": other, "html_url": URL}})  # e.g. a branch named like the SHA
+    run(gh, possibly_fixed_by=fixed(ref=SHA[:7]))
+    assert "Possibly fixed" not in gh.comment_bodies()[0]
+
+
 @pytest.mark.parametrize("kind,ref,ok", [
     ("commit", SHA[:6], False),  # under the 7-char minimum, even though it prefixes a listed SHA
     ("commit", SHA[:7], True), ("commit", SHA[:12], True), ("commit", SHA, True),
