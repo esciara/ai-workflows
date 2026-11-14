@@ -38,7 +38,7 @@ import pytest
 
 import playground as pg
 
-E2E_WORKFLOW = "AI workflows (e2e)"  # the playground's caller-e2e.yml
+E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 TRIAGE_MARKER = "<!-- ai-workflows:triage -->"
 REPRO_MARKER = "<!-- ai-workflows:reproduce -->"
 NEEDS_INFO_MARKER = "<!-- ai-workflows:needs-info -->"
