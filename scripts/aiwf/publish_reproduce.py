@@ -44,8 +44,7 @@ def fence(text: str, lang: str = "") -> str:
 
 
 def inline(text: str, limit: int = 200) -> str:
-    """Inline code for a table cell: one line, no backticks, pipes escaped."""
-    return "`" + " ".join(str(text).split())[:limit].replace("`", "'").replace("|", "\\|") + "`"
+    return publish_analysis.code(text, limit)  # one copy of the escaping rule
 
 
 def commands_table(cmds: list[dict[str, Any]]) -> list[str]:

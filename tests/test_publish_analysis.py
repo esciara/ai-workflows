@@ -197,6 +197,34 @@ def test_decide_cli_reads_the_command_from_the_config(monkeypatch, tmp_path):
     assert gh.added() == [pa.DECLINED] and "reason: later" in gh.bodies()[0]
 
 
+@pytest.mark.parametrize("cfg, labels, code", [
+    ({"command": "retriage"}, [pa.AWAITING], 1),  # not ours
+    ({"command": "fix"}, [pa.AWAITING, "ai: off"], 0),  # ai: off changes nothing
+    ({"command": "fix", "command_args": json.dumps(["x"])}, [pa.AWAITING], 0),  # non-text args: plain /fix
+])
+def test_decide_cli_branches(monkeypatch, tmp_path, cfg, labels, code):
+    event = tmp_path / "event.json"
+    event.write_text(json.dumps(EVENT))
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps(cfg))
+    gh = Gh(labels=labels, comments=[comment(5, ANALYSIS)])
+    monkeypatch.setattr(pa.config, "run_gh", gh)
+    from aiwf import cli
+    assert cli.main(["decide", "--repo", REPO, "--issue", "1"]) == code
+    if cfg.get("command_args"):
+        assert pa.status_lines(gh.bodies()[0])[0] == f"fix approved by @esciara ([comment]({URL}))."
+    else:
+        assert gh.writes() == []
+
+
+@pytest.mark.parametrize("event", [{}, {"comment": {"user": {"login": "esciara"}}}, {"comment": {"id": 7, "user": {}}}])
+def test_event_without_author_or_id_raises_and_keeps_the_label(event):
+    gh = Gh(labels=[pa.AWAITING], comments=[comment(5, ANALYSIS)])
+    with pytest.raises(RuntimeError):
+        pa.decide(gh, REPO, 1, "fix", "", event)
+    assert gh.writes() == []
+
+
 # --- a later B2 (spec B3): clears the decision; not reproduced marks the analysis superseded --------------------------
 
 def b2(gh, monkeypatch, tmp_path, **extra):
