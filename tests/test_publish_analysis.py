@@ -170,6 +170,7 @@ def test_a_decision_not_recorded_puts_the_label_back():
     with pytest.raises(RuntimeError):
         pa.decide(gh, REPO, 1, "no-fix", "later", EVENT)
     assert gh.removed() == [pa.AWAITING, pa.DECLINED] and gh.added() == [pa.DECLINED, pa.AWAITING]
+    assert gh.calls.index(gh.writes("POST")[-1]) < gh.calls.index(gh.writes("DELETE")[-1])  # awaiting back first
 
 
 def test_command_text_is_capped():
