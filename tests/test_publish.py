@@ -3,6 +3,7 @@ import json
 import pytest
 
 from aiwf import cli, publish
+from ghfake import RecordingGh
 
 # Pass 1 of triage (extractor) has a schema but no publisher: handy for the shared validate/publish path.
 VALID = {"reported_version": "1.2.0", "search_phrases": ["KeyError: total"], "file_paths": [],
@@ -45,18 +46,21 @@ def extractor_publisher(monkeypatch):
     return got
 
 
-def test_publish_valid_calls_the_publisher_only(extractor_publisher, gh):
+def test_publish_valid_calls_the_publisher_only(extractor_publisher):
+    gh = RecordingGh()
     assert publish.publish("extractor", json.dumps(VALID), "o/r", 7, "https://run", gh)
     assert extractor_publisher == [VALID] and gh.calls == []
 
 
-def test_publish_invalid_labels_error_and_posts_nothing(extractor_publisher, gh):
+def test_publish_invalid_labels_error_and_posts_nothing(extractor_publisher):
+    gh = RecordingGh()
     assert not publish.publish("extractor", "{}", "o/r", 7, "", gh)
     assert extractor_publisher == []
     assert gh.calls == [["api", "-X", "POST", "repos/o/r/issues/7/labels", "-f", "labels[]=ai: error"]]
 
 
-def test_cli_publish_exit_codes(monkeypatch, gh):
+def test_cli_publish_exit_codes(monkeypatch):
+    gh = RecordingGh()
     monkeypatch.setattr(cli.config, "run_gh", lambda args: "[]" if "?per_page" in args[-1] else gh(args))
     monkeypatch.setenv("AGENT_JSON", "")
     assert cli.main(["publish", "--kind", "classifier", "--repo", "o/r", "--issue", "3"]) == 1
