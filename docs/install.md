@@ -33,9 +33,11 @@ In Settings → Actions → General → Workflow permissions:
 
 Copy `templates/caller.yml` from esciara/ai-workflows to `.github/workflows/ai-workflows.yml` in the target repo.
 
-The caller pins every reusable workflow of esciara/ai-workflows to one release: a full 40-character commit SHA, with the release tag in a comment on the same line, for example `uses: esciara/ai-workflows/.github/workflows/review.yml@<40-hex SHA> # v0.2.0`. Keep it that way: never point it at a branch. The template already holds the latest release; check it against the release list at https://github.com/esciara/ai-workflows/releases (the tag's commit SHA must match). Copy the template from the release tag you pin (or from main, then pin the SHA of the release you want): a copy taken from an older tag, such as v0.1.0, holds that tag's older pins, so check its SHAs against the releases list before you commit it.
+The caller pins every reusable workflow of esciara/ai-workflows to one release: a full 40-character commit SHA, with the release tag in a comment on the same line, for example `uses: esciara/ai-workflows/.github/workflows/review.yml@<40-hex SHA> # v0.2.0`. Keep it that way: never point it at a branch. The template already holds the latest release; check it against the release list at https://github.com/esciara/ai-workflows/releases (the tag's commit SHA must match). Copy `templates/caller.yml` from the default branch (main) and keep its pin lines, which already point at the latest release: a release tag's own template cannot pin itself, and a copy taken from an older tag, such as v0.1.0, holds that tag's older pins.
 
 Review only (recommended to start): delete the `triage` job from the copied file. Keep `notify` only if you set a chat secret.
+
+The `silence` job runs on the daily cron when triage is on: it pings the reporter, then actions/stale labels and closes needs-info issues (not_planned). A review-only install should leave the `silence` job out too.
 
 ## 5. Copy the config
 
