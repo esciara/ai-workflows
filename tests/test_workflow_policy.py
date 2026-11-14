@@ -373,6 +373,22 @@ def test_only_the_verdict_job_writes_statuses():
                 assert (path.name, name) == ("ai-review.yml", "verdict"), f"{path.name}:{name}"
 
 
+def test_only_the_review_publish_job_and_its_callers_write_contents():
+    # ADR-0057 amendment: resolveReviewThread needs `contents: write`; only the publish job (orchestrator, no agent) has
+    # it, and the callers' `review` job grants it so the called workflow can narrow it to that one job.
+    allowed = {("review.yml", "publish"), ("ai-review.yml", "review"), ("caller.yml", "review")}
+    found = set()
+    for path in REAL:
+        for name, job in (policy.load_workflow(path.read_text()) or {}).get("jobs", {}).items():
+            perms = job.get("permissions")
+            if perms == "write-all" or (isinstance(perms, dict) and perms.get("contents") == "write"):
+                found.add((path.name, name))
+    assert found == allowed
+    publish = _doc(".github/workflows/review.yml")["jobs"]["publish"]
+    assert not any("claude" in str(step.get("uses", "")) or "agent" in str(step.get("uses", ""))
+                   for step in publish["steps"]), "no agent runs in the job that holds contents: write"
+
+
 def _st(state, description, creator="github-actions[bot]"):
     return {"context": "verdict", "state": state, "description": description, "creator": {"login": creator}}
 
