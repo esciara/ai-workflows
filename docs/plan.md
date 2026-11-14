@@ -64,6 +64,7 @@ Slice `base` marks shared runtime built before the slices. Rows with a letter (W
 Open items (hand-edited like the Status column):
 
 - Dev env: fresh worktrees lack .venv (verify-wp/tests jsonschema import) [was aiwf-e8d].
+- WP14: setup timing of the second repo `esciara/pyteleinfo` (2026-11-13, UTC, from GitHub timestamps): first commit of caller PR #15 at 21:58; #15 merged 22:14 (16 min to a merged caller and config); first working review on test PR #17 about 22:40-22:47 (about 42-49 min after the first commit, includes a pre-existing lint failure fixed by #16, merged 22:44); the GitHub App install and secret steps happened before 21:58 and were not timestamped. Not a clean timed run, so the "under 30 minutes from the guide alone" Done-when is still unproven: it needs a timed run or the maintainer's explicit acceptance. Status stays `in progress`.
 - WP16: single e2e slot (known issue, P1) → three slots per ADR-0056; gate (#105), build (#107) and playground PRs (#127, #130) merged; the maintainer deletes the old `e2e-target` ref after.
 
 **WP11 maintainer setup (chat alerts).** Before WP11 can pass, the maintainer sets these repository secrets on the test repo (and later on each target repo that wants alerts): Slack, create an Incoming Webhook for a channel and store it as `SLACK_WEBHOOK_URL`; Telegram, create a bot with @BotFather, get your chat ID, and store them as `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
