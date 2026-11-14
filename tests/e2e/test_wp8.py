@@ -26,7 +26,7 @@ Whether `/fix` starts B5 is WP9's test, not asserted here; WP9 updates this file
 than COMMAND_TIMEOUT, and leaves an `ai-fix/issue-<n>` branch to clean up). Plain `/fix` (no guidance), a command on
 an issue without `triage: awaiting-maintainer`, the risk-tier and link rules (a path not in the tree gets no link), the
 path rules for the analyst's code, a B3 rerun updating the same comment (earlier decision kept as "previously") and a
-non-reproducing B2 marking it superseded are unit-tested.
+non-reproducing B2 marking it superseded are left to the build PR's unit tests (none exist yet: this file is the gate).
 """
 
 from __future__ import annotations
@@ -137,7 +137,7 @@ def reproduce_and_analyse(issue: dict[str, Any], files: str) -> str:
         assert re.search(rf"\*\*{section}\*\*", body), f"no {section} section"
     link = rf"https://github\.com/{re.escape(pg.REPO)}/blob/[0-9a-f]{{40}}/{files}#L\d+"
     assert re.search(rf"^\*\*Root cause\*\*.*{link}", body, re.M), f"no root-cause line link into {files}"
-    assert re.search(r"\*\*Risk tier:\*\* low\b", body), "risk tier is not low (src/ paths, e2e config high: .github/**)"
+    assert re.search(r"\*\*Risk tier:\*\* low\b", body), "risk tier is not low (src/ only)"
     assert re.search(r"\*\*Confidence:\*\* (high|medium|low)\b", body), "no confidence"
     assert re.search(r"\*\*Size:\*\* [SML]\b", body), "no size"
     for cmd in ("`/fix`", "`/fix <guidance>`", "`/no-fix <reason>`"):
