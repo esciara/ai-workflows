@@ -169,8 +169,12 @@ def open_issue(title: str, body: str, *, e2e: bool, as_tester: bool = False) -> 
 
 
 def reusable_issue(title: str, body: str, *, e2e: bool) -> dict[str, Any]:
-    """The open test-fixture issue with this exact title (and, when `e2e`, the held slot's `e2e-target-<n>` label, so
-    its comments reach that slot's caller), created once per slot and reused (never deleted)."""
+    """The open test-fixture issue titled `<title> (slot <n>)` when `e2e` (the slot number keeps per-slot titles unique,
+    so triage dedup does not label them duplicates; old issues without it are left open and ignored) with the held
+    slot's `e2e-target-<n>` label, so its comments reach that slot's caller; created once per slot and reused (never
+    deleted)."""
+    if e2e:
+        title = f"{title} (slot {held_slot()})"
     found = api(f"repos/{REPO}/issues?labels={FIXTURE_LABEL}&state=open&per_page=100")
     for issue in found:
         has_slot = not e2e or e2eslot.label(held_slot()) in {lb["name"] for lb in issue["labels"]}
