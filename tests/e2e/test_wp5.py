@@ -9,7 +9,6 @@ at teardown so later runs do not see them as duplicates.
 from __future__ import annotations
 
 import json
-import os
 import re
 from typing import Any, Iterator
 
@@ -63,53 +62,26 @@ def run_tag(testrun_uid: str) -> str:
 
 @pytest.fixture
 def opened(run_tag: str) -> Iterator[list[int]]:
-    """Issues this test opened; closed as "not planned" at teardown (never deleted), so later runs and later dedup
-    corpora do not treat them as open duplicates. Also closes open WP5 issues left by earlier crashed runs."""
-    for issue in pg.api(f"repos/{pg.REPO}/issues?labels={pg.FIXTURE_LABEL}&state=open&per_page=100"):
-        if issue["title"].startswith(TITLE_PREFIX) and run_tag not in issue["title"] and "pull_request" not in issue:
-            close(issue["number"])
+    """Issues this test opened, closed as "not planned" at teardown (pg.close_issue); also closes open WP5 issues left
+    by earlier crashed runs."""
+    pg.close_left_over(TITLE_PREFIX, keep=run_tag)
     numbers: list[int] = []
     yield numbers
     for n in numbers:
-        close(n)
-
-
-def close(number: int) -> None:
-    pg.api(f"repos/{pg.REPO}/issues/{number}", "state=closed", "state_reason=not_planned", method="PATCH")
-
-
-def require_tester() -> None:
-    if not os.environ.get("AI_WORKFLOWS_TESTER_APP_ID"):
-        pytest.fail("AI_WORKFLOWS_TESTER_APP_ID is not set; cannot open issues as the tester App (not a pass)", pytrace=False)
+        pg.close_issue(n)
 
 
 def open_as_reporter(kind: str, report: tuple[str, str], run_tag: str, opened: list[int]) -> dict[str, Any]:
-    """Open an issue as the tester App (the outside reporter), routed to the e2e caller from its `opened` event."""
-    require_tester()
     title, body = report
-    issue = pg.open_issue(f"{TITLE_PREFIX} {kind} {run_tag}: {title}", body, e2e=True, as_tester=True)
+    issue = pg.open_as_reporter(f"{TITLE_PREFIX} {kind} {run_tag}: {title}", body)
     opened.append(issue["number"])
-    full = pg.api(f"repos/{pg.REPO}/issues/{issue['number']}")
-    author = full["user"]["login"]
-    assert author.endswith("[bot]") and author != pg.BOT, f"#{issue['number']} not opened by the tester App: {author}"
-    return {**issue, "created_at": full["created_at"], "html_url": full["html_url"]}
+    return issue
 
 
 def triage_run(issue: dict[str, Any]) -> dict[str, Any]:
-    """The completed `issues` run of the e2e caller for this issue (opened at or after its creation)."""
-
-    def find() -> int | None:
-        runs = pg.api(f"repos/{pg.REPO}/actions/runs?event=issues&created=%3E%3D{issue['created_at']}&per_page=50")
-        hits = [
-            r for r in runs["workflow_runs"]
-            if r["name"] == E2E_WORKFLOW and r["display_title"] == issue["title"] and r["created_at"] >= issue["created_at"]
-        ]
-        return min(hits, key=lambda r: (r["created_at"], r["id"]))["id"] if hits else None
-
-    run_id = pg.poll(find, f"the e2e issues run for #{issue['number']}")
-    run = pg.completed(run_id)
-    jobs = pg.jobs(run_id)
-    print(f"#{issue['number']} {issue['html_url']}: run {run_id} {run['html_url']} -> {run['conclusion']}, jobs {jobs}")
+    """The completed e2e `issues` run for this issue; its triage jobs succeeded."""
+    run = pg.issues_run(issue, E2E_WORKFLOW)
+    jobs = pg.jobs(run["id"])
     assert run["conclusion"] == "success", jobs
     triage_jobs = {k: v for k, v in jobs.items() if k.startswith("triage / ")}
     assert triage_jobs and all(v in {"success", "skipped"} for v in triage_jobs.values()), jobs

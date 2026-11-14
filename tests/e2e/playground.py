@@ -10,6 +10,8 @@ import os
 import re
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Iterator, TypeVar
 
@@ -311,3 +313,76 @@ def check_metrics(line: str, run: dict[str, Any], pr: int, sha: str, aiwf_sha: s
         assert isinstance(a.get("cost_usd"), (int, float)) and not isinstance(a["cost_usd"], bool), a  # notional
     print(f"metrics for run {run['id']}: {line}")
     return m
+
+
+# Issues opened by the outside reporter (tester App) and their triage runs (WP5, WP11b).
+
+
+def close_issue(number: int) -> None:
+    """Close as "not planned" (never deleted), so later runs and dedup corpora do not see it as an open duplicate."""
+    api(f"repos/{REPO}/issues/{number}", "state=closed", "state_reason=not_planned", method="PATCH")
+
+
+def close_left_over(prefix: str, keep: str) -> None:
+    """Close open test-fixture issues whose title starts with `prefix` but lacks this run's tag `keep` (crashed runs)."""
+    for issue in api(f"repos/{REPO}/issues?labels={FIXTURE_LABEL}&state=open&per_page=100"):
+        if issue["title"].startswith(prefix) and keep not in issue["title"] and "pull_request" not in issue:
+            close_issue(issue["number"])
+
+
+def open_as_reporter(title: str, body: str) -> dict[str, Any]:
+    """Open an issue as the tester App (the outside reporter), routed to the held slot's caller from its `opened`
+    event; adds created_at and html_url."""
+    if not os.environ.get("AI_WORKFLOWS_TESTER_APP_ID"):
+        pytest.fail("AI_WORKFLOWS_TESTER_APP_ID is not set; cannot open issues as the tester App (not a pass)",
+                    pytrace=False)
+    issue = open_issue(title, body, e2e=True, as_tester=True)
+    full = api(f"repos/{REPO}/issues/{issue['number']}")
+    author = full["user"]["login"]
+    assert author.endswith("[bot]") and author != BOT, f"#{issue['number']} not opened by the tester App: {author}"
+    return {**issue, "created_at": full["created_at"], "html_url": full["html_url"]}
+
+
+def issues_run(issue: dict[str, Any], workflow: str) -> dict[str, Any]:
+    """The completed `issues` run of the caller `workflow` for this issue (opened at or after its creation)."""
+
+    def find() -> int | None:
+        runs = api(f"repos/{REPO}/actions/runs?event=issues&created=%3E%3D{issue['created_at']}&per_page=50")
+        hits = [
+            r for r in runs["workflow_runs"]
+            if r["name"] == workflow and r["display_title"] == issue["title"] and r["created_at"] >= issue["created_at"]
+        ]
+        return min(hits, key=lambda r: (r["created_at"], r["id"]))["id"] if hits else None
+
+    run = completed(poll(find, f"the {workflow} issues run for #{issue['number']}"))
+    print(f"#{issue['number']} {issue['html_url']}: run {run['id']} {run['html_url']} -> {run['conclusion']}, "
+          f"jobs {jobs(run['id'])}")
+    return run
+
+
+# Chat notifications (WP11a, WP11b): the notify step prints one `AIWF_NOTIFY_RESULT {json}` line per message sent.
+
+NOTIFY_RESULT_PREFIX = "AIWF_NOTIFY_RESULT "
+
+
+def job_log(job_id: int) -> str:
+    return gh(["api", "--allow-escape-sequences", f"repos/{REPO}/actions/jobs/{job_id}/logs"])
+
+
+def notify_results(log: str) -> list[dict[str, Any]]:
+    out = []
+    for line in log.splitlines():
+        at = line.find(NOTIFY_RESULT_PREFIX)
+        if at >= 0:
+            out.append(json.loads(line[at + len(NOTIFY_RESULT_PREFIX):]))
+    return out
+
+
+def http_status(url: str) -> int:
+    """Anonymous GET, as someone clicking the link in the chat would do (public playground)."""
+    req = urllib.request.Request(url, headers={"User-Agent": "ai-workflows-e2e"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
