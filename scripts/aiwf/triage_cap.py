@@ -41,15 +41,19 @@ def recent_issues(gh: GhRunner, repo: str, until: datetime) -> list[dict[str, An
     return [i for i in items if "pull_request" not in i and until - WINDOW <= parse_time(i["created_at"]) <= until]
 
 
+def login(item: dict[str, Any]) -> str:
+    return (item.get("user") or {}).get("login") or ""
+
+
 def cap_reason(issues: list[dict[str, Any]], number: int, author: str, maintainers: list[str],
                limits: dict[str, int]) -> str:
     """Why issue `number` by `author` is capped, or '' when it is not. `issues`: those of the window."""
     if is_maintainer(author, maintainers):
         return ""
-    counted = [i for i in issues if i["number"] <= number and not is_maintainer(i["user"]["login"], maintainers)]
-    counted_numbers = {i["number"] for i in counted} | {number}  # the current issue always counts
-    total = len(counted_numbers)
-    mine = len({i["number"] for i in counted if i["user"]["login"].lower() == author.lower()} | {number})
+    outside = [(i["number"], login(i)) for i in issues
+               if i["number"] <= number and not is_maintainer(login(i), maintainers)]
+    total = len({n for n, _ in outside} | {number})  # the current issue always counts, even if the list lags
+    mine = len({n for n, who in outside if who.lower() == author.lower()} | {number})
     if total > limits["triage_per_day"]:
         return f"{total} issues from outside authors in 24 hours, above triage_per_day={limits['triage_per_day']}"
     if mine > limits["triage_per_author_per_day"]:
@@ -63,8 +67,8 @@ def check(gh: GhRunner, repo: str, number: int, cfg: dict[str, Any], event: str)
     if event != "issues":
         return ""
     issue = get_json(gh, f"repos/{repo}/issues/{number}")
-    author = (issue.get("user") or {}).get("login", "")
-    if is_maintainer(author, cfg["maintainers"]):
+    author = login(issue)
+    if is_maintainer(author, cfg["maintainers"]):  # early, to skip the list call; cap_reason checks it too
         return ""
     issues = recent_issues(gh, repo, parse_time(issue["created_at"]))
     return cap_reason(issues, number, author, cfg["maintainers"], cfg["limits"])

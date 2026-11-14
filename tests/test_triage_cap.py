@@ -1,8 +1,10 @@
 """ADR-0058: daily triage caps for issues from outside authors (no network)."""
 
 import json
+from pathlib import Path
 
 import pytest
+import yaml
 
 from aiwf import cli, publish_triage as pt, triage_cap as tc
 from ghfake import RecordingGh
@@ -119,15 +121,22 @@ def test_maintainer_check_skips_the_list():
     assert got == "" and len(gh.calls) == 1
 
 
-def test_cli_writes_capped_output(tmp_path, monkeypatch):
+@pytest.mark.parametrize("per_day,want", [(0, "capped=true\n"), (20, "capped=false\n")])
+def test_cli_writes_capped_output(tmp_path, monkeypatch, per_day, want):
+    """The workflow compares this output with the string 'true'."""
     gh = Gh("eve", [issue(1, "eve")])
     gh.current = 1
     monkeypatch.setattr(tc.config, "run_gh", gh)
-    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"maintainers": MAINT, "limits": {**LIMITS, "triage_per_day": 0}}))
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"maintainers": MAINT, "limits": {**LIMITS, "triage_per_day": per_day}}))
     monkeypatch.setenv("GITHUB_EVENT_NAME", "issues")
     out = tmp_path / "out"
     assert cli.main(["triage-cap", "--repo", REPO, "--issue", "1", "--github-output", str(out)]) == 0
-    assert out.read_text() == "capped=true\n"
+    assert out.read_text() == want
+
+
+def test_listed_issue_without_user_counts_as_outsider():
+    """A deleted account can come back with `user: null`: it counts, and does not crash the check."""
+    assert reason([{"number": 1, "user": None, "created_at": NOW}, issue(2, "eve")], 2, "eve", triage_per_day=1)
 
 
 # --- publish for a capped issue -------------------------------------------------------------------------------------
@@ -144,6 +153,38 @@ def test_publish_capped_label_and_fixed_comment():
     assert labels[-2:] == ["-f", "labels[]=triage: needs-human"]
     body = comment[-1].removeprefix("body=")
     assert body == f"{pt.MARKER}\n**AI triage:** Automatic triage limit reached for today; a maintainer can run `/retriage`."
+
+
+def test_publish_capped_rerun_updates_the_sticky_comment():
+    class Sticky(RecordingGh):
+        def respond(self, args):
+            if "--paginate" in args:
+                return json.dumps({"id": 9, "user": {"login": "github-actions[bot]"}, "body": pt.MARKER + "\nold"})
+            return "{}"
+
+    gh = Sticky()
+    pt.publish_capped(REPO, 7, gh)
+    assert [gh.url(c) for c in gh.writes("PATCH")] == [f"repos/{REPO}/issues/comments/9"]
+    assert len(gh.writes("POST")) == 1  # the label only
+
+
+# --- triage.yml wiring ----------------------------------------------------------------------------------------------
+
+def test_triage_workflow_skips_agents_and_publishes_fixed_text_when_capped():
+    jobs = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/triage.yml").read_text())["jobs"]
+    capped = "needs.context.outputs.capped"
+    assert jobs["context"]["outputs"]["capped"] == "${{ steps.cap.outputs.capped }}"
+    cap = next(s for s in jobs["context"]["steps"] if s.get("id") == "cap")
+    assert "aiwf triage-cap " in cap["run"]
+    first_agent_step = next(i for i, s in enumerate(jobs["context"]["steps"]) if "triage-issue" in s.get("run", ""))
+    assert jobs["context"]["steps"].index(cap) < first_agent_step
+    for job in ("extract", "classify"):
+        assert jobs[job]["if"] == f"{capped} != 'true'"
+        assert "context" in ([jobs[job]["needs"]] if isinstance(jobs[job]["needs"], str) else jobs[job]["needs"])
+    assert jobs["candidates"]["needs"] == "extract"  # skipped with extract
+    steps = jobs["publish"]["steps"]
+    assert any(s.get("if") == f"{capped} == 'true'" and "aiwf triage-capped " in s["run"] for s in steps)
+    assert any(s.get("if") == f"{capped} != 'true'" and "aiwf publish --kind classifier" in s["run"] for s in steps)
 
 
 class CliGh(RecordingGh):

@@ -8,6 +8,7 @@ from aiwf import cli, config
 
 FIX = Path(__file__).parent / "fixtures"
 ROOT = Path(__file__).resolve().parents[1]
+TRIAGE_CAP_DEFAULTS = {"triage_per_author_per_day": 3, "triage_per_day": 20}  # ADR-0058
 
 
 def load_text(text):
@@ -32,8 +33,7 @@ def test_minimal_config_gets_all_defaults():
         "maintainers": ["esciara"],
         "default_branch": "main",
         "risk_paths": {"high": [], "medium": []},
-        "limits": {"human_review_lines": 400, "fix_rounds": 3, "info_requests": 2, "triage_per_author_per_day": 3,
-                   "triage_per_day": 20},
+        "limits": {"human_review_lines": 400, "fix_rounds": 3, "info_requests": 2, **TRIAGE_CAP_DEFAULTS},
         "reporter_silence_days": {"ping": 4, "stale": 14, "close": 21},
         "linked_issue": "issue",
         "notify": "none",
@@ -44,8 +44,7 @@ def test_minimal_config_gets_all_defaults():
 
 def test_full_config_keeps_explicit_values():
     cfg = load_text((FIX / "full.yml").read_text())
-    assert cfg["limits"] == {"human_review_lines": 300, "fix_rounds": 2, "info_requests": 1, "triage_per_author_per_day": 3,
-                             "triage_per_day": 20}
+    assert cfg["limits"] == {"human_review_lines": 300, "fix_rounds": 2, "info_requests": 1, **TRIAGE_CAP_DEFAULTS}
     assert cfg["risk_paths"]["medium"] == ["src/api/**"]
     assert cfg["model"] == "claude-sonnet-4-5"
     assert cfg["required_checks"] == ["test", "lint"]
@@ -54,8 +53,7 @@ def test_full_config_keeps_explicit_values():
 
 def test_partial_nested_object_is_filled():
     cfg = load_text("maintainers: [a]\nlimits: {fix_rounds: 5}\n")
-    assert cfg["limits"] == {"human_review_lines": 400, "fix_rounds": 5, "info_requests": 2, "triage_per_author_per_day": 3,
-                             "triage_per_day": 20}
+    assert cfg["limits"] == {"human_review_lines": 400, "fix_rounds": 5, "info_requests": 2, **TRIAGE_CAP_DEFAULTS}
 
 
 def test_example_template_is_valid():
