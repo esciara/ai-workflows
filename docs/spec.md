@@ -173,18 +173,35 @@ The two highlighted steps are the only places the flow waits on a person, apart 
 
 The reusable workflow takes an optional list of extra labels an issue must also carry to be handled (empty in the caller template); the e2e slot callers use it to touch only their own test issues. The "Reporter silent" chat alert is wired with the slice's notifications (WP11b), not here.
 
-**B3 — Analyse.** With read access to the code and the passing reproduction:
+**B3 — Analyse.** Runs in the same run as a B2 that reproduced, and again after every later B2 that reproduces. The analyst reads the stored reproduction (test, output, commands run) and the code at the commit B2 ran on. It runs no commands and has no file tools: a job with no agent puts the code into its prompt (the source files the test imports or that appear in the output, and their callers, capped in size as for A's passes, ADR-0034), so ADR-0037's exception does not extend to it. Those paths come from B2's output, which is untrusted: the job reads a path only when it is relative, resolves inside the checked-out tree and is a regular file (no symlink), and the step that reads them holds no token. Like B1 and B2, the analyst also reports any instructions it finds in what it reads (Guardrails). It returns:
 
-- **Root cause:** the faulty code with file and line links, and why it produces the observed behaviour.
+- **Root cause:** the faulty code (file and line), and why it produces the observed behaviour.
 - **Blast radius:** other callers or features affected.
 - **Proposed fix:** approach, files to change, the regression test to keep, alternatives rejected.
-- **Risk tier** (same path rules as A), **confidence** (high, medium, low) and **size** (S, M, L).
+- **Confidence** (high, medium, low) and **size** (S, M, L).
 
-**B4 — Ask the maintainer.** Post the analysis as one issue comment that mentions the maintainer, label `triage: awaiting-maintainer`, and wait. Only comments from users with write or admin permission count:
+The orchestrator computes the **risk tier** from the files to change with A's path rules, and builds the file and line links itself, at the analysed commit, from the paths and lines the analyst returns; a path that is not in the tree gets no link. The analyst's text is posted cleaned, as B2's is: no mentions, HTML, markers, links or images. Every B2 run removes `triage: awaiting-maintainer` and `fix: declined`. When it reproduces, B3 updates the analysis comment, its status back to waiting (an earlier decision line, with its guidance, stays under it as "previously"), and B4 labels `triage: awaiting-maintainer` again; when it does not, B2 sets that comment's status to "superseded by <run link>; `/reproduce` to analyse again".
+
+**B4 — Ask the maintainer.** Post the analysis as one issue comment (template below, found by its hidden marker and updated in place by a later B3) that mentions each of `maintainers`, label `triage: awaiting-maintainer`, and wait. Only commands accepted per Commands (ADR-0005: in `maintainers` and with write or admin permission) count, and only while the issue has `triage: awaiting-maintainer`, read live from the API by the run that handles the command; a command at any other time changes nothing:
 
 - `/fix` — go ahead as proposed.
 - `/fix <guidance>` — go ahead, with the guidance added to the implementer's brief.
 - `/no-fix <reason>` — label `fix: declined`, stop.
+
+On either command the orchestrator first removes `triage: awaiting-maintainer`, then sets the comment's status line to who decided, with a link to their comment and, for `/fix <guidance>`, the guidance (cleaned), where a later B5 finds it; `triage: reproduced` stays. `/fix` then starts B5. The "B4 analysis posted" chat alert is wired with the slice's notifications (WP11b), not here.
+
+```markdown
+<!-- ai-workflows:analysis -->
+## Bug analysis
+@esciara: reply `/fix`, `/fix <guidance>` or `/no-fix <reason>`.
+**Risk tier:** low · **Confidence:** high · **Size:** S · **Run:** <run link>
+
+**Root cause** — [src/x.py#L42](<link at the analysed commit>): why it produces the observed behaviour.
+**Blast radius** — other callers or features affected.
+**Proposed fix** — approach; files to change; the regression test to keep; alternatives rejected.
+
+**Status:** waiting for `/fix` or `/no-fix`.  |  fix approved by @esciara ([comment](…)); guidance: …  |  fix declined by @esciara ([comment](…)).
+```
 
 **B5 — Fix loop, at most 3 rounds (**[REV-03](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**, **[EXE-06](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**).** Each round runs in a sandbox on branch `ai-fix/issue-<n>`:
 
