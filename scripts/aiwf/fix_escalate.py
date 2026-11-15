@@ -38,9 +38,13 @@ def records(folder: Path) -> list[dict[str, Any]]:
 def compare_link(gh: GhRunner, repo: str, issue: int) -> str:
     """The compare link from the default branch to the fix branch, or '' when the branch does not exist."""
     branch = branch_name(issue)
-    if not branch_head(gh, repo, branch):
+    try:
+        if not branch_head(gh, repo, branch):
+            return ""
+        base = json.loads(gh(["api", f"repos/{repo}"]) or "{}").get("default_branch") or "main"
+    except RuntimeError as exc:  # the comment, label and assignment still matter more than the link
+        print(f"::warning::no compare link for {branch}: {str(exc)[:200]}")
         return ""
-    base = json.loads(gh(["api", f"repos/{repo}"]) or "{}").get("default_branch") or "main"
     server = os.environ.get("GITHUB_SERVER_URL") or "https://github.com"
     return f"{server}/{repo}/compare/{base}...{branch}"
 
@@ -57,8 +61,13 @@ def round_lines(r: dict[str, Any]) -> list[str]:
 
 def body(logins: list[str], rounds: list[dict[str, Any]], link: str, run_url: str) -> str:
     mention = " ".join(f"@{m}" for m in logins)
-    if link:
+    pushed = any(r.get("pushed") for r in rounds)
+    if link and pushed:
         where = f"The last pushed work is on the branch, to open a PR from (none was opened): {link}."
+    elif link:
+        where = f"Someone else pushed to the branch, which is theirs: {link}."
+    elif pushed:
+        where = "The branch was pushed, then deleted."
     else:
         where = "Nothing was pushed, so there is no branch."
     lines = [MARKER, f"**Fix needs a maintainer.** {mention}: the fix loop ended after {len(rounds)} round(s) without an "
@@ -74,7 +83,7 @@ def superseded(rounds: list[dict[str, Any]]) -> bool:
 
 
 def superseded_body(link: str, run_url: str) -> str:
-    where = f"branch kept: {link}; delete it before the next `/fix`" if link else "nothing was pushed"
+    where = f"branch kept: {link}; delete it before the next `/fix`" if link else "no branch left"
     return f"{MARKER}\nFix loop stopped: superseded by the newer analysis; {where}. {run_link(run_url, '')}".rstrip()
 
 
