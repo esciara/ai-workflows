@@ -4,7 +4,7 @@
 - Date: 2026-11-14
 - Deciders: maintainer
 - Alias: `D59`
-- Amends: [ADR-0055](0055-verdict-check-states-before-a-review-exists.md) (Decision 1 and 4: a newer `verdict` run does not replace an older one across runs; comment reviews end green)
+- Amends: [ADR-0055](archive/0055-verdict-check-states-before-a-review-exists.md) (Decision 1 and 4: a newer `verdict` run does not replace an older one across runs; comment reviews end green)
 
 ## Context
 

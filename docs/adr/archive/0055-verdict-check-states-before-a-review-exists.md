@@ -1,11 +1,11 @@
 # ADR-0055 · `verdict` check states before a review exists
 
-- Status: Proposed
+- Status: Superseded by ADR-0060 (2026-11-15, maintainer: withdrawn, the verdict check no longer gates merge)
 - Date: 2026-11-13
 - Deciders: maintainer
 - Alias: `D55`
-- Amends: [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (what the `verdict` check shows while no review or no owner approval exists yet)
-- Amended by: [ADR-0060](0060-release-tag-as-the-only-human-gate.md) (`verdict` is no longer a required check; its states are advisory)
+- Amends: [ADR-0053](../0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (what the `verdict` check shows while no review or no owner approval exists yet)
+- Superseded by: [ADR-0060](../0060-release-tag-as-the-only-human-gate.md)
 
 ## Context
 
