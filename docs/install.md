@@ -8,6 +8,7 @@ Check these before you start:
 
 - [ ] Write access to the target repo, to add the workflow file, the config file and the labels.
 - [ ] Admin rights on the target repo (the owner, on a personal repo), to add secrets and to set the branch protection or ruleset.
+- [ ] A ruleset on the default branch (pull request required, no force-push or deletion, conversation resolution required): the `review` job's token holds `contents: write`, and the ruleset is what keeps it from pushing to the default branch.
 - [ ] A Claude subscription, for the model token. There is no Anthropic API key.
 - [ ] GitHub Actions is enabled on the target repo.
 - [ ] Optional, for chat notifications: a Slack incoming webhook URL, or a Telegram bot token and chat ID.
