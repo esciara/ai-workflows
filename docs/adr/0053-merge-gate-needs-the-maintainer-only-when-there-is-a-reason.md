@@ -5,7 +5,7 @@
 - Deciders: maintainer
 - Alias: `D53`
 - Amends: [ADR-0051](0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (the `verdict` check, the ruleset's last-push rule, the "falls back to the maintainer" path)
-- Amended by: [ADR-0055](0055-verdict-check-states-before-a-review-exists.md) (`verdict` skipped on drafts, pending while waiting for the maintainer, comment-only reviews ignored)
+- Amended by: [ADR-0055](0055-verdict-check-states-before-a-review-exists.md) (`verdict` skipped on drafts, pending while waiting for the maintainer, comment-only reviews ignored); [ADR-0060](0060-release-tag-as-the-only-human-gate.md) (points 1 and 2: `verdict` no longer gates merge, the release tag does)
 
 ## Context
 

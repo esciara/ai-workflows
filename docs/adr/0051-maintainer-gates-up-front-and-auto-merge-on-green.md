@@ -5,7 +5,7 @@
 - Deciders: maintainer
 - Alias: `D51`
 - Amends: [ADR-0031](0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md) ("the maintainer approves and merges"; the ruleset on `main`)
-- Amended by: [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (`verdict` passes on the maintainer's approval, last-push approval off, linked-issue rule configurable)
+- Amended by: [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (`verdict` passes on the maintainer's approval, last-push approval off, linked-issue rule configurable); [ADR-0060](0060-release-tag-as-the-only-human-gate.md) (the release tag replaces the up-front gates, the CODEOWNERS exceptions and `verdict` as merge gates)
 
 ## Context
 
