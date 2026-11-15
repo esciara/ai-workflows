@@ -1,12 +1,11 @@
-"""Workflow B, B5 escalation: the loop ended without an approved fix (spec B5).
+"""Workflow B, B5 escalation: the loop ended without an approved fix (spec B5, ADR-0061).
 
-The orchestrator opens the last pushed work as a draft PR (none when nothing was pushed), posts one comment (marker
-`<!-- ai-workflows:fix -->`, updated in place) that mentions each maintainer and gives every round's findings, labels
-`fix: needs-maintainer`, assigns the maintainers the issue and the draft PR and requests their review on it. Opening
-the PR can be refused (the repo setting "Allow GitHub Actions to create and approve pull requests" off): the comment
-then says so, and the label and the issue assignment still happen. Findings are untrusted text: cleaned, and check
-output only inside a fenced block.
-"""
+The orchestrator opens no PR. It posts one comment (marker `<!-- ai-workflows:fix -->`, updated in place) that mentions
+each maintainer, gives every round's findings and, when `ai-fix/issue-<n>` exists, the compare link from the default
+branch to it; it labels `fix: needs-maintainer` and assigns the maintainers the issue. When the status guard stopped the
+loop (a later B2 superseded the analysis), it does not escalate: the same comment gets one line saying so, with the
+compare link of the kept branch to delete before the next `/fix`; no label, no assignment. Findings are untrusted text:
+cleaned, and check output only inside a fenced block."""
 
 from __future__ import annotations
 
@@ -17,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from aiwf import config, guard, publish, publish_analysis
-from aiwf.fix import branch_name, post_json
+from aiwf.fix import branch_head, branch_name
 from aiwf.ghapi import GhRunner, upsert_marker_comment
 from aiwf.mdtext import run_link
 from aiwf.publish_reproduce import fence
@@ -36,24 +35,14 @@ def records(folder: Path) -> list[dict[str, Any]]:
     return sorted(found, key=lambda r: r["round"])
 
 
-def draft_pr(gh: GhRunner, repo: str, issue: int, run_url: str) -> tuple[dict[str, Any] | None, str]:
-    """(the open draft PR from the fix branch, '') or (None, why it could not be opened). An existing one is reused."""
+def compare_link(gh: GhRunner, repo: str, issue: int) -> str:
+    """The compare link from the default branch to the fix branch, or '' when the branch does not exist."""
     branch = branch_name(issue)
-    owner = repo.split("/")[0]
-    try:
-        found = json.loads(gh(["api", f"repos/{repo}/pulls?head={owner}:{branch}&state=open&per_page=10"]) or "[]")
-        if found:
-            return found[0], ""
-        base = json.loads(gh(["api", f"repos/{repo}"]) or "{}").get("default_branch") or "main"
-        body = (f"Draft from the ai-workflows fix loop for #{issue}: no round was approved, so a maintainer takes over. "
-                f"Each round's findings are on the issue. {run_link(run_url, '')}").strip()
-        pr = post_json(gh, "POST", f"repos/{repo}/pulls", {"title": f"Draft fix for #{issue} (needs a maintainer)",
-                                                           "head": branch, "base": base, "body": body, "draft": True})
-        return pr, ""
-    except RuntimeError as exc:
-        why = (str(exc).splitlines() or ["refused"])[0][:200]
-        print(f"::error title=Draft PR not opened::{publish.clean(why, 200)}")
-        return None, why
+    if not branch_head(gh, repo, branch):
+        return ""
+    base = json.loads(gh(["api", f"repos/{repo}"]) or "{}").get("default_branch") or "main"
+    server = os.environ.get("GITHUB_SERVER_URL") or "https://github.com"
+    return f"{server}/{repo}/compare/{base}...{branch}"
 
 
 def round_lines(r: dict[str, Any]) -> list[str]:
@@ -66,15 +55,12 @@ def round_lines(r: dict[str, Any]) -> list[str]:
     return lines + [""]
 
 
-def body(logins: list[str], rounds: list[dict[str, Any]], pr: dict[str, Any] | None, why: str, pushed: bool,
-         run_url: str) -> str:
+def body(logins: list[str], rounds: list[dict[str, Any]], link: str, run_url: str) -> str:
     mention = " ".join(f"@{m}" for m in logins)
-    if pr:
-        where = f"The last round's work is in draft PR #{pr['number']} ({pr['html_url']})."
-    elif pushed:
-        where = f"The draft PR could not be opened ({publish.clean(why, 200)}); the work is on its branch."
+    if link:
+        where = f"The last pushed work is on the branch, to open a PR from (none was opened): {link}."
     else:
-        where = "Nothing was pushed, so there is no branch and no draft PR."
+        where = "Nothing was pushed, so there is no branch."
     lines = [MARKER, f"**Fix needs a maintainer.** {mention}: the fix loop ended after {len(rounds)} round(s) without an "
              f"approved fix; labelled `{NEEDS_MAINTAINER}`. {where} {run_link(run_url, '')}".rstrip(), ""]
     for r in rounds:
@@ -82,26 +68,32 @@ def body(logins: list[str], rounds: list[dict[str, Any]], pr: dict[str, Any] | N
     return "\n".join(lines)
 
 
-def escalate(gh: GhRunner, repo: str, issue: int, cfg: dict[str, Any], rounds: list[dict[str, Any]], head: str,
+def superseded(rounds: list[dict[str, Any]]) -> bool:
+    """The loop stopped because the analysis comment's status changed (a later B2): no escalation (spec B5)."""
+    return bool(rounds) and bool(rounds[-1].get("superseded"))
+
+
+def superseded_body(link: str, run_url: str) -> str:
+    where = f"branch kept: {link}; delete it before the next `/fix`" if link else "nothing was pushed"
+    return f"{MARKER}\nFix loop stopped: superseded by the newer analysis; {where}. {run_link(run_url, '')}".rstrip()
+
+
+def escalate(gh: GhRunner, repo: str, issue: int, cfg: dict[str, Any], rounds: list[dict[str, Any]],
              run_url: str) -> str:
+    link = compare_link(gh, repo, issue)
+    if superseded(rounds):
+        upsert_marker_comment(gh, repo, issue, MARKER, superseded_body(link, run_url))
+        return f"#{issue}: superseded by a newer analysis, not escalated"
     logins = maintainers(cfg)
-    pr, why = draft_pr(gh, repo, issue, run_url) if head else (None, "")
-    upsert_marker_comment(gh, repo, issue, MARKER, body(logins, rounds, pr, why, bool(head), run_url))
+    upsert_marker_comment(gh, repo, issue, MARKER, body(logins, rounds, link, run_url))
     publish.add_labels(gh, repo, issue, NEEDS_MAINTAINER)
-    people = [a for m in logins for a in ("-f", f"assignees[]={m}")]
-    reviewers = [a for m in logins for a in ("-f", f"reviewers[]={m}")]
-    calls = [("assign the issue", f"#{issue}", ["api", "-X", "POST", f"repos/{repo}/issues/{issue}/assignees", *people])]
-    if pr:
-        n = pr["number"]
-        calls.append(("assign the draft PR", f"#{n}", ["api", "-X", "POST", f"repos/{repo}/issues/{n}/assignees", *people]))
-        calls.append(("request review", f"#{n}",
-                      ["api", "-X", "POST", f"repos/{repo}/pulls/{n}/requested_reviewers", *reviewers]))
-    for what, where, call in calls if logins else []:
+    if logins:
+        people = [a for m in logins for a in ("-f", f"assignees[]={m}")]
         try:
-            gh(call)
+            gh(["api", "-X", "POST", f"repos/{repo}/issues/{issue}/assignees", *people])
         except RuntimeError as exc:  # the comment already mentions them; a failure here only shows in the log
-            print(f"::warning::could not {what} on {where}: {str(exc)[:200]}")
-    return f"escalated #{issue}: draft PR {('#' + str(pr['number'])) if pr else 'none'}"
+            print(f"::warning::could not assign the issue #{issue}: {str(exc)[:200]}")
+    return f"escalated #{issue}: compare link {link or 'none'}"
 
 
 def cmd_escalate(args: argparse.Namespace) -> int:
@@ -109,13 +101,12 @@ def cmd_escalate(args: argparse.Namespace) -> int:
         print(f"::notice title=ai: off::#{args.issue} has '{guard.OFF_LABEL}': not escalated")
         return 0
     cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
-    print(escalate(config.run_gh, args.repo, args.issue, cfg, records(Path(args.records)),
-                   os.environ.get("FIX_HEAD", ""), os.environ.get("RUN_URL", "")))
+    print(escalate(config.run_gh, args.repo, args.issue, cfg, records(Path(args.records)), os.environ.get("RUN_URL", "")))
     return 0
 
 
 def register(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("fix-escalate", help="B5: draft PR, findings comment, label and assignment after a failed loop")
+    p = sub.add_parser("fix-escalate", help="B5: findings comment, compare link, label and assignment after a failed loop")
     p.add_argument("--repo", required=True)
     p.add_argument("--issue", required=True, type=int)
     p.add_argument("--records", required=True, help="folder holding each round's round.json")
