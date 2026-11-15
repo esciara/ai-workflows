@@ -30,7 +30,7 @@ Four passes review the PR at once; only findings that survive the refute step co
 
 **Trigger.** `pull_request` opened, reopened, synchronize (new push) or ready\_for\_review; drafts are skipped. A maintainer can force a run with a `/review` comment.
 
-**Inputs.** The diff and PR description; the linked issue and its acceptance criteria; CI check results; repo review rules (`REVIEW.md`, `CODEOWNERS`, risk-path config); for PRs from Workflow B, the stored reproduction test.
+**Inputs.** The diff and PR description; the linked issue and its acceptance criteria; CI check results; repo review rules (`REVIEW.md`, `CODEOWNERS`, risk-path config); for PRs of a Workflow B branch (`ai-fix/*`), the stored reproduction test.
 
 **Steps at a glance**
 
@@ -105,7 +105,7 @@ Four passes review the PR at once; only findings that survive the refute step co
 
 ## Workflow B — Bug issue to fix PR
 
-| **TL;DR** — Only bugs go further. Each bug is reproduced (or the reporter is asked for details), its root cause is found, and nothing is coded until the maintainer replies `/fix`. The fix then gets at most 3 implement/review rounds before it becomes a PR for Workflow A. |
+| **TL;DR** — Only bugs go further. Each bug is reproduced (or the reporter is asked for details), its root cause is found, and nothing is coded until the maintainer replies `/fix`. The fix then gets at most 3 implement/review rounds before B hands the maintainer a branch and a ready PR text; the PR the maintainer opens is reviewed by Workflow A. |
 | --- |
 
 [Diagram in the online doc: Workflow B · issue to fix PR, 2 human waits, 3-round cap]
