@@ -1,6 +1,6 @@
 # ADR-0054 · Own check runs known by their workflow run, not their name
 
-- Status: Proposed
+- Status: Accepted (2026-11-15, maintainer)
 - Date: 2026-11-13
 - Deciders: maintainer
 - Alias: `D54`
