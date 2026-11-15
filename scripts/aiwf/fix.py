@@ -258,11 +258,12 @@ def run_round(gh: GhRunner, repo: str, issue: int, k: int, cap: int, meta: dict[
     if why:
         findings.append(why)
     stop = ""  # both guards are read before the push; only the head's (force: false on the ref) is atomic
-    superseded = current_status(gh, repo, issue) != meta["approval"]
-    if superseded:
-        stop = "The analysis comment's status changed (a later run); nothing was pushed."
-    elif (branch_head(gh, repo, branch_name(issue)) or "") != prev_head:
+    superseded = False  # a person's push wins: the branch is theirs and the loop escalates
+    if (branch_head(gh, repo, branch_name(issue)) or "") != prev_head:
         stop = "Someone else pushed to the branch; the loop stopped and the branch is theirs."
+    elif current_status(gh, repo, issue) != meta["approval"]:
+        superseded = True
+        stop = "The analysis comment's status changed (a later run); nothing was pushed."
     head = prev_head
     if not stop and not why:
         try:

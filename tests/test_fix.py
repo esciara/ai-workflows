@@ -302,6 +302,12 @@ def test_a_changed_status_line_stops_without_pushing(base):
     assert rec["superseded"] and "status changed" in rec["findings"][-1]
 
 
+def test_a_persons_push_wins_over_a_changed_status(base):
+    gh = Gh(comments=[comment(ANALYSIS.replace(APPROVED, pa.WAITING))], head="f" * 40)
+    rec = round_(gh, *base(FIXED), k=2, prev="e" * 40)
+    assert rec["outcome"] == "stopped" and rec["escalate"] and not rec["superseded"] and gh.posted == []
+
+
 def test_someone_elses_push_stops_the_loop(base):
     gh = Gh(comments=[comment(ANALYSIS)], head="f" * 40)
     rec = round_(gh, *base(FIXED), prev="")  # branch exists, but B pushed nothing yet
@@ -401,7 +407,8 @@ COMPARE = "https://github.com/o/r/compare/trunk...ai-fix/issue-1"
 def test_escalation_comments_with_the_compare_link_labels_and_assigns_the_issue_and_opens_no_pr(monkeypatch):
     monkeypatch.delenv("GITHUB_SERVER_URL", raising=False)
     gh = Gh(head="h" * 40)
-    assert esc.escalate(gh, REPO, 1, CFG, [rec(1), rec(2)], RUN) == f"escalated #1: compare link {COMPARE}"
+    rounds = [rec(1, pushed="p" * 40), rec(2)]
+    assert esc.escalate(gh, REPO, 1, CFG, rounds, RUN) == f"escalated #1: compare link {COMPARE}"
     [body] = gh.comment_bodies()
     assert body.startswith(esc.MARKER) and "@esciara @other:" in body and "bad login" not in body
     assert f"open a PR from (none was opened): {COMPARE}." in body
@@ -425,6 +432,25 @@ def test_the_compare_link_follows_the_server_url_and_an_assignment_failure_only_
     assert capsys.readouterr().out.count("::warning::") == 1
 
 
+@pytest.mark.parametrize("head, pushed, expected", [
+    ("h" * 40, "", f"Someone else pushed to the branch, which is theirs: {COMPARE}."),
+    (None, "p" * 40, "The branch was pushed, then deleted."),
+])
+def test_the_branch_line_says_whose_work_it_is(monkeypatch, head, pushed, expected):
+    monkeypatch.delenv("GITHUB_SERVER_URL", raising=False)
+    gh = Gh(head=head)
+    esc.escalate(gh, REPO, 1, CFG, [rec(1, pushed=pushed)], RUN)
+    assert expected in gh.comment_bodies()[0]
+
+
+def test_a_failed_branch_lookup_still_escalates_without_a_link(capsys):
+    gh = Gh(head="h" * 40)
+    gh.respond = lambda args, orig=gh.respond: (_ for _ in ()).throw(RuntimeError("gh: boom (HTTP 502)")) if (
+        "/git/matching-refs/" in gh.url(args)) else orig(args)
+    assert esc.escalate(gh, REPO, 1, CFG, [rec(1)], RUN) == "escalated #1: compare link none"
+    assert esc.NEEDS_MAINTAINER in str(gh.writes()) and "::warning::no compare link" in capsys.readouterr().out
+
+
 def test_with_no_branch_there_is_no_compare_link_and_no_maintainer_means_no_assignment():
     gh = Gh()
     assert esc.escalate(gh, REPO, 1, {"maintainers": []}, [rec(1, outcome="stopped")], RUN) == (
@@ -436,7 +462,7 @@ def test_with_no_branch_there_is_no_compare_link_and_no_maintainer_means_no_assi
 
 
 @pytest.mark.parametrize("head, expected", [("h" * 40, f"branch kept: {COMPARE}; delete it before the next `/fix`."),
-                                            (None, "nothing was pushed.")])
+                                            (None, "no branch left.")])
 def test_a_superseded_loop_says_so_in_one_line_without_label_or_assignment(monkeypatch, head, expected):
     monkeypatch.delenv("GITHUB_SERVER_URL", raising=False)
     gh = Gh(head=head)

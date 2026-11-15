@@ -4,7 +4,7 @@
 # reply while the issue has `triage: needs-info`. The reproducer runs project commands: sandboxed Bash only, env scrubbed.
 # WP8: B3 analyse after a reproducing B2 (no tools, code in its prompt), B4 analysis comment, `/fix` and `/no-fix`.
 # WP9: B5 fix loop after a recorded `/fix`: up to 3 rounds of implementer (sandboxed as B2), the orchestrator's own check,
-# adversarial reviewer, push to `ai-fix/issue-<n>` (the push job's `contents: write` only); escalation to a draft PR.
+# adversarial reviewer, push to `ai-fix/issue-<n>` (the push job's `contents: write` only); escalation without a PR (ADR-0061).
 # B1 runs two agent passes (ADR-0035): pass 1 reads the issue and returns what to search for; the orchestrator gathers
 # duplicate candidates (issue search, all issues) and possible fixes (commits and merged PRs since the reported
 # version's tag) with a read-only token; pass 2 classifies. Issue and comment text are untrusted: they reach scripts
