@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -557,6 +559,45 @@ def test_check_runs_project_commands_as_another_user_with_output_to_a_file():
     assert run.index("sudo pkill -KILL -u aiwfcheck") < run.index('tail -c 900 "$out"')  # nothing left to write later
     assert all(WF[f"round-{k}-check"]["runs-on"] == WF[f"round-{k}-implement"]["runs-on"] for k in (1, 2, 3))
     assert 'echo "ok=$ok" >> "$GITHUB_OUTPUT"' in run
+
+
+FAKE_SUDO = """#!/bin/bash
+case "$1" in useradd|chown|pkill) exit 0;; -u) shift 2; exec "$@";; *) exec "$@";; esac
+"""
+
+
+@pytest.mark.skipif(not all(shutil.which(t) for t in ("bash", "git", "jq", "tar")), reason="needs bash, git, jq, tar")
+@pytest.mark.parametrize("test_cmd, ok", [("echo 'forced failure (e2e)'; exit 3", "false"), ("true", "true")])
+def test_the_check_step_keeps_a_failing_commands_output_under_bash_e(tmp_path, test_cmd, ok):
+    """The step runs as GitHub runs it (`bash -e`): a failing command still reaches check.log and `ok` is written."""
+    run = next(s["run"] for s in WF["round-1-check"]["steps"] if s.get("id") == "check")
+    run = run.replace("home=/home/aiwfcheck", f"home={tmp_path / 'home'}")
+    (tmp_path / "home").mkdir()
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin/sudo").write_text(FAKE_SUDO)
+    (tmp_path / "bin/sudo").chmod(0o755)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.txt").write_text("a\n")
+    (tmp_path / "fix").mkdir()
+    (tmp_path / "fix/meta.json").write_text(json.dumps({"repro_command": "true"}))
+    subprocess.run(["tar", "-czf", str(tmp_path / "fix/target.tgz"), "-C", str(src), "."], check=True)
+    (tmp_path / "diff").mkdir()
+    (tmp_path / "diff/patch.diff").write_text("diff --git a/b.txt b/b.txt\nnew file mode 100644\n--- /dev/null\n"
+                                               "+++ b/b.txt\n@@ -0,0 +1 @@\n+b\n")
+    (tmp_path / "step.sh").write_text(run)
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "SETUP": "true", "TEST": test_cmd, "ROUND": "1",
+           "GITHUB_OUTPUT": str(tmp_path / "out")}
+    done = subprocess.run(["bash", "-e", str(tmp_path / "step.sh")], cwd=tmp_path, env=env, capture_output=True,
+                          text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert (tmp_path / "out").read_text() == f"ok={ok}\n"
+    log = (tmp_path / "check.log").read_text()
+    assert "### setup: passed" in log and "### reproduction test: passed" in log
+    if ok == "false":
+        assert "### test: failed (exit 3)" in log and "forced failure (e2e)" in log
+    else:
+        assert "### test: passed" in log
 
 
 def test_caller_template_grants_what_b5_needs():

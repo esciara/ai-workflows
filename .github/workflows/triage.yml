@@ -741,9 +741,9 @@ jobs:
           run_as_check() {  # name, command: as the unprivileged user
             if [ -z "$2" ]; then echo "### $1: not given" >> check.log; return; fi
             out=$(mktemp)
+            rc=0  # the step's shell runs with -e: a failing command must not end the step before its output is kept
             sudo -u aiwfcheck env -i PATH="$PATH" HOME="$home" LANG=C.UTF-8 CI=true CMD="$2" \
-              timeout 780 bash -c 'cd "$HOME/work" && eval "$CMD"' > "$out" 2>&1 < /dev/null
-            rc=$?
+              timeout 780 bash -c 'cd "$HOME/work" && eval "$CMD"' > "$out" 2>&1 < /dev/null || rc=$?
             sudo pkill -KILL -u aiwfcheck || true
             if [ "$rc" = 0 ]; then echo "### $1: passed" >> check.log
             else { echo "### $1: failed (exit $rc): $2"; tail -c 900 "$out"; echo; } >> check.log; ok=false
