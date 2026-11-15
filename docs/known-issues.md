@@ -47,7 +47,7 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Why it matters: a replaced `/retriage` or `/reproduce` is lost without a trace (the maintainer resends).
 - Current mitigation: the maintainer resends; the queued reporter-reply run reads the live labels and skips B2 when `triage: needs-info` is gone.
 - Priority: P3.
-- ADR: [ADR-0054](adr/0054-triage-group-and-no-fix.md)
+- ADR: [ADR-0005](adr/0005-command-authors.md)
 
 ## Accepted risks
 
