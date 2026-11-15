@@ -48,5 +48,30 @@
     }
   },
   "required": ["reproduced", "summary", "test", "environment", "tried", "happened", "questions", "commands", "suspicious_instructions"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "if": {"properties": {"reproduced": {"const": true}}},
+  "then": {
+    "properties": {
+      "test": {
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))(?=.*\\S)[^\\\\\\x00]+$", "description": "Relative to the repo root, no parent segments, not absolute."},
+          "code": {"type": "string", "pattern": "\\S"},
+          "command": {"type": "string", "pattern": "\\S"},
+          "output": {"type": "string", "pattern": "\\S"}
+        }
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "test": {
+        "properties": {
+          "path": {"maxLength": 0},
+          "code": {"maxLength": 0},
+          "command": {"maxLength": 0},
+          "output": {"maxLength": 0}
+        }
+      }
+    }
+  }
 }

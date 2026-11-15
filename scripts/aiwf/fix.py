@@ -66,6 +66,22 @@ def repro_command(body: str) -> tuple[str, str]:
     return (m.group(1).replace("\\|", "|"), m.group(2).replace("\\|", "|")) if m else ("", "")
 
 
+FENCE_RE = re.compile(r"^(`{3,})[^\n]*\n(.*?)\n\1[ \t]*$", re.MULTILINE | re.DOTALL)
+
+
+def repro_code(body: str) -> str:
+    """The test code of B2's reproduction comment: the fenced block right after its **Test** line ('' if none)."""
+    m = REPRO_RE.search(body)
+    f = FENCE_RE.search(body, m.end()) if m else None
+    return f.group(2) if f else ""
+
+
+def safe_test_path(path: str) -> str:
+    """`path` when it is a plain relative path inside the repo, else '' (the exit check then fails closed)."""
+    ok = path and not path.startswith("/") and "\\" not in path and "\0" not in path and ".." not in path.split("/")
+    return path if ok else ""
+
+
 def body_without_status(body: str) -> str:
     m = publish_analysis.STATUS_RE.search(body)
     return body[: m.start()] if m else body
@@ -107,8 +123,9 @@ def context(gh: GhRunner, repo: str, issue: int, comment_id: int, cfg: dict[str,
     (out / "brief.md").write_text(brief(item, comments, cfg, guidance, repro_body.removeprefix(publish_reproduce.MARKER),
                                         (analysis.get("body") or "").removeprefix(publish_analysis.MARKER), command),
                                   encoding="utf-8")
-    (out / "meta.json").write_text(json.dumps({"approval": status, "repro_command": command, "test_path": test_path}),
-                                   encoding="utf-8")
+    (out / "meta.json").write_text(
+        json.dumps({"approval": status, "repro_command": command, "test_path": safe_test_path(test_path),
+                    "test_code": repro_code(repro_body)}), encoding="utf-8")
     return True
 
 

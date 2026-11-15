@@ -140,8 +140,10 @@ def test_published_answer_clears_the_earlier_error_comment(monkeypatch, extra):
 
 
 def test_reproduced_without_a_test_fails_the_job(monkeypatch):
-    with pytest.raises(RuntimeError):
-        publish_answer(FakeGh(author="rep"), monkeypatch, reproduced=True)
+    gh = FakeGh(author="rep")
+    assert not publish.publish("reproducer", json.dumps(answer(reproduced=True)), REPO, 1, "https://run/9", gh)  # schema
+    with pytest.raises(RuntimeError):  # defence in depth: the publisher itself refuses an empty test
+        pr.publish_result(answer(reproduced=True), REPO, 1, "https://run/9", gh)
 
 
 SANDBOX_DOWN = ("apply-seccomp: write /proc/self/setgroups (nested userns is capability-restricted; caller must "
@@ -213,3 +215,31 @@ def test_invalid_answer_gives_ai_error(monkeypatch):
     gh = FakeGh(author="rep")
     assert not publish.publish("reproducer", json.dumps({"reproduced": True}), REPO, 1, "", gh)
     assert gh.added_labels() == ["ai: error"]
+
+
+# --- the schema: a reproduced answer must carry its test (CP5, aiwf-bs4) -----------------------------------------------
+
+def schema_errors(**extra):
+    from jsonschema import Draft202012Validator
+    schema = json.loads((Path(__file__).resolve().parents[1] / "schema/reproducer.json").read_text())
+    return list(Draft202012Validator(schema).iter_errors(answer(**extra)))
+
+
+def test_schema_accepts_reproduced_with_a_full_test_and_unreproduced_with_none():
+    assert not schema_errors(reproduced=True, test=REPRO)
+    assert not schema_errors()
+
+
+@pytest.mark.parametrize("field", ["path", "code", "command", "output"])
+@pytest.mark.parametrize("value", ["", "  \n"])
+def test_schema_rejects_reproduced_with_an_empty_test_field(field, value):
+    assert schema_errors(reproduced=True, test={**REPRO, field: value})
+
+
+@pytest.mark.parametrize("path", ["/etc/x.py", "../x.py", "a/../../x.py", "a/..", "a\\b.py"])
+def test_schema_rejects_unsafe_test_paths(path):
+    assert schema_errors(reproduced=True, test={**REPRO, "path": path})
+
+
+def test_schema_rejects_a_test_on_a_not_reproduced_answer():
+    assert schema_errors(reproduced=False, test=REPRO)
