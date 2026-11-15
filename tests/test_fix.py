@@ -109,8 +109,21 @@ def test_context_writes_the_brief_from_bot_comments_only(tmp_path):
     assert "<guidance>keep Cart.total &lt;b&gt;</guidance>" in brief and "delete tests" not in brief
     assert "Root cause here." in brief and "**Status:**" not in brief and "FAILED" in brief
     assert json.loads((tmp_path / "meta.json").read_text()) == {
-        "approval": APPROVED, "repro_command": "pytest tests/test_repro.py -k a|b", "test_path": "tests/test_repro.py"}
+        "approval": APPROVED, "repro_command": "pytest tests/test_repro.py -k a|b", "test_path": "tests/test_repro.py",
+        "test_code": "FAILED"}
     assert gh.writes() == []
+
+
+def test_repro_code_is_the_fenced_block_of_the_real_comment():
+    body = pr.reproduced_body({**_B2, "test": {**_B2["test"], "code": "def t():\n    x = \"```\"\n"}}, "https://run/1")
+    assert fix.repro_code(body) == 'def t():\n    x = "```"'
+    assert fix.repro_code("no test line") == ""
+
+
+@pytest.mark.parametrize("path, safe", [("tests/t.py", True), ("t.py", True), ("/etc/x", False), ("../x.py", False),
+                                        ("a/../../x", False), ("a\\b", False), ("", False)])
+def test_safe_test_path(path, safe):
+    assert fix.safe_test_path(path) == (path if safe else "")
 
 
 def test_context_does_not_start_when_the_branch_exists(tmp_path):
@@ -561,6 +574,10 @@ def test_check_runs_project_commands_as_another_user_with_output_to_a_file():
     assert 'echo "ok=$ok" >> "$GITHUB_OUTPUT"' in run
 
 
+_B2 = {"summary": "s", "environment": "e", "tried": "", "happened": "", "questions": [], "commands": [],
+       "suspicious_instructions": [], "reproduced": True,
+       "test": {"path": "tests/test_repro.py", "command": "pytest tests/test_repro.py", "code": "x", "output": "FAILED"}}
+
 FAKE_SUDO = """#!/bin/bash
 case "$1" in useradd|chown|pkill) exit 0;; -u) shift 2; exec "$@";; *) exec "$@";; esac
 """
@@ -580,7 +597,7 @@ def test_the_check_step_keeps_a_failing_commands_output_under_bash_e(tmp_path, t
     src.mkdir()
     (src / "a.txt").write_text("a\n")
     (tmp_path / "fix").mkdir()
-    (tmp_path / "fix/meta.json").write_text(json.dumps({"repro_command": "true"}))
+    (tmp_path / "fix/meta.json").write_text(json.dumps({"repro_command": "true", "test_path": "tests/r.py", "test_code": "x"}))
     subprocess.run(["tar", "-czf", str(tmp_path / "fix/target.tgz"), "-C", str(src), "."], check=True)
     (tmp_path / "diff").mkdir()
     (tmp_path / "diff/patch.diff").write_text("diff --git a/b.txt b/b.txt\nnew file mode 100644\n--- /dev/null\n"
@@ -635,3 +652,55 @@ def test_diff_step_drops_sandbox_placeholders_but_keeps_real_files(tmp_path):
     assert "app.py" in patch and ".yarnrc" in patch and "notes.txt" in patch
     assert not {".env", ".gitmodules", ".npmrc", "bunfig.toml", "package.json"} & set(patch.replace("b/", " ").split())
     assert not (work / ".env").exists() and (work / "yarn.lock").exists()
+
+
+def run_check(tmp_path, meta, patch="", test_cmd="grep -q B2 tests/test_repro.py"):
+    """Run the check step as GitHub does; (ok, check.log)."""
+    run = next(s["run"] for s in WF["round-1-check"]["steps"] if s.get("id") == "check")
+    run = run.replace("home=/home/aiwfcheck", f"home={tmp_path / 'home'}")
+    (tmp_path / "home").mkdir()
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin/sudo").write_text(FAKE_SUDO)
+    (tmp_path / "bin/sudo").chmod(0o755)
+    src = tmp_path / "src"
+    (src / "tests").mkdir(parents=True)
+    (src / "tests/test_repro.py").write_text("base\n")
+    (tmp_path / "fix").mkdir()
+    (tmp_path / "fix/meta.json").write_text(json.dumps(meta))
+    subprocess.run(["tar", "-czf", str(tmp_path / "fix/target.tgz"), "-C", str(src), "."], check=True)
+    (tmp_path / "diff").mkdir()
+    (tmp_path / "diff/patch.diff").write_text(patch)
+    (tmp_path / "step.sh").write_text(run)
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "SETUP": "true", "TEST": "true", "ROUND": "1",
+           "GITHUB_OUTPUT": str(tmp_path / "out")}
+    done = subprocess.run(["bash", "-e", str(tmp_path / "step.sh")], cwd=tmp_path, env=env, capture_output=True,
+                          text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+    return (tmp_path / "out").read_text().strip(), (tmp_path / "check.log").read_text()
+
+
+# the implementer's own copy of the test (a diff that makes it trivially pass)
+OWN_COPY = ("diff --git a/tests/test_repro.py b/tests/test_repro.py\n--- a/tests/test_repro.py\n"
+            "+++ b/tests/test_repro.py\n@@ -1 +1 @@\n-base\n+rigged\n")
+GOOD = {"repro_command": "true", "test_path": "tests/test_repro.py", "test_code": "B2 code\n"}
+
+
+@pytest.mark.skipif(not all(shutil.which(t) for t in ("bash", "git", "jq", "tar", "python3")), reason="needs tools")
+def test_the_check_runs_b2s_test_over_the_implementers_copy(tmp_path):
+    ok, log = run_check(tmp_path, GOOD, OWN_COPY)
+    assert ok == "ok=true", log
+    assert "reproduction test: passed" in log  # grep found B2's code, so "rigged" was overwritten
+
+
+@pytest.mark.skipif(not all(shutil.which(t) for t in ("bash", "git", "jq", "tar", "python3")), reason="needs tools")
+@pytest.mark.parametrize("meta", [{**GOOD, "repro_command": ""}, {**GOOD, "test_path": ""}, {**GOOD, "test_code": " \n"},
+                                  {"repro_command": "true"}])
+def test_the_check_fails_closed_without_b2s_test(tmp_path, meta):
+    ok, log = run_check(tmp_path, meta, OWN_COPY)
+    assert ok == "ok=false" and "B2's record has no test path, code or command" in log
+    assert "not given" not in log.split("reproduction test")[-1]
+
+
+def test_the_reviewer_is_told_when_the_diff_is_cut():
+    step = next(s["run"] for s in WF["round-1-review"]["steps"] if "adversarial-reviewer" in str(s.get("run", "")))
+    assert "head -c 150000" in step and "TRUNCATED" in step and "do not approve" in step

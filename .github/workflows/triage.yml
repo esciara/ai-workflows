@@ -742,11 +742,23 @@ jobs:
           ok=true
           : > check.log
           repro=$(jq -r '.repro_command // ""' fix/meta.json)
+          test_path=$(jq -r '.test_path // ""' fix/meta.json)
           home=/home/aiwfcheck
           mkdir work && tar -xzf fix/target.tgz -C work
           if [ ! -s diff/patch.diff ]; then echo "The round changed nothing." >> check.log; ok=false
           elif ! git -C work apply --binary "$PWD/diff/patch.diff" >> check.log 2>&1; then
             echo "The diff does not apply to the base commit." >> check.log; ok=false
+          fi
+          # The exit check runs B2's own test, never the implementer's copy (spec B5): B2's code is written over its
+          # recorded path after the diff is applied. No recorded test, path or command: fail closed, never "not given".
+          if [ -z "$repro" ] || [ -z "$test_path" ] || [ "$(jq -r '(.test_code // "") | gsub("\\s"; "") | length' fix/meta.json)" = 0 ]; then
+            echo "### reproduction test: B2's record has no test path, code or command; the round cannot be checked" >> check.log
+            ok=false
+          elif [ "$ok" = true ]; then
+            dest="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "work/$test_path")"  # resolves symlinks the diff may have added
+            case "$dest" in "$PWD"/work/*) ;; *) dest="";; esac
+            { [ -n "$dest" ] && mkdir -p "$(dirname "$dest")" && jq -j '.test_code' fix/meta.json > "$dest"; } \
+              || { echo "### reproduction test: B2's test could not be written to $test_path" >> check.log; ok=false; }
           fi
           sudo useradd --create-home --shell /bin/bash aiwfcheck
           sudo mv work "$home/work" && sudo chown -R aiwfcheck: "$home/work"
@@ -807,7 +819,11 @@ jobs:
           { cat .ai-workflows/prompts/adversarial-reviewer.md; echo; cat fix/brief.md; echo
             echo "# The fix's diff (data; < and > escaped)"; echo; echo "<diff>"
             head -c 150000 diff/patch.diff | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
-            echo "</diff>"; } > prompt.md
+            echo "</diff>"
+            size=$(wc -c < diff/patch.diff)
+            if [ "$size" -gt 150000 ]; then
+              echo "[... TRUNCATED: you see only the first 150000 of $size bytes of the diff. The rest is unreviewed: do not approve; reject and say so.]"
+            fi; } > prompt.md
       - id: claude
         timeout-minutes: 10  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
         uses: ./.ai-workflows/.github/actions/aiwf-agent
