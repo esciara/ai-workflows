@@ -1,12 +1,9 @@
-# ADR-0051: PRs touching these paths need the maintainer's review (ruleset: "Require review from Code Owners").
-# Everything else auto-merges when the required checks are green. Keep tests/test_codeowners.py in sync.
+# ADR-0060: the release tag is the only human gate; PRs auto-merge on green (ADR-0051 per-PR approval of spec, e2e tests and workflows is gone).
+# Owned paths below are the guard, policy and trust-boundary files: PRs touching them wait for the maintainer (ruleset: "Require review from Code Owners").
+# Keep tests/test_codeowners.py in sync.
 
-# Workflows, composite actions, Dependabot, this file
-/.github/                           @esciara
-
-# Spec and acceptance tests (gates 1 and 2; every later edit, even waits or fixture data)
-/docs/spec.md                       @esciara
-/tests/e2e/test_wp*.py              @esciara
+# This file
+/.github/CODEOWNERS                 @esciara
 
 # Dev-agent guard hook and identity scripts (ADR-0031)
 /scripts/dev/guard-bash             @esciara

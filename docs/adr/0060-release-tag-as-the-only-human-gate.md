@@ -41,7 +41,7 @@ Why: the maintainer reviews once, on what ships, with the evidence for that exac
 
 1. Tag ruleset on `refs/tags/v*` (maintainer, now; tightening only): restrict creation, update and deletion; bypass list the maintainer only (not the App, not GitHub Actions).
 2. This ADR and the matching CLAUDE.md update (this PR).
-3. CODEOWNERS PR (separate, later): removes the maintainer-review requirement for the ADR-0051 exception paths (with `tests/test_codeowners.py`). It touches `.github/CODEOWNERS`, so it is the last PR that waits for the maintainer under the old rule.
+3. CODEOWNERS PR (separate, later): removes the maintainer-review requirement for the ADR-0051 exception paths (with `tests/test_codeowners.py`). It touches `.github/CODEOWNERS`, so it is the last PR that waits for the maintainer under the old rule. Decided 2026-11-15: it drops `/.github/` (except `/.github/CODEOWNERS`), `/docs/spec.md` and `/tests/e2e/test_wp*.py`, and keeps the guard, policy and trust-boundary files owned (`scripts/dev/` guards, `scripts/aiwf/devguard.py`, `.claude/settings.json`, `scripts/aiwf/policy.py`, `tests/test_workflow_policy.py`, `tests/test_codeowners.py`, `tests/test_devguard.py`, `tests/test_as_agent.py`, `scripts/aiwf/commands.py`, `scripts/aiwf/review_gate.py`, `.github/CODEOWNERS`); those stay in the release-review diff too.
 4. Ruleset `main` (maintainer): drop `verdict` from the required checks and untick "Require conversation resolution before merging"; keep the rest as in point 4.
 5. Peer sessions (`aiwf-review`, `aiwf-issues`, `aiwf-checkpoint`) reload CLAUDE.md.
 
