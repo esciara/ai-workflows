@@ -73,7 +73,7 @@ def test_pushes_share_the_item_group():
 
 @pytest.mark.parametrize("on_pr", [True, False])
 @pytest.mark.parametrize("body", [
-    "/review", "/fix", "  /retriage", "   /no-fix reason", "\n\n/fix", "\r\n  \r\n/fix please", " \t\n /review",
+    "/review", "/reproduce", "  /retriage", "   /no-fix reason", "\n\n/fix", "\r\n  \r\n/fix please", " \t\n /review",
     "see a /path",  # not a command, but kept with the item: a false positive only waits
     "/unknown",
 ])
@@ -89,8 +89,20 @@ def test_plain_comments_get_their_own_group(body, on_pr):
 
 @pytest.mark.parametrize("body", [
     "/review", "  /fix", "   /no-fix why", "\n/retriage", "\r\n/fix", " \n   /review", "\t\n/fix", "text\n\n/fix",
+    "/reproduce",
 ])
 def test_every_parsed_command_stays_in_the_item_group(body):
     """Never a false negative: what commands.parse accepts is never put in a unique group."""
     if commands.parse(body) is not None:
         assert group("issue_comment", comment(body)) == "ai-workflows-7"
+
+
+@pytest.mark.parametrize("body", ["/fix", "/fix keep the API", "/no-fix not now", "/FIX"])
+def test_fix_and_no_fix_get_their_own_group_so_no_fix_can_stop_a_running_loop(body):
+    """aiwf-1q2: a /fix run holds B5 for hours; /no-fix and a second /fix must not queue behind it or replace each other."""
+    assert group("issue_comment", comment(body, on_pr=False)) == f"ai-workflows-comment-{RUN_ID}-7"
+
+
+def test_other_commands_still_share_the_item_group():
+    for body in ("/reproduce", "/retriage", "/review", "  /fix", "\n/no-fix x"):  # leading blanks: queue (documented)
+        assert group("issue_comment", comment(body, on_pr=False)) == "ai-workflows-7"

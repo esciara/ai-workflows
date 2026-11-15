@@ -46,3 +46,17 @@ def test_every_b1_and_b2_command_and_new_issues_are_in_the_issue_group():
     assert commands == {"retriage", "reproduce"}
     assert f"""contains(fromJSON('{json.dumps(sorted(commands, reverse=True))}'), fromJSON(inputs.config).command)""" in GROUP
     assert "github.event_name == 'issues'" in GROUP
+
+
+def test_fix_and_no_fix_stay_out_of_the_issue_group_and_b5_stays_single():
+    """aiwf-1q2: /no-fix must reach the running loop; one B5 per issue is held by `decide`'s group, not this one."""
+    assert "'fix'" not in GROUP and "no-fix" not in GROUP
+    assert WF["jobs"]["decide"]["concurrency"]["group"] == "aiwf-decide-${{ github.repository }}-${{ github.event.issue.number }}"
+    assert WF["jobs"]["decide"]["concurrency"]["cancel-in-progress"] is False
+
+
+def test_repro_context_skip_flows_to_b2_jobs():
+    jobs = WF["jobs"]
+    assert "proceed" in jobs["repro-context"]["outputs"]
+    for name in ("reproduce", "repro-publish"):
+        assert "needs.repro-context.outputs.proceed != 'false'" in jobs[name]["if"]

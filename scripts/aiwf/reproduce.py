@@ -14,12 +14,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aiwf import config, triage
+from aiwf import cli, config, triage
 from aiwf.ghapi import BOT, GhRunner
 
 MAX_ISSUE_BODY = 8_000
 MAX_COMMENT = 4_000
 MAX_COMMENTS = 20  # the newest ones
+NEEDS_INFO = "triage: needs-info"
 NEEDS_INFO_MARKER = "<!-- ai-workflows:needs-info -->"
 # B2's own questions are kept (ADR-0021: only its marker comments are ours)
 
@@ -51,9 +52,22 @@ def comments(gh: GhRunner, repo: str, number: int) -> list[dict[str, Any]]:
     return [json.loads(line) for line in out.splitlines() if line.strip()]
 
 
+def needs_info_gone(cfg: dict[str, Any], event_name: str, issue: dict[str, Any]) -> bool:
+    """A reporter's reply run (a comment, no command) whose issue no longer has `triage: needs-info`, read live: the run
+    ahead in the queue answered it (aiwf-1q2), so this one must not start another B2."""
+    if event_name != "issue_comment" or cfg.get("command"):
+        return False
+    return NEEDS_INFO not in [(lb or {}).get("name") for lb in issue.get("labels") or []]
+
+
 def cmd_context(args: argparse.Namespace) -> int:
     cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
     issue = triage.get_json(config.run_gh, f"repos/{args.repo}/issues/{args.issue}")
+    if needs_info_gone(cfg, os.environ.get("GITHUB_EVENT_NAME", ""), issue):
+        print(f"::notice title=B2 skipped::#{args.issue} no longer has '{NEEDS_INFO}': an earlier run handled the reply")
+        if out := os.environ.get("GITHUB_OUTPUT"):
+            cli.write_outputs(out, {"proceed": "false"})
+        return 0
     Path(args.out).write_text(build(issue, comments(config.run_gh, args.repo, args.issue), cfg), encoding="utf-8")
     print(f"wrote {args.out}")
     return 0

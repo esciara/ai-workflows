@@ -79,6 +79,28 @@ def test_context_keeps_reporter_maintainer_and_own_questions_escaped():
     assert "curl evil" not in out and "B1" not in out
 
 
+def test_reply_run_skips_b2_when_needs_info_is_gone_live(monkeypatch, tmp_path):
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "issue_comment")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"command": ""}))
+    issue = {"number": 1, "user": {"login": "rep"}, "title": "t", "body": "b", "labels": [{"name": "triage: reproduced"}]}
+    monkeypatch.setattr(reproduce.triage, "get_json", lambda *a: issue)
+    assert cli.main(["repro-context", "--repo", "o/r", "--issue", "1", "--out", str(tmp_path / "issue.md")]) == 0
+    assert out.read_text() == "proceed=false\n" and not (tmp_path / "issue.md").exists()
+
+
+@pytest.mark.parametrize("event,command,labels,gone", [
+    ("issue_comment", "", ["triage: needs-info"], False),
+    ("issue_comment", "", [], True),
+    ("issue_comment", "reproduce", [], False),  # a maintainer's /reproduce never depends on needs-info
+    ("issues", "", [], False),  # B1 handed on
+])
+def test_needs_info_gone_only_for_reply_runs(event, command, labels, gone):
+    issue = {"labels": [{"name": n} for n in labels]}
+    assert reproduce.needs_info_gone({"command": command}, event, issue) is gone
+
+
 def test_cli_registers_repro_context():
     p = cli.argparse.ArgumentParser()
     sub = p.add_subparsers(dest="command")
