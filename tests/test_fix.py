@@ -603,3 +603,35 @@ def test_the_check_step_keeps_a_failing_commands_output_under_bash_e(tmp_path, t
 def test_caller_template_grants_what_b5_needs():
     caller = yaml.safe_load((ROOT / "templates/caller.yml").read_text())
     assert caller["jobs"]["triage"]["permissions"] == {"contents": "write", "issues": "write", "pull-requests": "read"}
+
+
+def test_diff_step_drops_sandbox_placeholders_but_keeps_real_files(tmp_path):
+    """Run 43723093357: the sandbox left ~18 empty protected-path files in work/; they must not reach the diff."""
+    step = next(s for s in WF["round-1-implement"]["steps"] if s.get("name") == "Diff")
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def sh(*a, cwd):
+        subprocess.run(a, cwd=cwd, check=True, capture_output=True, env=env)
+
+    base = tmp_path / "base"
+    base.mkdir()
+    sh("git", "init", "-q", cwd=base)
+    (base / "app.py").write_text("x = 1\n")
+    (base / "yarn.lock").write_text("")  # empty but tracked: part of the base, so kept as is
+    sh("git", "add", "-A", cwd=base)
+    sh("git", "commit", "-qm", "base", cwd=base)
+    (tmp_path / "fix").mkdir()
+    sh("tar", "-czf", str(tmp_path / "fix/target.tgz"), "-C", str(base), ".", cwd=tmp_path)
+    work = tmp_path / "work"
+    shutil.copytree(base, work)
+    (work / "app.py").write_text("x = 2\n")
+    for name in (".env", ".gitmodules", ".npmrc", "bunfig.toml", "package.json"):
+        (work / name).write_text("")
+    (work / ".yarnrc").write_text("registry x\n")  # non-empty: a real change, kept
+    (work / "notes.txt").write_text("")  # empty but not a protected name: kept
+    subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, check=True, capture_output=True, env=env)
+    patch = (tmp_path / "patch.diff").read_text()
+    assert "app.py" in patch and ".yarnrc" in patch and "notes.txt" in patch
+    assert not {".env", ".gitmodules", ".npmrc", "bunfig.toml", "package.json"} & set(patch.replace("b/", " ").split())
+    assert not (work / ".env").exists() and (work / "yarn.lock").exists()
