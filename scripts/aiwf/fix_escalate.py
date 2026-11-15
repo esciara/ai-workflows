@@ -3,9 +3,9 @@
 The orchestrator opens no PR. It posts one comment (marker `<!-- ai-workflows:fix -->`, updated in place) that mentions
 each maintainer, gives every round's findings and, when `ai-fix/issue-<n>` exists, the compare link from the default
 branch to it; it labels `fix: needs-maintainer` and assigns the maintainers the issue. When the status guard stopped the
-loop (a later B2 superseded the analysis), it does not escalate: the same comment gets one line saying so, with the
-compare link of the kept branch to delete before the next `/fix`; no label, no assignment. Findings are untrusted text:
-cleaned, and check output only inside a fenced block."""
+loop (a later B2, `/no-fix` or another `/fix` changed the analysis status), it does not escalate: the same comment gets
+one line saying so, with the compare link of the kept branch to delete before the next `/fix`; no label, no assignment.
+Findings are untrusted text: cleaned, and check output only inside a fenced block."""
 
 from __future__ import annotations
 
@@ -78,13 +78,14 @@ def body(logins: list[str], rounds: list[dict[str, Any]], link: str, run_url: st
 
 
 def superseded(rounds: list[dict[str, Any]]) -> bool:
-    """The loop stopped because the analysis comment's status changed (a later B2): no escalation (spec B5)."""
+    """The loop stopped because the analysis comment's status changed while it ran: no escalation (spec B5)."""
     return bool(rounds) and bool(rounds[-1].get("superseded"))
 
 
 def superseded_body(link: str, run_url: str) -> str:
     where = f"branch kept: {link}; delete it before the next `/fix`" if link else "no branch left"
-    return f"{MARKER}\nFix loop stopped: superseded by the newer analysis; {where}. {run_link(run_url, '')}".rstrip()
+    why = "the analysis status changed while this ran (newer analysis, `/no-fix` or another `/fix`)"
+    return f"{MARKER}\nFix loop stopped: {why}; {where}. {run_link(run_url, '')}".rstrip()
 
 
 def escalate(gh: GhRunner, repo: str, issue: int, cfg: dict[str, Any], rounds: list[dict[str, Any]],
@@ -92,7 +93,7 @@ def escalate(gh: GhRunner, repo: str, issue: int, cfg: dict[str, Any], rounds: l
     link = compare_link(gh, repo, issue)
     if superseded(rounds):
         upsert_marker_comment(gh, repo, issue, MARKER, superseded_body(link, run_url))
-        return f"#{issue}: superseded by a newer analysis, not escalated"
+        return f"#{issue}: analysis status changed, not escalated"
     logins = maintainers(cfg)
     upsert_marker_comment(gh, repo, issue, MARKER, body(logins, rounds, link, run_url))
     publish.add_labels(gh, repo, issue, NEEDS_MAINTAINER)

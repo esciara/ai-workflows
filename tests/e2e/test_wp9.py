@@ -1,5 +1,5 @@
-"""WP9 acceptance test. Done when: a seeded bug is fixed in at most 3 rounds; a forced failure gives a draft PR,
-`fix: needs-maintainer`, assignment and review request (spec: B4 `/fix`, B5).
+"""WP9 acceptance test. Done when: a seeded bug is fixed in at most 3 rounds; a forced failure gives the branch's
+compare link, `fix: needs-maintainer` and assignment, and no PR is opened (spec: B4 `/fix`, B5, ADR-0061).
 
 Runs against the playground (AIWF_E2E=1) with an e2e slot (AIWF_E2E_SLOT=1|2|3|any, ADR-0056), as WP8: issues carry
 the held slot's `e2e-target-<n>`, are opened by the tester App (an outside reporter), get the maintainer's `/reproduce`
@@ -12,9 +12,7 @@ The build adds, in a maintainer-merged playground PR:
   check fails every round, deterministically, whatever the implementer does;
 - to the three slot callers, `config_path` set to that file when the issue carries `e2e-fix-fail` (like WP12a's
   `e2e-crash`, the product has no test hook, ADR-0050). The label is added after B4, so B2 and B3 ran on the normal
-  e2e config;
-- the repo setting that lets the workflow's `GITHUB_TOKEN` open pull requests, as the open decision on
-  `docs/known-issues.md` ("Workflow B cannot open PRs ...") settles it.
+  e2e config. The repo setting that lets the workflow's `GITHUB_TOKEN` open pull requests stays off (ADR-0061).
 
 1. `/fix <guidance>` to an approved fix: the coupon bug from WP8 (this scenario replaces WP8's first one, whose
    assertions it keeps). The `/fix <guidance>` run succeeds: `triage: awaiting-maintainer` gone, `triage: reproduced`
@@ -25,8 +23,8 @@ The build adds, in a maintainer-merged playground PR:
 2. Forced failure to the maintainer: the tax-rate bug from WP8, labelled `e2e-fix-fail` before plain `/fix`. The run
    succeeds (escalation is an exit, not `ai: error`) after exactly `fix_rounds` (1) rounds: `fix: needs-maintainer`,
    one escalation comment (hidden marker) that mentions each of `maintainers`, has each round's findings (the failing
-   check's output) and links the draft PR; that PR is a draft from `ai-fix/issue-<n>`, and each maintainer is assigned
-   to the issue and to the PR and requested as a reviewer on it.
+   check's output) and gives the compare link of `ai-fix/issue-<n>`, which is ahead of the default branch; each
+   maintainer is assigned to the issue, and no PR is open for the branch.
 
 Left to unit tests: the guidance reaching the implementer's brief (as data), the reviewer's fresh context, a reviewer
 `reject` leading to the next round, a branch that already exists (B5 does not start), a person's push to the branch
@@ -156,7 +154,7 @@ def test_fix_with_guidance_runs_the_fix_loop_to_an_approved_branch(e2e_target, t
     assert not [f for f in files if f.startswith(".github/")], f"the fix touches .github/: {files}"
 
 
-def test_a_forced_failure_escalates_to_a_draft_pr_and_the_maintainer(e2e_target, tag, opened):
+def test_a_forced_failure_escalates_to_a_compare_link_and_the_maintainer_with_no_pr(e2e_target, tag, opened):
     cap = fail_config()["limits"]["fix_rounds"]
     issue = open_as_reporter("fix-fail", TAX_BUG, tag, opened)
     reproduce_and_analyse(issue, TAX_FILES)
