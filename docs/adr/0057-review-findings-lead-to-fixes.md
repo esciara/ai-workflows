@@ -1,6 +1,6 @@
 # ADR-0057 · Review findings lead to fixes
 
-- Status: Proposed
+- Status: Accepted (2026-11-15, maintainer)
 - Date: 2026-11-13
 - Deciders: maintainer
 - Alias: `D57`

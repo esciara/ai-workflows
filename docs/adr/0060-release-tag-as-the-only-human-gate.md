@@ -4,7 +4,8 @@
 - Date: 2026-11-15
 - Deciders: maintainer
 - Alias: `D60`
-- Amends: [ADR-0051](0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (gates up front, CODEOWNERS exceptions, `verdict` as a required check), [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (points 1 and 2: `verdict` and the ruleset as the merge gate), [ADR-0055](0055-verdict-check-states-before-a-review-exists.md) (`verdict` states no longer gate)
+- Amends: [ADR-0051](0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (gates up front, CODEOWNERS exceptions, `verdict` as a required check), [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (points 1 and 2: `verdict` and the ruleset as the merge gate)
+- Supersedes: [ADR-0055](archive/0055-verdict-check-states-before-a-review-exists.md) (`verdict` states no longer gate; withdrawn by the maintainer 2026-11-15)
 
 ## Context
 
@@ -62,4 +63,4 @@ Until step 4 is done, GitHub still enforces the old gates (code-owner review, `v
 - Risk: the `review` job on this repo holds `contents: write` (resolving threads, ADR-0057), so its token can push to any unprotected branch, including open PR branches. It runs no agent and no PR code, and `main` stays protected by "pull request required". A push made with `GITHUB_TOKEN` starts no workflow, so `test` and `gitleaks` would not run on the new head and the PR would not auto-merge. Tags are covered by the tag ruleset (step 1), which the token cannot bypass.
 - Verdict semantics change on this repo: `ai-review: merge`, `changes-requested` and `human-review` become advisory. A PR can merge before Workflow A finishes or with a red `verdict` (ADR-0055's explained red now reads "waiting for maintainer approval" on PRs that merge anyway) until the `verdict` follow-up. Findings that arrive after merge are fixed forward and appear in the findings list. In target repos nothing changes: the verdict and the human Merge stay as specified.
 - ADR-0053 points 3 to 6 (configurable linked issue, 400-line split, e2e run-ID rule, devguard wording) stay; the e2e run-ID rule now only shapes an advisory verdict.
-- Once all transition steps are done, a consolidated ADR may supersede ADR-0051, ADR-0053 and ADR-0055; they stay live until then because the old gates are still enforced.
+- Once all transition steps are done, a consolidated ADR may supersede ADR-0051 and ADR-0053; they stay live until then because the old gates are still enforced.
