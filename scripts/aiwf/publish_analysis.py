@@ -3,7 +3,8 @@
 - B3 publish (kind `analyst`): one comment found by its marker, updated in place; the risk tier comes from the files to
   change with A's path rules, and file links are built here, at the analysed commit, only for a path in the list of
   tree files that passed the path check (`analyse.safe_file`) and a whole-number line. Label `triage: awaiting-maintainer`.
-- B4 (`aiwf decide`): only while the issue has `triage: awaiting-maintainer`, read live; removes it first, then sets the
+- B4 (`aiwf decide`): only while the issue has `triage: awaiting-maintainer`, read live (`/no-fix` also while the status is a
+  `/fix` approval: it stops a running B5); removes it first, then sets the
   comment's status line to who decided, a link to their comment and the command's text (cleaned, one line, capped).
   `/no-fix` also labels `fix: declined`. A recorded `/fix` starts B5 (job output `fix=true`), which reads the guidance
   only from this status line.
@@ -149,9 +150,16 @@ def decision_status(name: str, login: str, comment_url: str, text: str) -> str:
     return f"fix {verb} by @{login} ([comment]({comment_url}))" + (f"; {what}: {said}" if said else ".")
 
 
+def fix_approved(gh: GhRunner, repo: str, issue: int) -> bool:
+    """The analysis comment's current status is a `/fix` approval: B5 may be running, and `/no-fix` stops it (spec B4)."""
+    found = find_marker_comment(gh, repo, issue, MARKER)
+    return bool(found) and status_lines(found.get("body") or "")[0].startswith("fix approved by ")
+
+
 def decide(gh: GhRunner, repo: str, issue: int, name: str, text: str, event: dict[str, Any]) -> str:
     """Apply an accepted `/fix` or `/no-fix` (config.yml already checked the author, ADR-0005); returns what it did."""
-    if AWAITING not in guard.item_labels(gh, repo, issue):
+    awaiting = AWAITING in guard.item_labels(gh, repo, issue)
+    if not awaiting and not (name == "no-fix" and fix_approved(gh, repo, issue)):
         return f"no '{AWAITING}' on #{issue}: /{name} changes nothing"
     c = event.get("comment") or {}
     login, cid = (c.get("user") or {}).get("login", ""), c.get("id")
@@ -164,7 +172,7 @@ def decide(gh: GhRunner, repo: str, issue: int, name: str, text: str, event: dic
             publish.add_labels(gh, repo, issue, DECLINED)
         recorded = set_status(gh, repo, issue, decision_status(name, login, url, text))
     except Exception:
-        undo = [lambda: publish.add_labels(gh, repo, issue, AWAITING)]  # not recorded: the maintainer can resend
+        undo = [lambda: publish.add_labels(gh, repo, issue, AWAITING)] if awaiting else []  # not recorded: resend
         if name == "no-fix":
             undo.append(lambda: remove_label(gh, repo, issue, DECLINED))
         for step in undo:  # each on its own, so one failing call does not skip the other

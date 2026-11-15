@@ -40,6 +40,15 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Priority: P2, at the next release.
 - ADR: [ADR-0040](adr/0040-code-ref-and-pinning-consolidated.md)
 
+### Command groups: callers must copy the new concurrency group, and some queued commands can be replaced
+
+- Date: 2026-11-15
+- What: since aiwf-1q2, templates/caller.yml gives a comment that starts with `/fix` or `/no-fix` its own concurrency group, so `/no-fix` stops a running B5 loop (the status-line guard) instead of queueing behind it for hours. Callers keep their old group until they copy the new one when bumping the pin (the playground's callers too; its e2e compares them with the template). Residuals, accepted: a `/fix` or `/no-fix` written with leading spaces or newlines stays in the item's group and queues behind a running loop; a needs-info reply can replace a pending `/retriage`, and any pending B1/B2 command can be replaced silently by a newer starter of another kind, or by a later comment that merely has ` /` in it (a run cancelled while pending cannot post a notice); a second `/fix` while B5 runs finds no `triage: awaiting-maintainer` and changes nothing, but one sent after a re-analysis and before round 1 pushes starts a second loop whose approval supersedes the first (the first stops at its next status-line check, one effective loop); a `/no-fix` after B5 finished (status still the approval) labels `fix: declined` over a pushed branch or an escalation.
+- Why it matters: a replaced `/retriage` or `/reproduce` is lost without a trace (the maintainer resends).
+- Current mitigation: the maintainer resends; the queued reporter-reply run reads the live labels and skips B2 when `triage: needs-info` is gone.
+- Priority: P3.
+- ADR: [ADR-0054](adr/0054-triage-group-and-no-fix.md)
+
 ## Accepted risks
 
 ### Unreviewed code on `e2e-target-<n>` runs with playground secrets

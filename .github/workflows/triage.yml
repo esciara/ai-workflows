@@ -32,7 +32,10 @@ on:
 # One B1/B2 run per issue at a time (aiwf-kbc): runs that can start B1 or B2 (new issue, accepted `/retriage` or
 # `/reproduce`, the reporter's reply as in repro-context) queue per issue and caller workflow; all other runs get their
 # own group, so they never replace a pending run. A newer pending run replaces the older one: a replaced reply is read
-# by it, a replaced command of another kind is lost (aiwf-1q2). Prefix differs from the caller's group (no deadlock).
+# by it, a replaced command of another kind is lost, accepted (aiwf-1q2, docs/known-issues.md). A queued reply run reads
+# the live labels in repro-context and skips B2 when `triage: needs-info` is gone. `/fix` and `/no-fix` are not in this
+# group (nor in the caller's issue group): `/no-fix` must stop a running B5 loop, and one B5 per issue holds through
+# `decide`'s own group and B5's status-line guard. Prefix differs from the caller's group (no deadlock).
 concurrency:
   group: >-
     aiwf-triage-${{ github.workflow }}-${{ (github.event_name == 'issues'
@@ -281,6 +284,7 @@ jobs:
       contents: read
       issues: read
     outputs:
+      proceed: ${{ steps.tree.outputs.proceed }}  # 'false': a reply run whose `triage: needs-info` is gone (live read)
       sha: ${{ steps.tree.outputs.sha }}  # the commit B2 runs on and B3 analyses (its links point there)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -302,9 +306,11 @@ jobs:
           AIWF_CONFIG: ${{ inputs.config }}
         run: |
           aiwf repro-context --repo "$REPO" --issue "$ISSUE" --out issue.md
+          if grep -qx 'proceed=false' "$GITHUB_OUTPUT"; then exit 0; fi  # reply run, needs-info gone: B2 is skipped
           echo "sha=$(git -C target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           tar -czf target.tgz -C target .
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: steps.tree.outputs.proceed != 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: repro-input
           path: |
@@ -324,7 +330,7 @@ jobs:
   # without a status check GitHub skips the job when any earlier job was skipped, e.g. `publish` on a `/reproduce`.
   reproduce:
     needs: repro-context
-    if: ${{ !cancelled() && needs.repro-context.result == 'success' }}
+    if: ${{ !cancelled() && needs.repro-context.result == 'success' && needs.repro-context.outputs.proceed != 'false' }}
     runs-on: ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
     timeout-minutes: 25
     permissions: {}
@@ -389,7 +395,7 @@ jobs:
   # B2 labels and comment, from the checked JSON; invalid or missing output gives `ai: error` and nothing else.
   repro-publish:
     needs: [repro-context, reproduce]
-    if: ${{ !cancelled() && needs.repro-context.result == 'success' }}
+    if: ${{ !cancelled() && needs.repro-context.result == 'success' && needs.repro-context.outputs.proceed != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

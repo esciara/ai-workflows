@@ -189,6 +189,37 @@ def test_command_without_awaiting_changes_nothing():
     assert gh.writes() == []
 
 
+APPROVED = f"{pa.MARKER}\n## Bug analysis\n\n**Status:** fix approved by @esciara ([comment](u))."
+
+
+def test_no_fix_stops_a_running_fix_loop_while_the_status_is_an_approval():
+    gh = Gh(labels=["triage: reproduced"], comments=[comment(5, APPROVED)])
+    assert "recorded" in pa.decide(gh, REPO, 1, "no-fix", "wrong approach", EVENT)
+    assert gh.added() == [pa.DECLINED]
+    assert pa.status_lines(gh.bodies()[0])[0] == f"fix declined by @esciara ([comment]({URL})); reason: wrong approach"
+
+
+def test_a_no_fix_not_recorded_does_not_add_awaiting_back_when_it_was_not_set():
+    class Failing(Gh):
+        def respond(self, args):
+            if self.method(args) == "PATCH":
+                raise RuntimeError("api down")
+            return super().respond(args)
+    gh = Failing(labels=[], comments=[comment(5, APPROVED)])
+    with pytest.raises(RuntimeError):
+        pa.decide(gh, REPO, 1, "no-fix", "x", EVENT)
+    assert pa.AWAITING not in gh.added()
+
+
+def test_fix_and_no_fix_do_nothing_with_a_declined_or_waiting_status_and_no_label():
+    for body in (ANALYSIS, f"{pa.MARKER}\n\n**Status:** fix declined by @esciara ([comment](u))."):
+        gh = Gh(labels=[], comments=[comment(5, body)])
+        assert "changes nothing" in pa.decide(gh, REPO, 1, "no-fix", "", EVENT)
+        assert gh.writes() == []
+    gh = Gh(labels=[], comments=[comment(5, APPROVED)])  # a second /fix: the first one's approval is no waiting state
+    assert "changes nothing" in pa.decide(gh, REPO, 1, "fix", "", EVENT) and gh.writes() == []
+
+
 def test_decide_cli_reads_the_command_from_the_config(monkeypatch, tmp_path):
     event = tmp_path / "event.json"
     event.write_text(json.dumps(EVENT))
