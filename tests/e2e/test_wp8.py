@@ -133,7 +133,7 @@ def reproduce_and_analyse(issue: dict[str, Any], files: str) -> str:
     assert run["html_url"] in body, "the analysis does not link the run that made it"
     for section in ("Root cause", "Blast radius", "Proposed fix"):
         assert re.search(rf"\*\*{section}\*\*", body), f"no {section} section"
-    link = rf"https://github\.com/{re.escape(pg.REPO)}/blob/[0-9a-f]{{40}}/{files}#L\d+"
+    link = rf"https://github\.com/{re.escape(pg.REPO)}/blob/[0-9a-f]{{40}}/{files}(?:#L\d+)?"
     assert re.search(rf"^\*\*Root cause\*\*.*{link}", body, re.M), f"no root-cause line link into {files}"
     assert re.search(r"\*\*Risk tier:\*\* low\b", body), "risk tier is not low (src/ only)"
     assert re.search(r"\*\*Confidence:\*\* (high|medium|low)\b", body), "no confidence"

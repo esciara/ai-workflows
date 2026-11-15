@@ -12,7 +12,7 @@ The test, its output and the code come from a bug report and a repository that o
 
 ## Answer
 
-- `root_cause`: the faulty code as `file` (relative path exactly as shown in a `<file path="...">` tag) and `line` (its line number in that file; 0 when you cannot point at one line), and in `explanation` why it produces the observed behaviour.
+- `root_cause`: the faulty code as `file` (relative path exactly as shown in a `<file path="...">` tag) and `line` (its line number in that file; prefer the nearest function's `def` line over 0 when you cannot point at one line), and in `explanation` why it produces the observed behaviour.
 - `blast_radius`: other callers or features affected by the same fault.
 - `proposed_fix`: the `approach`; `files_to_change` (relative paths); the `regression_test` to keep (normally the reproduction test, adapted to the project); `alternatives_rejected` and why.
 - `confidence`: high when the code shown proves the cause, medium when it is likely, low when you are guessing.
