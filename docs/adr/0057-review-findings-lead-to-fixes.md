@@ -5,6 +5,7 @@
 - Deciders: maintainer
 - Alias: `D57`
 - Amends: [ADR-0032](archive/0032-workflow-b-runs-workflow-a-on-its-own-fix-prs.md) (what B does with Workflow A's review of its fix PR), [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (one more dev-process `human-review` reason next to point 5)
+- Note (2026-11-15): ADR-0061 supersedes ADR-0032. Point 4 and the Consequences that rely on the nested A run, the draft PR escalation and "no CI on B's PR" no longer hold as written; point 4 gets a new trigger when WP19 is planned.
 
 ## Context
 
