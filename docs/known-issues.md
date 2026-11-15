@@ -9,7 +9,7 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Date: 2026-11-12
 - What: the install guide keeps the repo setting "Allow GitHub Actions to create and approve pull requests" off (plan open item, spec: Installing). With it off, the workflow's `GITHUB_TOKEN` cannot create pull requests, yet the spec has the orchestrator open the B5 draft PR and the B6 fix PR with that token.
 - Why it matters: Workflow B's fix stage (slice 4: WP9, WP10) cannot open its PRs on a repo set up from the guide.
-- Current mitigation: decided 2026-11-15 (ADR-0061): B never opens a PR; it pushes `ai-fix/issue-<n>` and posts a compare link with the PR text, and the maintainer opens the PR; the setting stays off. Until the follow-up code change merges, B5's escalation still tries a draft PR, which is refused and degrades to comment, label and issue assignment (unit-tested). Remove this entry when that change and WP10 merge.
+- Current mitigation: decided 2026-11-15 (ADR-0061): B never opens a PR; it pushes `ai-fix/issue-<n>` and posts a compare link with the PR text, and the maintainer opens the PR; the setting stays off. B5's escalation now opens no PR (comment with the compare link, label, issue assignment; branch `wp9-compare-link`), so B5 no longer depends on the setting. Remove this entry when WP10 (B6 compare-link comment) merges.
 - Priority: P2, before slice 4.
 - ADR: [ADR-0061](adr/0061-workflow-b-pushes-a-branch-and-the-maintainer-opens-the-pr.md) (decision); [ADR-0052](adr/0052-playground-caller-pins-the-release-metrics-in-a-run-artifact.md) (context).
 
@@ -34,7 +34,7 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 ### Upgrading the caller pin past WP9 needs wider `triage` permissions
 
 - Date: 2026-11-14
-- What: from WP9a, triage.yml has jobs asking for `contents: write` and `pull-requests: write` (B5 push and escalation). A caller that bumps its pin but keeps the old `triage` job permissions (`contents: read`, `pull-requests: read`) fails at startup on every triage event, B1 included.
+- What: from WP9a, triage.yml has a job asking for `contents: write` (B5 push; the escalation no longer needs `pull-requests: write`, ADR-0061). A caller that bumps its pin but keeps the old `triage` job permissions (`contents: read`, `pull-requests: read`) fails at startup on every triage event, B1 included.
 - Why it matters: installed repos (the playground's normal caller, esciara/pyteleinfo) break on their next upgrade unless they also copy the new permissions from templates/caller.yml.
 - Current mitigation: templates/caller.yml has the new permissions; the release note must say so.
 - Priority: P2, at the next release.

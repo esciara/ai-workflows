@@ -822,6 +822,7 @@ jobs:
       head: ${{ steps.push.outputs.head }}  # the commit pushed last ('' while nothing is pushed)
       next: ${{ steps.push.outputs.next }}
       escalate: ${{ steps.push.outputs.escalate }}
+      superseded: ${{ steps.push.outputs.superseded }}  # stopped by a later B2: the end job says so, no escalation
     steps: &push-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -979,19 +980,19 @@ jobs:
     outputs: *push-outputs  # anchored in round-1-push
     steps: *push-steps
 
-  # B5 escalation (spec B5): the loop ended without an approved round (cap reached, or stopped by a guard). Draft PR of
-  # the last pushed work (none when nothing was pushed; a refused PR is reported in the comment and the log only), one
-  # comment that mentions each maintainer with every round's findings, `fix: needs-maintainer`, the maintainers
-  # assigned to the issue and the PR and requested as reviewers. An exit, not an `ai: error`.
+  # B5 escalation (spec B5, ADR-0061): the loop ended without an approved round (cap reached, or someone else pushed
+  # to the branch). No PR: one comment that mentions each maintainer with every round's findings and the compare link of
+  # `ai-fix/issue-<n>` when it exists, `fix: needs-maintainer`, the maintainers assigned to the issue. When a later B2
+  # stopped the loop (`superseded`), the same comment only says so with the kept branch's compare link: no label, no
+  # assignment. An exit, not an `ai: error`.
   escalate:
     needs: [fix-context, round-1-push, round-2-push, round-3-push]
-    if: ${{ !cancelled() && (needs.round-1-push.outputs.escalate == 'true' || needs.round-2-push.outputs.escalate == 'true' || needs.round-3-push.outputs.escalate == 'true') }}
+    if: ${{ !cancelled() && (needs.round-1-push.outputs.escalate == 'true' || needs.round-2-push.outputs.escalate == 'true' || needs.round-3-push.outputs.escalate == 'true' || needs.round-1-push.outputs.superseded == 'true' || needs.round-2-push.outputs.superseded == 'true' || needs.round-3-push.outputs.superseded == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: read  # whether the fix branch exists, the default branch
       issues: write
-      pull-requests: write  # the draft PR, its assignees and review request
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1009,7 +1010,6 @@ jobs:
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
           AIWF_CONFIG: ${{ inputs.config }}
-          FIX_HEAD: ${{ needs.round-3-push.outputs.head || needs.round-2-push.outputs.head || needs.round-1-push.outputs.head }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: aiwf fix-escalate --repo "$REPO" --issue "$ISSUE" --records records
 

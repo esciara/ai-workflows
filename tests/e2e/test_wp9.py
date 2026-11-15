@@ -172,20 +172,14 @@ def test_a_forced_failure_escalates_to_a_draft_pr_and_the_maintainer(e2e_target,
     assert NEEDS_MAINTAINER in labels(issue["number"])
 
     maintainers = e2e_config()["maintainers"]
-    [pr] = [p for p in fix_prs(issue["number"]) if p["state"] == "open"]
-    pr = pg.api(f"repos/{pg.REPO}/pulls/{pr['number']}")
-    print(f"draft PR {pr['html_url']}: draft={pr['draft']}")
-    assert pr["draft"], "the escalation PR is not a draft"
-    assert pr["head"]["ref"] == fix_branch(issue["number"]), pr["head"]["ref"]
+    branch = fix_branch(issue["number"])
+    assert branch_sha(branch), f"no {branch} branch"
     default = pg.api(f"repos/{pg.REPO}")["default_branch"]
-    ahead = pg.api(f"repos/{pg.REPO}/compare/{default}...{pr['head']['ref']}")["ahead_by"]
-    assert ahead >= 1, "the draft PR branch has none of the rejected round's work (spec: nothing is lost)"
-    reviewers = {u["login"] for u in pr["requested_reviewers"]}
-    pr_assignees = {u["login"] for u in pr["assignees"]}
+    ahead = pg.api(f"repos/{pg.REPO}/compare/{default}...{branch}")["ahead_by"]
+    assert ahead >= 1, "the branch has none of the rejected round's work (spec: nothing is lost)"
+    assert not [p for p in fix_prs(issue["number"]) if p["state"] == "open"], "the escalation opened a PR (ADR-0061)"
     issue_assignees = {u["login"] for u in pg.api(f"repos/{pg.REPO}/issues/{issue['number']}")["assignees"]}
     for login in maintainers:
-        assert login in reviewers, f"{login} not requested as reviewer: {reviewers}"
-        assert login in pr_assignees, f"{login} not assigned to the PR: {pr_assignees}"
         assert login in issue_assignees, f"{login} not assigned to the issue: {issue_assignees}"
 
     notes = bot_comments(issue["number"], FIX_MARKER)
@@ -194,7 +188,7 @@ def test_a_forced_failure_escalates_to_a_draft_pr_and_the_maintainer(e2e_target,
     print(body)
     for login in maintainers:
         assert f"@{login}" in body, f"the escalation comment does not mention {login}"
-    assert pr["html_url"] in body or f"#{pr['number']}" in body, "the escalation comment does not link the draft PR"
+    assert f"/{pg.REPO}/compare/{default}...{branch}" in body, "the escalation comment has no compare link"
     for k in range(1, cap + 1):
         assert re.search(rf"\bRound {k}\b", body), f"no findings for round {k}"
     assert "forced failure (e2e)" in body, "the round's findings do not carry the failing check's output"

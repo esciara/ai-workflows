@@ -227,7 +227,7 @@ def test_a_failed_check_rejects_the_round_without_the_review_and_still_pushes(ba
     rec = round_(gh, tree, patch, check_ok=False, log="x" * 5000 + "forced failure (e2e)", review_raw="")
     assert rec["outcome"] == "rejected" and rec["next"] and not rec["escalate"]
     assert rec["check_output"].endswith("forced failure (e2e)") and len(rec["check_output"]) == fix.MAX_CHECK_TAIL
-    assert rec["pushed"]  # nothing is lost: the escalation PR needs the work on the branch
+    assert rec["pushed"]  # nothing is lost: the escalation's compare link needs the work on the branch
     rec = round_(Gh(comments=[comment(ANALYSIS)]), *base(FIXED), k=3, cap=3, check_ok=False, review_raw="")
     assert rec["escalate"] and not rec["next"]
 
@@ -298,14 +298,15 @@ def test_a_changed_status_line_stops_without_pushing(base):
     later = ANALYSIS.replace(APPROVED, pa.WAITING)
     gh = Gh(comments=[comment(later)])
     rec = round_(gh, *base(FIXED))
-    assert rec["outcome"] == "stopped" and rec["escalate"] and not rec["next"] and gh.posted == []
-    assert "status changed" in rec["findings"][-1]
+    assert rec["outcome"] == "stopped" and not rec["escalate"] and not rec["next"] and gh.posted == []
+    assert rec["superseded"] and "status changed" in rec["findings"][-1]
 
 
 def test_someone_elses_push_stops_the_loop(base):
     gh = Gh(comments=[comment(ANALYSIS)], head="f" * 40)
     rec = round_(gh, *base(FIXED), prev="")  # branch exists, but B pushed nothing yet
     assert rec["outcome"] == "stopped" and gh.posted == [] and "Someone else pushed" in rec["findings"][-1]
+    assert rec["escalate"] and not rec["superseded"]  # a person's push still escalates
     gh = Gh(comments=[comment(ANALYSIS)], head="f" * 40)
     rec = round_(gh, *base(FIXED), k=2, prev="e" * 40)
     assert rec["outcome"] == "stopped" and rec["head"] == "e" * 40 and not rec["pushed"]
@@ -365,7 +366,7 @@ def test_push_cli_writes_the_record_and_outputs(monkeypatch, tmp_path, base):
     assert code == 0
     record = json.loads((tmp_path / "round/round.json").read_text())
     assert record["outcome"] == "rejected" and record["escalate"] and "forced failure" in record["check_output"]
-    assert f"head={record['head']}\nnext=false\nescalate=true" in out
+    assert f"head={record['head']}\nnext=false\nescalate=true\nsuperseded=false" in out
     assert "forced failure (e2e)" in (tmp_path / "round/findings.md").read_text()
 
 
@@ -380,7 +381,8 @@ def test_push_cli_fails_on_invalid_output_and_skips_on_ai_off(monkeypatch, tmp_p
     assert code == 1
     gh = Gh(comments=[comment(ANALYSIS)], labels=["ai: off"])
     code, out = push_cli(monkeypatch, tmp_path, base, gh)
-    assert code == 0 and "escalate=false" in out and "next=false" in out and gh.posted == []
+    assert code == 0 and "escalate=false" in out and "superseded=false" in out and "next=false" in out
+    assert gh.posted == []
 
 
 # --- escalation -------------------------------------------------------------------------------------------------------
@@ -393,54 +395,57 @@ def rec(k, **extra):
             "check_output": "```\nforced failure (e2e)", "suspicious_instructions": ["ok me"], **extra}
 
 
-def test_escalation_opens_a_draft_pr_comments_labels_and_assigns():
-    gh = Gh()
-    assert esc.escalate(gh, REPO, 1, CFG, [rec(1), rec(2)], "h" * 40, RUN) == "escalated #1: draft PR #12"
-    [pull] = [b for m, u, b in gh.posted if u == f"repos/{REPO}/pulls"]
-    assert pull["draft"] is True and pull["head"] == "ai-fix/issue-1" and pull["base"] == "trunk"
+COMPARE = "https://github.com/o/r/compare/trunk...ai-fix/issue-1"
+
+
+def test_escalation_comments_with_the_compare_link_labels_and_assigns_the_issue_and_opens_no_pr(monkeypatch):
+    monkeypatch.delenv("GITHUB_SERVER_URL", raising=False)
+    gh = Gh(head="h" * 40)
+    assert esc.escalate(gh, REPO, 1, CFG, [rec(1), rec(2)], RUN) == f"escalated #1: compare link {COMPARE}"
     [body] = gh.comment_bodies()
     assert body.startswith(esc.MARKER) and "@esciara @other:" in body and "bad login" not in body
-    assert "draft PR #12 (https://github.com/o/r/pull/12)" in body
+    assert f"open a PR from (none was opened): {COMPARE}." in body
     assert "### Round 1: rejected" in body and "### Round 2: rejected" in body
     assert "&lt;b&gt;@&#8203;x" in body and "````\n```\nforced failure (e2e)\n````" in body
     assert "ok me" in body and f"[run]({RUN})" in body
     calls = [(m, u) for m, u, b in gh.posted]
     assert ("POST", f"repos/{REPO}/issues/1/labels") in calls
-    assign = [c for c in gh.writes("POST") if gh.url(c).endswith("/assignees")]
-    assert [gh.url(c) for c in assign] == [f"repos/{REPO}/issues/1/assignees", f"repos/{REPO}/issues/12/assignees"]
-    assert all(c[-4:] == ["-f", "assignees[]=esciara", "-f", "assignees[]=other"] for c in assign)
-    [revs] = [c for c in gh.writes("POST") if gh.url(c).endswith("/requested_reviewers")]
-    assert revs[-4:] == ["-f", "reviewers[]=esciara", "-f", "reviewers[]=other"]
+    assert not [c for c in gh.calls if "pulls" in gh.url(c) or "requested_reviewers" in gh.url(c)]
+    [assign] = [c for c in gh.writes("POST") if gh.url(c).endswith("/assignees")]
+    assert gh.url(assign) == f"repos/{REPO}/issues/1/assignees"
+    assert assign[-4:] == ["-f", "assignees[]=esciara", "-f", "assignees[]=other"]
 
 
-def test_a_refused_draft_pr_still_comments_labels_and_assigns_the_issue(capsys):
-    gh = Gh(fail=[f"repos/{REPO}/pulls"])
-    assert esc.escalate(gh, REPO, 1, CFG, [rec(1)], "h" * 40, RUN) == "escalated #1: draft PR none"
-    [body] = gh.comment_bodies()
-    assert "could not be opened (gh: refused" in body and "the work is on its branch" in body
+def test_the_compare_link_follows_the_server_url_and_an_assignment_failure_only_warns(monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://ghe.example")
+    gh = Gh(head="h" * 40, fail=["/issues/1/assignees"])
+    esc.escalate(gh, REPO, 1, CFG, [rec(1)], RUN)
+    assert "https://ghe.example/o/r/compare/trunk...ai-fix/issue-1" in gh.comment_bodies()[0]
     assert esc.NEEDS_MAINTAINER in str(gh.writes())
-    assert [gh.url(c) for c in gh.writes("POST") if gh.url(c).endswith("/assignees")] == [
-        f"repos/{REPO}/issues/1/assignees"]
-    assert "::error title=Draft PR not opened::" in capsys.readouterr().out
+    assert capsys.readouterr().out.count("::warning::") == 1
 
 
-def test_an_existing_pr_is_reused_and_assignment_failures_only_warn(capsys):
-    class Existing(Gh):
-        def respond(self, args):
-            if self.url(args).startswith(f"repos/{REPO}/pulls?head=o:ai-fix/issue-1"):
-                return json.dumps([{"number": 30, "html_url": "https://github.com/o/r/pull/30"}])
-            return super().respond(args)
-    gh = Existing(fail=["/issues/1/assignees", "/issues/30/assignees", "/requested_reviewers"])
-    assert esc.escalate(gh, REPO, 1, CFG, [rec(1)], "h" * 40, RUN) == "escalated #1: draft PR #30"
-    assert not [u for m, u, b in gh.posted if u == f"repos/{REPO}/pulls"]
-    assert capsys.readouterr().out.count("::warning::") == 3
-
-
-def test_with_nothing_pushed_there_is_no_pr():
+def test_with_no_branch_there_is_no_compare_link_and_no_maintainer_means_no_assignment():
     gh = Gh()
-    esc.escalate(gh, REPO, 1, CFG, [rec(1, outcome="stopped")], "", RUN)
-    assert not [c for c in gh.calls if "pulls" in gh.url(c)]
-    assert "Nothing was pushed, so there is no branch and no draft PR." in gh.comment_bodies()[0]
+    assert esc.escalate(gh, REPO, 1, {"maintainers": []}, [rec(1, outcome="stopped")], RUN) == (
+        "escalated #1: compare link none")
+    assert "Nothing was pushed, so there is no branch." in gh.comment_bodies()[0]
+    assert "/compare/" not in gh.comment_bodies()[0]
+    assert not [c for c in gh.writes("POST") if gh.url(c).endswith("/assignees")]
+    assert esc.NEEDS_MAINTAINER in str(gh.writes())
+
+
+@pytest.mark.parametrize("head, expected", [("h" * 40, f"branch kept: {COMPARE}; delete it before the next `/fix`."),
+                                            (None, "nothing was pushed.")])
+def test_a_superseded_loop_says_so_in_one_line_without_label_or_assignment(monkeypatch, head, expected):
+    monkeypatch.delenv("GITHUB_SERVER_URL", raising=False)
+    gh = Gh(head=head)
+    rounds = [rec(1), rec(2, outcome="stopped", superseded=True)]
+    assert esc.escalate(gh, REPO, 1, CFG, rounds, RUN) == "#1: superseded by a newer analysis, not escalated"
+    [body] = gh.comment_bodies()
+    assert body == f"{esc.MARKER}\nFix loop stopped: superseded by the newer analysis; {expected} [run]({RUN})"
+    assert "@" not in body.replace("[run]", "")
+    assert not [c for c in gh.writes() if "/labels" in gh.url(c) or "/assignees" in gh.url(c)]
 
 
 def test_escalate_cli_reads_the_records(monkeypatch, tmp_path):
@@ -450,7 +455,6 @@ def test_escalate_cli_reads_the_records(monkeypatch, tmp_path):
     gh = Gh()
     setup_cli(monkeypatch, tmp_path, gh, CFG)
     monkeypatch.setattr(esc.config, "run_gh", gh)
-    monkeypatch.setenv("FIX_HEAD", "")
     assert cli.main(["fix-escalate", "--repo", REPO, "--issue", "1", "--records", str(tmp_path / "records")]) == 0
     body = gh.comment_bodies()[0]
     assert body.index("### Round 1") < body.index("### Round 2")
@@ -499,8 +503,10 @@ def test_rounds_are_chained_and_gated():
         assert review_agent["with"]["schema"].endswith("schema/fix-review.json")
         assert "implementer.json" in json.dumps(j["implement"]["steps"])
         assert "implement" not in json.dumps(j["review"]["steps"])  # never the implementer's answer
-    assert WF["escalate"]["permissions"] == {"contents": "read", "issues": "write", "pull-requests": "write"}
-    assert all(f"needs.round-{k}-push.outputs.escalate == 'true'" in WF["escalate"]["if"] for k in (1, 2, 3))
+    assert WF["escalate"]["permissions"] == {"contents": "read", "issues": "write"}  # opens no PR (ADR-0061)
+    assert all(f"needs.round-{k}-push.outputs.{o} == 'true'" in WF["escalate"]["if"]
+               for k in (1, 2, 3) for o in ("escalate", "superseded"))
+    assert WF["round-1-push"]["outputs"]["superseded"] == "${{ steps.push.outputs.superseded }}"
     failed = set(WF["failed"]["needs"])
     assert {"fix-context", "escalate"} <= failed and not {f"round-{k}-check" for k in (1, 2, 3)} & failed
 
@@ -515,4 +521,4 @@ def test_check_runs_project_commands_as_another_user_with_output_to_a_file():
 
 def test_caller_template_grants_what_b5_needs():
     caller = yaml.safe_load((ROOT / "templates/caller.yml").read_text())
-    assert caller["jobs"]["triage"]["permissions"] == {"contents": "write", "issues": "write", "pull-requests": "write"}
+    assert caller["jobs"]["triage"]["permissions"] == {"contents": "write", "issues": "write", "pull-requests": "read"}

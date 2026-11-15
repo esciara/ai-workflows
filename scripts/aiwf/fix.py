@@ -9,6 +9,8 @@
   from the orchestrator's own check (setup, test, reproduction command) and the reviewer's verdict, and pushes the
   round's cumulative diff (rejected rounds too) through the Git data API, only when it touches no CI config (`.github/`),
   the status line is still the approval and the branch head is still the commit pushed last. Writes the round record.
+  A changed status line (a later B2) stops the loop without escalating (`superseded`); a moved head or the round cap
+  escalates.
 - Escalation (`aiwf fix-escalate`, module `fix_escalate`) reads the round records.
 """
 
@@ -256,7 +258,8 @@ def run_round(gh: GhRunner, repo: str, issue: int, k: int, cap: int, meta: dict[
     if why:
         findings.append(why)
     stop = ""  # both guards are read before the push; only the head's (force: false on the ref) is atomic
-    if current_status(gh, repo, issue) != meta["approval"]:
+    superseded = current_status(gh, repo, issue) != meta["approval"]
+    if superseded:
         stop = "The analysis comment's status changed (a later run); nothing was pushed."
     elif (branch_head(gh, repo, branch_name(issue)) or "") != prev_head:
         stop = "Someone else pushed to the branch; the loop stopped and the branch is theirs."
@@ -273,7 +276,8 @@ def run_round(gh: GhRunner, repo: str, issue: int, k: int, cap: int, meta: dict[
     nxt = outcome == "rejected" and k < cap
     return {"round": k, "outcome": outcome, "findings": findings, "check_output": check_output,
             "pushed": head if head != prev_head else "", "head": head, "next": nxt,
-            "escalate": outcome != "approved" and not nxt, "summary": impl["summary"],
+            "escalate": outcome != "approved" and not nxt and not superseded, "superseded": superseded,
+            "summary": impl["summary"],
             "suspicious_instructions": impl["suspicious_instructions"] + suspicious}
 
 
@@ -296,7 +300,7 @@ def cmd_push(args: argparse.Namespace) -> int:
     cap = int(cfg.get("limits", {}).get("fix_rounds", 3))
     prev = os.environ.get("PREV_HEAD", "")
     record: dict[str, Any] = {"round": args.round, "outcome": "stopped", "findings": [], "check_output": "",
-                              "pushed": "", "head": prev, "next": False, "escalate": False}
+                              "pushed": "", "head": prev, "next": False, "escalate": False, "superseded": False}
     if guard.item_off(config.run_gh, args.repo, args.issue):
         print(f"::notice title=ai: off::#{args.issue} has '{guard.OFF_LABEL}': round {args.round} not pushed")
     else:
@@ -319,7 +323,8 @@ def cmd_push(args: argparse.Namespace) -> int:
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
         cli.write_outputs(out, {"head": record["head"], "next": str(record["next"]).lower(),
-                                "escalate": str(record["escalate"]).lower()})
+                                "escalate": str(record["escalate"]).lower(),
+                                "superseded": str(record["superseded"]).lower()})
     return 0
 
 
