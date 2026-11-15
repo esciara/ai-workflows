@@ -670,6 +670,15 @@ jobs:
           set -euo pipefail
           mkdir pristine && tar -xzf fix/target.tgz -C pristine
           cd work
+          # The sandbox (bwrap) leaves an empty placeholder for each protected path it finds missing in work/ (run
+          # 43723093357). Drop a zero-size file of those names that the base does not have; a non-empty one stays.
+          for f in .env .env.development .env.local .env.production .env.test .env.development.local \
+              .env.production.local .env.test.local .gitmodules .npmrc .yarnrc .yarnrc.yml bunfig.toml package.json \
+              package-lock.json pnpm-lock.yaml yarn.lock; do
+            if [ -f "$f" ] && [ ! -L "$f" ] && [ ! -s "$f" ] && ! git --git-dir=../pristine/.git cat-file -e "HEAD:$f" 2>/dev/null; then
+              rm -f -- "$f"
+            fi
+          done
           git --git-dir=../pristine/.git --work-tree=. add -A -- . ':(exclude).mcp.json' ':(exclude).claude'
           git --git-dir=../pristine/.git --work-tree=. diff --cached --binary HEAD > ../patch.diff
           echo "diff: $(wc -c < ../patch.diff) bytes"
