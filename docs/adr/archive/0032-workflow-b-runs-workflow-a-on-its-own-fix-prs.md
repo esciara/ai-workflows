@@ -1,9 +1,10 @@
 # ADR-0032 · Workflow B runs Workflow A on its own fix PRs
 
-- Status: Accepted
+- Status: Superseded by ADR-0061
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D32`
+- Superseded by: ADR-0061
 
 ## Context
 

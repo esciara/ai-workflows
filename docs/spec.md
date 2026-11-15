@@ -2,7 +2,7 @@
 
 Exported Oct 30, 2026 from the online doc: https://claude.ai/artifact/3rnF9qwMUZ1YhTc7MU31og
 
-Two GitHub workflows, runnable on their own: **A** reviews every pull request and labels it with a merge verdict; **B** triages new issues, reproduces and diagnoses bugs, and — only after the maintainer says yes — fixes them through at most three implement/review rounds, then hands the PR to A. No agent ever merges or closes anything.
+Two GitHub workflows, runnable on their own: **A** reviews every pull request and labels it with a merge verdict; **B** triages new issues, reproduces and diagnoses bugs, and — only after the maintainer says yes — fixes them through at most three implement/review rounds on a branch, then gives the maintainer a link to open the PR, which A reviews. No agent ever opens a PR, merges or closes anything.
 
 ## Scope and source
 
@@ -110,7 +110,7 @@ Four passes review the PR at once; only findings that survive the refute step co
 
 [Diagram in the online doc: Workflow B · issue to fix PR, 2 human waits, 3-round cap]
 
-The two highlighted steps are the only places the flow waits on a person, apart from an outsider's bug, which waits for the maintainer's `/reproduce` before B2; every other exit stops with a label rather than guessing.
+The two highlighted steps are the only places the flow waits on a person, apart from an outsider's bug, which waits for the maintainer's `/reproduce` before B2, and B6, where the maintainer opens the PR; every other exit stops with a label rather than guessing.
 
 **Steps at a glance**
 
@@ -120,8 +120,8 @@ The two highlighted steps are the only places the flow waits on a person, apart 
 | B2 Reproduce | Turns the report into a failing test in a sandbox | No repro: ask the reporter; ping, stale and close after `reporter_silence_days` (defaults 4/14/21) | Reporter (an outsider's bug: first the maintainer's `/reproduce`) |
 | B3 Analyse | Root cause, blast radius, fix plan, risk and size | — | — |
 | B4 Ask the maintainer | Posts the analysis, waits for a command | `/no-fix`: `fix: declined`, stop | Maintainer |
-| B5 Fix loop | Implementer, then adversarial reviewer, up to 3 rounds | Round 3 rejected: draft PR, `fix: needs-maintainer` | — |
-| B6 Open the PR | `Fixes #n` PR, handed to Workflow A | — | Maintainer merges |
+| B5 Fix loop | Implementer, then adversarial reviewer, up to 3 rounds | Round 3 rejected: branch kept, `fix: needs-maintainer` | — |
+| B6 Hand over the PR | Compare link and ready PR text; the maintainer opens the `Fixes #n` PR, which Workflow A reviews | — | Maintainer opens the PR, then merges |
 
 **B1 — Classify (**[TRI-01](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**, **[TRI-02](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**, **[TRI-07](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)**).** Trigger: `issues.opened`, or `/retriage` from a maintainer. The issue text is untrusted input ([INT-06](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.2965)): the classifier can read it and set labels, nothing else.
 
@@ -207,11 +207,11 @@ On either command the orchestrator first removes `triage: awaiting-maintainer`, 
 
 1. **Implementer** writes the fix (round 1) or addresses the reviewer's findings (rounds 2–3). Exit condition: the repro test passes and the full test suite is green.
 2. **Adversarial reviewer**, in a fresh context that never sees the implementer's reasoning, tries to break the fix: symptom patched instead of cause, missed edge cases, regressions, a weakened or deleted test, scope creep. It returns `approve` or `reject` with findings.
-3. `approve` → B6. `reject` and fewer than 3 rounds → next round. `reject` after round 3 → escalate: comment on the issue with each round's findings, label `fix: needs-maintainer`, open the work as a **draft** PR so nothing is lost. To make sure the maintainer hears about it, the orchestrator assigns them the issue and the draft PR, requests their review on the PR, and mentions them in the comment; each of those sends a GitHub notification.
+3. `approve` → B6. `reject` and fewer than 3 rounds → next round. `reject` after round 3 → escalate: comment on the issue with each round's findings, label `fix: needs-maintainer`, and give the compare link of `ai-fix/issue-<n>` so nothing is lost; no PR is opened. To make sure the maintainer hears about it, the orchestrator assigns them the issue and mentions them in the comment; each of those sends a GitHub notification.
 
-The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrator checks the exit condition itself, never taking the implementer's word: a job with no secret and no token scope applies the round's diff to the tree and runs `setup`, `test` and the repro test's command; when that check fails, the round counts as rejected with the failing output as its finding, and the reviewer does not run. B5 starts only when `ai-fix/issue-<n>` does not exist yet (checked once, before round 1); otherwise it comments that the branch exists and must be deleted to retry, and runs no round. The orchestrator pushes each round's diff to that branch itself, rejected rounds included (the escalation draft PR needs the last round's work on the branch, so nothing is lost), and only while the branch head is still the commit it pushed last (otherwise a person has pushed: the loop stops, as in Failure modes) and the analysis comment's status line is still the approval that started B5 (a later B2 changed it: stop without pushing). A diff that touches anything under `.github/` (workflows, actions, the `ai-workflows.yml` config with its `setup` and `test` commands, CODEOWNERS) is never pushed; that round counts as rejected. When escalating with nothing pushed (no round diff was pushable, or the head or status guard stopped the loop before any push), there is no branch and no draft PR: the orchestrator only comments with the findings, labels `fix: needs-maintainer` and assigns and mentions the maintainer.
+The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrator checks the exit condition itself, never taking the implementer's word: a job with no secret and no token scope applies the round's diff to the tree and runs `setup`, `test` and the repro test's command; when that check fails, the round counts as rejected with the failing output as its finding, and the reviewer does not run. B5 starts only when `ai-fix/issue-<n>` does not exist yet (checked once, before round 1); otherwise it comments that the branch exists and must be deleted to retry, and runs no round. The orchestrator pushes each round's diff to that branch itself, rejected rounds included (the escalation's compare link needs the last round's work on the branch, so nothing is lost), and only while the branch head is still the commit it pushed last (otherwise a person has pushed: the loop stops, as in Failure modes) and the analysis comment's status line is still the approval that started B5 (a later B2 changed it: stop without pushing). A diff that touches anything under `.github/` (workflows, actions, the `ai-workflows.yml` config with its `setup` and `test` commands, CODEOWNERS), or another CI service's config or a CODEOWNERS file elsewhere (`.gitlab-ci.yml`, `.circleci/`, `Jenkinsfile` and the like, best effort), is never pushed; that round counts as rejected. When escalating with nothing pushed (no round diff was pushable, or the head or status guard stopped the loop before any push), there is no branch and no compare link: the orchestrator only comments with the findings, labels `fix: needs-maintainer` and assigns and mentions the maintainer.
 
-**B6 — Open the PR.** Body: `Fixes #<n>`, root cause, what changed, the repro test, and a round-by-round log. Label `ai-fix`. Opening it triggers **Workflow A**, whose reviewer is independent from the inner loop's; its verdict label decides what the maintainer does next.
+**B6 — Hand over the PR.** Workflow B never opens a PR (ADR-0061). After an approved round, the orchestrator posts one comment on the issue that mentions the maintainer and gives the compare link from the default branch to `ai-fix/issue-<n>`, which pre-fills the title and the label `ai-fix`, and the PR body to paste: `Fixes #<n>`, root cause, what changed, the repro test, and a round-by-round log. The maintainer opens the PR as themselves, so the target's CI and **Workflow A** run on it as on any PR; A's reviewer is independent from the inner loop's, and its verdict label decides what the maintainer does next.
 
 ## Shared components
 
@@ -222,7 +222,7 @@ The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrato
 
 | Role | Reads untrusted text | Can write | Secrets | Used in |
 | --- | --- | --- | --- | --- |
-| Orchestrator | No (passes structured outputs only) | Labels, comments, branches, PRs via the workflow's GITHUB\_TOKEN, permissions scoped per job | CLAUDE\_CODE\_OAUTH\_TOKEN for the model; GITHUB\_TOKEN never handed to agent steps ([SEC-05](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | A, B |
+| Orchestrator | No (passes structured outputs only) | Labels, comments, branches via the workflow's GITHUB\_TOKEN; opens no PRs, permissions scoped per job | CLAUDE\_CODE\_OAUTH\_TOKEN for the model; GITHUB\_TOKEN never handed to agent steps ([SEC-05](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | A, B |
 | Classifier | Yes | Nothing; returns JSON | None | B1 |
 | Reproducer | Yes | Its own sandbox only | None; egress allowlist ([SEC-06](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | B2 |
 | Analyst | Repro output, code | Nothing; returns the report | None | B3 |
@@ -239,8 +239,8 @@ The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrato
 | `triage: reproduced` | B2 | Repro test stored |
 | `triage: awaiting-maintainer` | B4 | Analysis posted, waiting for `/fix` |
 | `triage: needs-human` / `duplicate` | B1, B2 | Agent stopped; a person takes over |
-| `fix: declined` / `fix: needs-maintainer` | B4, B5 | Maintainer said no / 3 rounds failed; draft PR waiting for the maintainer |
-| `ai-fix` | B6 | PR written by Workflow B |
+| `fix: declined` / `fix: needs-maintainer` | B4, B5 | Maintainer said no / 3 rounds failed; the branch, if any, waits for the maintainer |
+| `ai-fix` | B6 (pre-filled by the compare link) | PR of a branch written by Workflow B |
 | `ai-review: pending` / `merge` / `changes-requested` / `human-review` | A | Review running / verdict |
 | `ai: off` | A maintainer | Kill switch on that issue or PR ([CTL-08](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) |
 
@@ -260,7 +260,7 @@ The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrato
 | New issue triaged (B1) | #n triaged as bug, feature or question, plus duplicate of #k or needs a person when so; links to the issue |
 | B4 analysis posted | Bug #n analysed: root cause in one line; reply `/fix` or `/no-fix` on GitHub |
 | Reporter silent `ping` days (B2) | #n: no reply from the reporter; worth pursuing? |
-| `fix: needs-maintainer` (B5) | #n: fix failed after 3 rounds; draft PR #m |
+| `fix: needs-maintainer` (B5) | #n: fix failed after 3 rounds; links to the issue |
 | Verdict on a PR (A) | PR #m: merge, changes requested or human review needed |
 | `ai: error` | Run failed on #n, with the run link |
 
@@ -294,7 +294,7 @@ fork_prs: on-command            # public repos: review fork PRs only after /revi
 
 Rights needed to install in maintainer mode: write access to add the workflow files and labels; admin (owner, on a personal repo) to add the secrets `CLAUDE_CODE_OAUTH_TOKEN` and the chat secrets, and to set the branch protection that lets Request changes block merges.
 
-**Installing.** A target repo is set up from the install guide (`docs/install.md`) alone: copy the caller template (`templates/caller.yml`) to `.github/workflows/ai-workflows.yml` and the example config (`templates/ai-workflows.example.yml`) to `.github/ai-workflows.yml`, add the `CLAUDE_CODE_OAUTH_TOKEN` secret, run the workflow once by hand to create the labels. The caller pins every reusable workflow of this repo to a release: a full commit SHA with its version tag in a comment (`@<sha> # v0.x.y`), never a branch such as `@main`; upgrading means bumping that SHA. The guide recommends turning on "Require conversation resolution" (branch protection or ruleset) on the target repo, so threads A has not closed block the merge. For Workflow A, the repo setting "Allow GitHub Actions to create and approve pull requests" stays off: Workflow A only comments, requests changes and labels.
+**Installing.** A target repo is set up from the install guide (`docs/install.md`) alone: copy the caller template (`templates/caller.yml`) to `.github/workflows/ai-workflows.yml` and the example config (`templates/ai-workflows.example.yml`) to `.github/ai-workflows.yml`, add the `CLAUDE_CODE_OAUTH_TOKEN` secret, run the workflow once by hand to create the labels. The caller pins every reusable workflow of this repo to a release: a full commit SHA with its version tag in a comment (`@<sha> # v0.x.y`), never a branch such as `@main`; upgrading means bumping that SHA. The guide recommends turning on "Require conversation resolution" (branch protection or ruleset) on the target repo, so threads A has not closed block the merge. The repo setting "Allow GitHub Actions to create and approve pull requests" stays off: Workflow A only comments, requests changes and labels, and Workflow B pushes a branch and leaves opening the PR to the maintainer (ADR-0061).
 
 **Contributor ladder.** Before using it on someone else's repo, read its contribution guide and any AI policy, then go no higher than the policy allows.
 

@@ -9,9 +9,9 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Date: 2026-11-12
 - What: the install guide keeps the repo setting "Allow GitHub Actions to create and approve pull requests" off (plan open item, spec: Installing). With it off, the workflow's `GITHUB_TOKEN` cannot create pull requests, yet the spec has the orchestrator open the B5 draft PR and the B6 fix PR with that token.
 - Why it matters: Workflow B's fix stage (slice 4: WP9, WP10) cannot open its PRs on a repo set up from the guide.
-- Current mitigation: none needed for slice 1 (Workflow A only comments, requests changes and labels); the spec scopes the setting to Workflow A. Slice 4 decides: turn the setting on for B, or open PRs with a GitHub App token (new ADR).
+- Current mitigation: decided 2026-11-15 (ADR-0061): B never opens a PR; it pushes `ai-fix/issue-<n>` and posts a compare link with the PR text, and the maintainer opens the PR; the setting stays off. Until the follow-up code change merges, B5's escalation still tries a draft PR, which is refused and degrades to comment, label and issue assignment (unit-tested). Remove this entry when that change and WP10 merge.
 - Priority: P2, before slice 4.
-- ADR: [ADR-0052](adr/0052-playground-caller-pins-the-release-metrics-in-a-run-artifact.md) (context); the decision is still open.
+- ADR: [ADR-0061](adr/0061-workflow-b-pushes-a-branch-and-the-maintainer-opens-the-pr.md) (decision); [ADR-0052](adr/0052-playground-caller-pins-the-release-metrics-in-a-run-artifact.md) (context).
 
 ### `verdict` approval rule assumes a personal repo
 
