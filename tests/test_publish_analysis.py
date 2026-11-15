@@ -86,11 +86,15 @@ def test_analysis_comment_and_label(env):
 @pytest.mark.parametrize("root_cause", [
     {"file": "src/minicart/nope.py", "line": 3, "explanation": "x"},  # not a checked tree file
     {"file": "../secret.py", "line": 3, "explanation": "x"},
-    {"file": "src/minicart/cart.py", "line": 0, "explanation": "x"},  # no whole-number line
 ])
-def test_no_link_unless_the_path_passed_the_check_and_the_line_is_whole(env, root_cause):
+def test_no_link_unless_the_path_passed_the_check(env, root_cause):
     body = post(Gh(), root_cause=root_cause)
     assert "/blob/" not in body and f"**Root cause** — `{root_cause['file']}" in body
+
+
+def test_line_zero_links_the_checked_file_without_a_line(env):
+    body = post(Gh(), root_cause={"file": "src/minicart/cart.py", "line": 0, "explanation": "x"})
+    assert f"[src/minicart/cart.py](https://github.com/o/r/blob/{SHA}/src/minicart/cart.py)" in body and "#L" not in body
 
 
 def test_no_link_without_a_full_sha(env, monkeypatch):

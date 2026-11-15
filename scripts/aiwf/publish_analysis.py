@@ -48,10 +48,10 @@ def server() -> str:
 
 
 def file_ref(repo: str, sha: str, path: str, line: int, files: set[str]) -> str:
-    """A link at the analysed commit for a checked path and a whole-number line, else `path:line` as inline code."""
-    if path in files and SHA_RE.fullmatch(sha) and type(line) is int and line >= 1:
-        url = f"{server()}/{repo}/blob/{sha}/{quote(path, safe='/')}#L{line}"
-        return f"[{publish.clean(f'{path}#L{line}', 320)}]({url})"
+    """A link at the analysed commit for a checked path (to the line when whole-number, 0 = whole file), else inline code."""
+    if path in files and SHA_RE.fullmatch(sha) and type(line) is int and line >= 0:
+        url = f"{server()}/{repo}/blob/{sha}/{quote(path, safe='/')}" + (f"#L{line}" if line else "")
+        return f"[{publish.clean(f'{path}#L{line}' if line else path, 320)}]({url})"
     return inline(f"{path}:{line}" if line else path, 320)
 
 
