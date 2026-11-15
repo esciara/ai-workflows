@@ -9,7 +9,7 @@
   from the orchestrator's own check (setup, test, reproduction command) and the reviewer's verdict, and pushes the
   round's cumulative diff (rejected rounds too) through the Git data API, only when it touches no CI config (`.github/`),
   the status line is still the approval and the branch head is still the commit pushed last. Writes the round record.
-  A changed status line (a later B2) stops the loop without escalating (`superseded`); a moved head or the round cap
+  A changed status line (a later B2, `/no-fix`, another `/fix`) stops the loop without escalating (`superseded`); a moved head or the round cap
   escalates.
 - Escalation (`aiwf fix-escalate`, module `fix_escalate`) reads the round records.
 """

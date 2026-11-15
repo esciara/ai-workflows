@@ -822,7 +822,7 @@ jobs:
       head: ${{ steps.push.outputs.head }}  # the commit pushed last ('' while nothing is pushed)
       next: ${{ steps.push.outputs.next }}
       escalate: ${{ steps.push.outputs.escalate }}
-      superseded: ${{ steps.push.outputs.superseded }}  # stopped by a later B2: the end job says so, no escalation
+      superseded: ${{ steps.push.outputs.superseded }}  # the status line changed: the end job says so, no escalation
     steps: &push-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -982,9 +982,9 @@ jobs:
 
   # B5 escalation (spec B5, ADR-0061): the loop ended without an approved round (cap reached, or someone else pushed
   # to the branch). No PR: one comment that mentions each maintainer with every round's findings and the compare link of
-  # `ai-fix/issue-<n>` when it exists, `fix: needs-maintainer`, the maintainers assigned to the issue. When a later B2
-  # stopped the loop (`superseded`), the same comment only says so with the kept branch's compare link: no label, no
-  # assignment. An exit, not an `ai: error`.
+  # `ai-fix/issue-<n>` when it exists, `fix: needs-maintainer`, the maintainers assigned to the issue. When a changed
+  # status line stopped the loop (`superseded`), the same comment only says so with the kept branch's compare link: no
+  # label, no assignment. An exit, not an `ai: error`.
   escalate:
     needs: [fix-context, round-1-push, round-2-push, round-3-push]
     if: ${{ !cancelled() && (needs.round-1-push.outputs.escalate == 'true' || needs.round-2-push.outputs.escalate == 'true' || needs.round-3-push.outputs.escalate == 'true' || needs.round-1-push.outputs.superseded == 'true' || needs.round-2-push.outputs.superseded == 'true' || needs.round-3-push.outputs.superseded == 'true') }}

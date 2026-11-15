@@ -376,6 +376,20 @@ def test_push_cli_writes_the_record_and_outputs(monkeypatch, tmp_path, base):
     assert "forced failure (e2e)" in (tmp_path / "round/findings.md").read_text()
 
 
+def test_a_superseded_round_flows_from_the_push_outputs_to_the_one_line_comment(monkeypatch, tmp_path, base):
+    gh = Gh(comments=[comment(ANALYSIS.replace(APPROVED, pa.WAITING))])
+    code, out = push_cli(monkeypatch, tmp_path, base, gh)
+    assert code == 0 and "next=false\nescalate=false\nsuperseded=true" in out
+    (tmp_path / "records/fix-round-1").mkdir(parents=True)
+    (tmp_path / "round/round.json").rename(tmp_path / "records/fix-round-1/round.json")
+    gh = Gh()
+    monkeypatch.setattr(esc.config, "run_gh", gh)
+    assert cli.main(["fix-escalate", "--repo", REPO, "--issue", "1", "--records", str(tmp_path / "records")]) == 0
+    [body] = gh.comment_bodies()
+    assert "the analysis status changed while this ran" in body and "no branch left" in body
+    assert not [c for c in gh.writes() if "/labels" in gh.url(c) or "/assignees" in gh.url(c)]
+
+
 def test_push_cli_without_a_check_log_says_the_check_did_not_finish(monkeypatch, tmp_path, base):
     code, _ = push_cli(monkeypatch, tmp_path, base, Gh(comments=[comment(ANALYSIS)]), log=None)
     record = json.loads((tmp_path / "round/round.json").read_text())
@@ -467,9 +481,9 @@ def test_a_superseded_loop_says_so_in_one_line_without_label_or_assignment(monke
     monkeypatch.delenv("GITHUB_SERVER_URL", raising=False)
     gh = Gh(head=head)
     rounds = [rec(1), rec(2, outcome="stopped", superseded=True)]
-    assert esc.escalate(gh, REPO, 1, CFG, rounds, RUN) == "#1: superseded by a newer analysis, not escalated"
+    assert esc.escalate(gh, REPO, 1, CFG, rounds, RUN) == "#1: analysis status changed, not escalated"
     [body] = gh.comment_bodies()
-    assert body == f"{esc.MARKER}\nFix loop stopped: superseded by the newer analysis; {expected} [run]({RUN})"
+    assert body == f"{esc.MARKER}\nFix loop stopped: the analysis status changed while this ran (newer analysis, `/no-fix` or another `/fix`); {expected} [run]({RUN})"
     assert "@" not in body.replace("[run]", "")
     assert not [c for c in gh.writes() if "/labels" in gh.url(c) or "/assignees" in gh.url(c)]
 
