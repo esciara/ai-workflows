@@ -1,6 +1,6 @@
 # Diagrams
 
-Snapshot of 2026-11-14, hand-maintained: nothing generates it. Where things stand is the Status column of `docs/plan.md`, which wins over any box colour here. Only work merged on `main` has a flow diagram; a new diagram goes in a PR description when useful.
+Snapshot of 2026-11-15, hand-maintained: nothing generates it. Where things stand is the Status column of `docs/plan.md`, which wins over any box colour here. Only work merged on `main` has a flow diagram; a new diagram goes in a PR description when useful.
 
 ## Overview — work packages and dependencies
 
@@ -15,7 +15,7 @@ Key:
   - solid dark box = done
   - pale box with thick solid border = in progress (or in review)
   - very pale box with dotted border = not started
-- Parent boxes (WP2, WP11, WP12) are the whole package; the split boxes (WP2a, WP2b, WP11a, WP11b, WP11b1, WP12a, WP12b) are its PRs.
+- Parent boxes (WP2, WP9, WP11, WP12) are the whole package; the split boxes (WP2a, WP2b, WP8a, WP8b, WP9a, WP9b, WP11a, WP11b, WP11b1, WP12a, WP12b) are its PRs.
 
 The box statuses are those of the snapshot's date. Click a box to open that WP's definition in `docs/plan.md`; if clicking doesn't work in your viewer, use the table below.
 
@@ -32,9 +32,12 @@ flowchart TD
   WP5["WP5 B classify<br/>dedup, already fixed?"]
   WP6["WP6 B reproduce<br/>sandbox, needs-info"]
   WP7["WP7 B reporter silence<br/>ping, stale, close"]
-  WP8["WP8 B analyse<br/>root cause, /fix"]
-  WP9["WP9 B fix loop<br/>implement + review"]
-  WP10["WP10 B opens PR<br/>reviewed by A"]
+  WP8a["WP8a B analyst context<br/>no agent, path check"]
+  WP8b["WP8b B analyse + ask<br/>root cause, /fix, /no-fix"]
+  WP9["WP9 B fix loop<br/>(whole: 9a + 9b)"]
+  WP9b["WP9b B fix prompts<br/>implementer, reviewer"]
+  WP9a["WP9a B fix loop<br/>rounds, push ai-fix/issue-n"]
+  WP10["WP10 B hands over the PR<br/>compare-link comment (ADR-0061)"]
   WP11["WP11 Notifications<br/>(whole: 11a + 11b)"]
   WP11a["WP11a Notification senders<br/>Slack, Telegram"]
   WP11b["WP11b Notification events<br/>the 5 events"]
@@ -47,8 +50,8 @@ flowchart TD
   WP15["WP15 A usage metrics<br/>one line per run"]
   WP16["WP16 Three e2e slots<br/>ADR-0056"]
   WP17["WP17 Pre-push review loop<br/>dev process"]
-  WP18["WP18 A closes fixed threads"]
-  WP19["WP19 B: A's findings back<br/>into the fix loop"]
+  WP18["WP18 A resolves its own<br/>fixed threads"]
+  WP19["WP19 B: A's findings back<br/>into the fix loop<br/>(trigger undecided, ADR-0061)"]
 
   WP0 --> WP1
   WP1 --> WP2
@@ -59,8 +62,11 @@ flowchart TD
   WP1 --> WP5
   WP5 --> WP6
   WP6 --> WP7
-  WP6 --> WP8
-  WP8 --> WP9
+  WP6 --> WP8a
+  WP8a --> WP8b
+  WP8b --> WP9
+  WP8b --> WP9b
+  WP9b --> WP9a
   WP9 --> WP10
   WP3 --> WP10
   WP1 --> WP11
@@ -74,7 +80,7 @@ flowchart TD
   WP1 --> WP12a
   WP1 --> WP12b
   WP3 --> WP13
-  WP8 --> WP13
+  WP8b --> WP13
   WP3 --> WP14
   WP15 --> WP14
   WP2 --> WP15
@@ -108,23 +114,26 @@ flowchart TD
   click WP5 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L41" "Open WP5 in docs/plan.md" _blank
   click WP6 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L42" "Open WP6 in docs/plan.md" _blank
   click WP7 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43" "Open WP7 in docs/plan.md" _blank
-  click WP8 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44" "Open WP8 in docs/plan.md" _blank
-  click WP9 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45" "Open WP9 in docs/plan.md" _blank
-  click WP10 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46" "Open WP10 in docs/plan.md" _blank
-  click WP11 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L47" "Open WP11 in docs/plan.md" _blank
-  click WP11a "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L48" "Open WP11a in docs/plan.md" _blank
-  click WP11b "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L49" "Open WP11b in docs/plan.md" _blank
-  click WP11b1 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50" "Open WP11b1 in docs/plan.md" _blank
-  click WP12 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L51" "Open WP12 in docs/plan.md" _blank
-  click WP12a "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L52" "Open WP12a in docs/plan.md" _blank
-  click WP12b "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L53" "Open WP12b in docs/plan.md" _blank
-  click WP13 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L54" "Open WP13 in docs/plan.md" _blank
-  click WP14 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L55" "Open WP14 in docs/plan.md" _blank
-  click WP15 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L56" "Open WP15 in docs/plan.md" _blank
-  click WP16 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L57" "Open WP16 in docs/plan.md" _blank
-  click WP17 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L58" "Open WP17 in docs/plan.md" _blank
-  click WP18 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L59" "Open WP18 in docs/plan.md" _blank
-  click WP19 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L60" "Open WP19 in docs/plan.md" _blank
+  click WP8a "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44" "Open WP8a in docs/plan.md" _blank
+  click WP8b "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45" "Open WP8b in docs/plan.md" _blank
+  click WP9 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46" "Open WP9 in docs/plan.md" _blank
+  click WP9b "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L47" "Open WP9b in docs/plan.md" _blank
+  click WP9a "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L48" "Open WP9a in docs/plan.md" _blank
+  click WP10 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L49" "Open WP10 in docs/plan.md" _blank
+  click WP11 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50" "Open WP11 in docs/plan.md" _blank
+  click WP11a "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L51" "Open WP11a in docs/plan.md" _blank
+  click WP11b "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L52" "Open WP11b in docs/plan.md" _blank
+  click WP11b1 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L53" "Open WP11b1 in docs/plan.md" _blank
+  click WP12 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L54" "Open WP12 in docs/plan.md" _blank
+  click WP12a "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L55" "Open WP12a in docs/plan.md" _blank
+  click WP12b "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L56" "Open WP12b in docs/plan.md" _blank
+  click WP13 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L57" "Open WP13 in docs/plan.md" _blank
+  click WP14 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L58" "Open WP14 in docs/plan.md" _blank
+  click WP15 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L59" "Open WP15 in docs/plan.md" _blank
+  click WP16 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L60" "Open WP16 in docs/plan.md" _blank
+  click WP17 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L61" "Open WP17 in docs/plan.md" _blank
+  click WP18 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L62" "Open WP18 in docs/plan.md" _blank
+  click WP19 "https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L63" "Open WP19 in docs/plan.md" _blank
 
   class WP0 baseDone
   class WP1 baseDone
@@ -136,8 +145,11 @@ flowchart TD
   class WP5 bDone
   class WP6 bDone
   class WP7 bDone
-  class WP8 b
-  class WP9 b
+  class WP8a bDone
+  class WP8b bDone
+  class WP9 bDone
+  class WP9a bDone
+  class WP9b bDone
   class WP10 b
   class WP11 xWip
   class WP11a xDone
@@ -151,7 +163,7 @@ flowchart TD
   class WP15 aDone
   class WP16 baseDone
   class WP17 a
-  class WP18 a
+  class WP18 aDone
   class WP19 b
 ```
 
@@ -167,27 +179,31 @@ flowchart TD
 | WP5 | done | [docs/plan.md, line 41](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L41) |
 | WP6 | done | [docs/plan.md, line 42](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L42) |
 | WP7 | done | [docs/plan.md, line 43](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L43) |
-| WP8 | todo | [docs/plan.md, line 44](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44) |
-| WP9 | todo | [docs/plan.md, line 45](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45) |
-| WP10 | todo | [docs/plan.md, line 46](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46) |
-| WP11 | in progress | [docs/plan.md, line 47](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L47) |
-| WP11a | done | [docs/plan.md, line 48](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L48) |
-| WP11b | todo | [docs/plan.md, line 49](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L49) |
-| WP11b1 | done | [docs/plan.md, line 50](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50) |
-| WP12 | done | [docs/plan.md, line 51](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L51) |
-| WP12a | done | [docs/plan.md, line 52](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L52) |
-| WP12b | done | [docs/plan.md, line 53](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L53) |
-| WP13 | todo | [docs/plan.md, line 54](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L54) |
-| WP14 | done | [docs/plan.md, line 55](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L55) |
-| WP15 | done | [docs/plan.md, line 56](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L56) |
-| WP16 | done | [docs/plan.md, line 57](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L57) |
-| WP17 | todo | [docs/plan.md, line 58](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L58) |
-| WP18 | todo | [docs/plan.md, line 59](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L59) |
-| WP19 | todo | [docs/plan.md, line 60](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L60) |
+| WP8a | done | [docs/plan.md, line 44](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L44) |
+| WP8b | done | [docs/plan.md, line 45](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45) |
+| WP9 | done | [docs/plan.md, line 46](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L46) |
+| WP9b | done | [docs/plan.md, line 47](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L47) |
+| WP9a | done | [docs/plan.md, line 48](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L48) |
+| WP10 | todo | [docs/plan.md, line 49](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L49) |
+| WP11 | in progress | [docs/plan.md, line 50](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L50) |
+| WP11a | done | [docs/plan.md, line 51](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L51) |
+| WP11b | todo | [docs/plan.md, line 52](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L52) |
+| WP11b1 | done | [docs/plan.md, line 53](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L53) |
+| WP12 | done | [docs/plan.md, line 54](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L54) |
+| WP12a | done | [docs/plan.md, line 55](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L55) |
+| WP12b | done | [docs/plan.md, line 56](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L56) |
+| WP13 | todo | [docs/plan.md, line 57](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L57) |
+| WP14 | done | [docs/plan.md, line 58](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L58) |
+| WP15 | done | [docs/plan.md, line 59](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L59) |
+| WP16 | done | [docs/plan.md, line 60](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L60) |
+| WP17 | todo | [docs/plan.md, line 61](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L61) |
+| WP18 | done | [docs/plan.md, line 62](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L62) |
+| WP19 | todo | [docs/plan.md, line 63](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L63) |
 
 Milestones: see [docs/plan.md](plan.md#slices-and-test-setup).
 
-Not started, so no flow diagram yet: WP8, WP9, WP10, WP11b (other events), WP13, WP17, WP18, WP19.
+Not started, so no flow diagram yet: WP10 (the compare-link comment after an approved round), WP11b (other events), WP13, WP17, WP19.
+
 ## WP1 — Shared runtime
 
 Done when ([docs/plan.md, line 35](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L35)): A command from a maintainer is accepted, from a non-maintainer is refused; all labels exist
@@ -377,6 +393,62 @@ flowchart TD
   KO -.-> ST
 ```
 
+## WP8b — B3–B4 · analyse and ask
+
+Done when ([docs/plan.md, line 45](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L45)): Reproduced bug gets one analysis comment and `triage: awaiting-maintainer`; `/fix <guidance>` and `/no-fix` do what the spec says; a non-maintainer's `/fix` changes nothing (`tests/e2e/test_wp8.py`)
+
+WP8a (no diagram) builds the analyst's context: no agent, no token, with a path check on B2's untrusted names.
+
+```mermaid
+flowchart TD
+  R["B2 ended 'triage: reproduced'<br/>(same run, or a later B2 that reproduces)"] --> CX["analyst context job, no agent, no token<br/>test, output, commands, code at B2's commit<br/>path check: relative, real path inside the tree,<br/>no symlink, regular file; size capped"]
+  CX --> AN["Analyst agent job<br/>no commands, no file tools, no GitHub token<br/>root cause, blast radius, fix plan; JSON only"]
+  AN --> PU["Publish job, the only writer<br/>risk tier from A's path rules, file and line links built by the orchestrator<br/>analyst text cleaned"]
+  PU --> CM["One analysis comment, found by its hidden marker<br/>mentions the maintainers, status 'waiting'<br/>label 'triage: awaiting-maintainer'"]
+  CM --> W["Waits for a command<br/>only maintainers (config + write/admin), only while the label is on"]
+  W -- "/fix or /fix guidance" --> F["Label removed, status line = who decided + guidance<br/>starts B5 (WP9a diagram)"]
+  W -- "/no-fix reason" --> D["Label removed, 'fix: declined'<br/>status line = reason, stop"]
+  W -- "non-maintainer, or label not on" --> X["Nothing changes"]
+  CM -. "a later B2 ends reproduced or not" .-> RS["awaiting-maintainer and declined removed<br/>comment updated or marked superseded"]
+```
+
+## WP9a — B5 · fix loop (ADR-0061)
+
+Done when ([docs/plan.md, line 48](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L48)): Seeded bug fixed in 3 rounds or fewer; a forced failure gives the compare-link comment, `fix: needs-maintainer` and issue assignment, no PR (`tests/e2e/test_wp9.py`)
+
+Workflow B never opens a PR. WP10 (the compare-link comment after an approved round, and the PR the maintainer opens) is not built yet: the approved exit below is the spec, not running.
+
+```mermaid
+flowchart TD
+  F["/fix accepted<br/>(WP8b)"] --> BRai-fix/issue-n already exists?
+  BR -- yes --> BC["Comment: delete the branch to retry<br/>no round runs"]
+  BR -- no --> IM["Implementer, sandbox, no GitHub token<br/>round 1 writes the fix; rounds 2 and 3 answer the reviewer<br/>rounds: limits.fix_rounds, 1 to 3"]
+  IM --> CKOrchestrator's own check, no token<br/>apply diff, setup, test, repro test, no secret
+  CK -- fail --> RJ["Round rejected, reviewer skipped"]
+  CK -- pass --> RV["Adversarial reviewer, fresh context<br/>approve or reject, with findings"]
+  RV -- reject --> RJ
+  RJ --> PS
+  RV -- approve --> PS{"Push the round's diff to ai-fix/issue-n<br/>Git data API, rejected rounds included<br/>guards: head is the last pushed commit, status line still the approval,<br/>nothing under .github/ or CI config / CODEOWNERS (else round rejected)"}
+  PS -- "head moved: a person pushed" --> HG["Loop stops, the branch is theirs<br/>comment + compare link, fix: needs-maintainer, assigned"]
+  PS -- "analysis status changed (later B2, /no-fix, /fix)" --> SG["Stops, no escalation<br/>comment with the branch compare link"]
+  PS -- "approved" --> OK["B6 / WP10, not built yet:<br/>comment with compare link and PR text to paste<br/>the maintainer opens the PR, A reviews it"]
+  PS -- "rejected, rounds left" --> IM
+  PS -- "rejected after the last round" --> ES["Escalate: comment with each round's findings + compare link<br/>label 'fix: needs-maintainer', maintainer assigned and mentioned"]
+```
+
+## WP18 — A resolves its own fixed threads (ADR-0057)
+
+Done when ([docs/plan.md, line 62](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L62)): Seeded-bug PR: a fixing push gets A's reply and the thread resolved, the summary's "N threads open" equals the real number of unresolved threads; a non-fixing push leaves the thread open (`tests/e2e/test_wp18.py`)
+
+```mermaid
+flowchart TD
+  P["New push, A reruns<br/>(step 9, WP2b)"] --> VR{"Verify pass marks a finding resolved<br/>or still open"}
+  VR -- "resolved, and it has an inline thread A opened<br/>(first comment id in A's state marker, never matched by author)" --> RP["Publish job replies in the thread<br/>'resolved in sha: reason' (schema-checked reason field)<br/>then resolves it"]
+  VR -- "still open" --> KO["Thread stays open, no reply"]
+  RP & KO --> SM["Summary 'Since last run' line<br/>ends with N threads open (A's and others')"]
+  SM --> VD["verdict step summary and non-gating status:<br/>'N unresolved threads at sha', information only"]
+```
+
 ## WP11a — Notification senders
 
 Done when ([docs/plan.md, line 48](https://github.com/esciara/ai-workflows/blob/main/docs/plan.md?plain=1#L48)): A `workflow_dispatch` test event sends one message with a working link, on both channels
@@ -464,9 +536,9 @@ flowchart TD
   DR["tests/e2e/test_callers_match.py<br/>read-only, no slot"] -. "3 callers match the template,<br/>normal caller gate = negation of the 3 slot gates" .-> CL
 ```
 
-## Verdict check and stale-run rerun (ADR-0053, 0055, 0059)
+## Verdict check and stale-run rerun (ADR-0053, 0059; advisory since ADR-0060)
 
-On this repo's own PRs only: `verdict` is a job of `.github/workflows/ai-review.yml` and a required check of the ruleset on `main`. After-merge check still open (ADR-0059): confirm on the next real `human-review` PR that the rerun clears the block.
+On this repo's own PRs only: `verdict` is a job of `.github/workflows/ai-review.yml`. Since ADR-0060 (2026-11-15) it no longer gates: the ruleset on `main` requires only `gitleaks` and `test`, so a PR merges on green with no approval and a red `verdict` only lists it for the release review. ADR-0055 (the explained-red states) is superseded by ADR-0060; what the job does with its states, and whether it stays, is a follow-up of ADR-0060. Code-owner review remains only for the guard, policy and trust-boundary files in `.github/CODEOWNERS`. In target repos nothing changes: the verdict is advisory and a human presses Merge. After-merge check still open (ADR-0059): confirm on the next real `human-review` PR that the rerun clears the red.
 
 ```mermaid
 flowchart TD
@@ -484,6 +556,20 @@ flowchart TD
   RR -- yes --> LR["rerun the verdict job of every earlier run<br/>on that head whose last attempt failed<br/>(actions: write, this job only)"]
   RR -- "no (fork, Dependabot, moved head)" --> MN["stale red runs: maintainer reruns by hand"]
   LR --> RE["each rerun re-evaluates with the same rule<br/>green only on that same owner approval"]
-  RE --> AM["required check green: GitHub auto-merge can fire (ADR-0051)"]
+  RE --> AM["verdict green again: advisory only, not a required check (ADR-0060)"]
   R1 -. "approval later" .-> RV
+```
+
+## Release (ADR-0060)
+
+Process on this repo, not a workflow. Steps 2 and 3 are done by hand by the `aiwf-orch` session; a helper script is only an optional follow-up in ADR-0060.
+
+```mermaid
+flowchart TD
+  M["PRs merge into main on green<br/>(test + gitleaks), no per-PR approval<br/>auto-merge by rebase, enabled by the App"] --> E["E2E suite on main HEAD, once per slice<br/>red: fixed forward by new PRs, then rerun on the new HEAD"]
+  E --> RP["Release-candidate report, one commit of main<br/>e2e run IDs, diff since the last tag of the release-review paths,<br/>A's findings on the merged PRs and what happened to each"]
+  RP --> MR["Maintainer reads the report once"]
+  MR --> TG["Only the maintainer creates the v* tag<br/>tag ruleset blocks everyone else, no agent creates, moves or deletes tags"]
+  TG --> PN["Target repos' callers pin that tag's sha"]
+  M -.-> OW["This repo's own caller and the playground stay on @main<br/>(accepted risk: unreviewed code runs between tags)"]
 ```
