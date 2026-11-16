@@ -21,6 +21,7 @@
 /tests/test_codeowners.py           @esciara
 
 # Trust boundaries: command authors (ADR-0005), fork-PR review gate (ADR-0044).
-# Add the ADR-0037 sandbox/scrub code here when it lands.
+# ADR-0037 sandbox: shared composite action (settings + setup).
+/.github/actions/aiwf-sandbox/      @esciara
 /scripts/aiwf/commands.py           @esciara
 /scripts/aiwf/review_gate.py        @esciara
