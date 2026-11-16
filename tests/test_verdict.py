@@ -187,3 +187,9 @@ def test_owner_approvals_take_the_latest_non_comment_review_per_user():
     reviews = [r("b", "APPROVED"), r("a", "APPROVED"), r("a", "CHANGES_REQUESTED"), r("c", "APPROVED", "MEMBER"),
                r("d", "APPROVED", sha="old"), r("b", "COMMENTED")]
     assert verdict.owner_approvals(reviews, "h") == "b"
+
+
+def test_owner_approvals_are_sorted_and_comma_joined():
+    def r(login):
+        return {"user": {"login": login}, "state": "APPROVED", "commit_id": "h", "author_association": "OWNER"}
+    assert verdict.owner_approvals([r("z"), r("a")], "h") == "a,z"

@@ -173,9 +173,7 @@ class Verdict:
             print("::warning title=verdict::could not list earlier verdict runs; rerun red ones by hand")
             return
         for run in self._lines(["api", "--paginate", f"repos/{repo}/actions/workflows/{wf}/runs?head_sha={self.sha}"
-                                f"&status=completed&per_page=100", "--jq", ".workflow_runs[] | .id | tostring"]):
-            if run == env["RUN_ID"]:
-                continue
+                                f"&status=completed&per_page=100", "--jq", ".workflow_runs[] | select((.id | tostring) != $ENV.RUN_ID) | .id"]):
             for job in self._lines(["api", "--paginate", f"repos/{repo}/actions/runs/{run}/jobs?filter=latest&per_page=100",
                                     "--jq", RERUN_JOBS_JQ]):
                 try:
@@ -191,7 +189,10 @@ class Verdict:
             # Green, no new status: the other runs on this head keep their answers, and a red one still blocks (ADR-0059).
             self.summary(f"review state {review_state} ignored; the other verdict runs of {short} keep their answers")
             raise Done(0)
-        reviews = _json_stream(self.gh(["api", "--paginate", f"repos/{repo}/pulls/{pr}/reviews", "--jq", ".[]"]))
+        try:  # the shell pipeline `gh | jq -s .` hid a failed listing: no reviews, and the run went on
+            reviews = _json_stream(self.gh(["api", "--paginate", f"repos/{repo}/pulls/{pr}/reviews", "--jq", ".[]"]))
+        except RuntimeError:
+            reviews = []
         approved = owner_approvals(reviews, self.sha)
         if approved:
             self.status("success", f"approved on {short} by {approved}")
