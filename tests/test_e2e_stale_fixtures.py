@@ -25,3 +25,33 @@ def test_closes_only_old_non_reused_e2e_issues():
         issue(6, "[e2e] WP5 pr", "2026-11-10T00:00:00Z", pull_request={}),  # PR: kept
     ]
     assert pg.stale_fixture_issues(issues, NOW) == [1, 4]
+
+
+def test_close_stale_fixtures_pages_oldest_first_and_closes_the_stale(monkeypatch):
+    import json
+    import time as _t
+
+    calls, closed = [], []
+    old = _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime(_t.time() - 5 * 3600))
+    new = _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime())
+
+    def gh(args, **kw):
+        calls.append(args)
+        return "\n".join(json.dumps(i) for i in [issue(7, "[e2e] WP6 x", old), issue(8, "[e2e] WP6 y", new)])
+
+    monkeypatch.setattr(pg, "gh", gh)
+    monkeypatch.setattr(pg, "close_issue", closed.append)
+    assert pg.close_stale_fixtures() == [7] and closed == [7]
+    assert "--paginate" in calls[0] and "direction=asc" in calls[0][-1]
+
+
+def test_cleanup_failure_is_not_fatal(monkeypatch, capsys):
+    import pytest
+    conftest = __import__("conftest")
+
+    def boom():
+        pytest.fail("gh down", pytrace=False)
+
+    monkeypatch.setattr(pg, "close_stale_fixtures", boom)
+    conftest.close_stale_best_effort()
+    assert "cleanup skipped" in capsys.readouterr().out

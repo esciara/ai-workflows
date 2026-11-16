@@ -378,7 +378,9 @@ def stale_fixture_issues(issues: list[dict[str, Any]], now: float) -> list[int]:
 
 def close_stale_fixtures() -> list[int]:
     """Close what `stale_fixture_issues` finds on the playground (as "not planned", never deleted)."""
-    found = api(f"repos/{REPO}/issues?labels={FIXTURE_LABEL}&state=open&per_page=100")
+    out = gh(["api", "--paginate", "--jq", ".[]",  # oldest first and all pages: stale ones are the oldest
+              f"repos/{REPO}/issues?labels={FIXTURE_LABEL}&state=open&sort=created&direction=asc&per_page=100"])
+    found = [json.loads(line) for line in out.splitlines() if line.strip()]
     numbers = stale_fixture_issues(found, time.time())
     for n in numbers:
         close_issue(n)

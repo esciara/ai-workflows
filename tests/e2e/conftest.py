@@ -21,13 +21,11 @@ def pytest_configure(config):
     fixture and the playground helpers read them."""
     if os.environ.get("AIWF_E2E") != "1" or hasattr(config, "workerinput"):
         return
-    closed = pg.close_stale_fixtures()  # leftovers of crashed runs would be found as duplicates by B1
-    if closed:
-        print(f"closed stale e2e fixture issues: {closed}")
     try:
         slot = e2eslot.parse_slot(os.environ.get("AIWF_E2E_SLOT"))
     except ValueError as e:
         raise pytest.UsageError(str(e)) from None
+    close_stale_best_effort()
     if slot is None:
         return
     held = e2eslot.hold(slot)
@@ -37,6 +35,17 @@ def pytest_configure(config):
     sha = e2eslot.push_target(n, remote=os.environ.get("AIWF_E2E_REMOTE", "origin"))
     os.environ.update({e2eslot.HELD_ENV: str(n), e2eslot.SHA_ENV: sha})
     print(f"e2e slot {n} held; e2e-target-{n} -> {sha}")
+
+
+def close_stale_best_effort() -> None:
+    """Leftovers of crashed runs would be found as duplicates by B1; hygiene only, so a GitHub failure is not fatal."""
+    try:
+        closed = pg.close_stale_fixtures()
+    except pytest.fail.Exception as e:
+        print(f"stale e2e fixture cleanup skipped: {e}")
+        return
+    if closed:
+        print(f"closed stale e2e fixture issues: {closed}")
 
 
 @pytest.fixture
