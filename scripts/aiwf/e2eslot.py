@@ -166,13 +166,17 @@ def push_target(n: int, ref: str = "HEAD", remote: str = "origin", cwd: Path = R
         raise RuntimeError(f"push_target needs e2e slot {n}: run it inside e2eslot.hold({n})")
     target = target_ref(n)
     sha = _git("rev-parse", f"{ref}^{{commit}}", cwd=cwd)
-    current = _git("ls-remote", remote, target, cwd=cwd).split("\t")[0]
-    push = ["push", "--quiet", f"--force-with-lease={target}:{current}", remote, f"{sha}:{target}"]
-    if Path(cwd, remote).exists():  # a local remote (unit tests)
-        _git(*push, cwd=cwd)
-    else:  # GitHub: push as the agent App (ADR-0031), never with the maintainer's git credentials
-        subprocess.run([str(ROOT / "scripts" / "dev" / "as-agent"), "git", *push], cwd=cwd, capture_output=True,
-                       text=True, check=True)
+    local = Path(cwd, remote).exists()  # a local remote (unit tests)
+
+    def remote_git(*args: str) -> str:
+        if local:
+            return _git(*args, cwd=cwd)
+        # GitHub: as the agent App (ADR-0031), never with the maintainer's git credentials (no ssh key here either)
+        wrapper = str(ROOT / "scripts" / "dev" / "as-agent")
+        return subprocess.run([wrapper, "git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout.strip()
+
+    current = remote_git("ls-remote", remote, target).split("\t")[0]
+    remote_git("push", "--quiet", f"--force-with-lease={target}:{current}", remote, f"{sha}:{target}")
     return sha
 
 
