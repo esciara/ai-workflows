@@ -25,7 +25,7 @@ from triage_fix import (COUPON_BUG, COUPON_FILES, ESCALATE_JOB, FIX_MARKER, GUID
 import playground as pg
 
 HANDOVER_MARKER = "<!-- ai-workflows:fix-pr -->"
-HANDOVER_JOB = "triage / handover"
+HANDOVER_JOB = "triage / fix / handover"
 
 
 def test_an_approved_fix_gives_the_compare_link_comment_and_opens_no_pr(e2e_target, tag, opened):
