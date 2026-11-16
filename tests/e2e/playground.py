@@ -358,6 +358,33 @@ def close_left_over(prefix: str, keep: str) -> None:
             close_issue(issue["number"])
 
 
+STALE_AFTER = 2 * 3600  # seconds; longer than any one scenario, so a parallel run's live issues are never touched
+_REUSED = re.compile(r"^\[e2e\] WP1 ")  # WP1 fixtures are reused across runs (reusable_issue): never closed here
+
+
+def stale_fixture_issues(issues: list[dict[str, Any]], now: float) -> list[int]:
+    """Numbers of open test-fixture `[e2e] ` issues older than STALE_AFTER, except the reused WP1 fixtures.
+
+    A crashed or interrupted run leaves its scenario issues open; B1's duplicate search (open and closed issues) then
+    labels the next run's same-bug fixture `triage: duplicate`. Run at session start (conftest)."""
+    out = []
+    for i in issues:
+        created = calendar.timegm(time.strptime(i["created_at"], "%Y-%m-%dT%H:%M:%SZ"))
+        if ("pull_request" not in i and i["title"].startswith("[e2e] ") and not _REUSED.match(i["title"])
+                and now - created > STALE_AFTER):
+            out.append(i["number"])
+    return out
+
+
+def close_stale_fixtures() -> list[int]:
+    """Close what `stale_fixture_issues` finds on the playground (as "not planned", never deleted)."""
+    found = api(f"repos/{REPO}/issues?labels={FIXTURE_LABEL}&state=open&per_page=100")
+    numbers = stale_fixture_issues(found, time.time())
+    for n in numbers:
+        close_issue(n)
+    return numbers
+
+
 def open_as_reporter(title: str, body: str) -> dict[str, Any]:
     """Open an issue as the tester App (the outside reporter), routed to the held slot's caller from its `opened`
     event; adds created_at and html_url."""
