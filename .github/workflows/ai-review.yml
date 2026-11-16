@@ -68,6 +68,15 @@ jobs:
       statuses: write
       actions: write   # rerun earlier failed `verdict` jobs on the head SHA only (ADR-0059)
     steps:
+      # The logic is `aiwf verdict` (scripts/aiwf/verdict.py), taken from main, never from the PR's own copy. No secret
+      # and no agent here; the token is the job's own (statuses and the rerun only).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -80,84 +89,4 @@ jobs:
           EVENT: ${{ github.event_name }}
           REVIEW_STATE: ${{ github.event.review.state }}
           REVIEW: ${{ needs.review.result }}
-        run: |
-          short=${HEAD_SHA:0:7}
-          # Information only (spec: Open threads): "N unresolved threads at <sha>", the PR's unresolved review threads,
-          # A's and others'. It never changes the result; the ruleset's "Require conversation resolution" is the gate.
-          threads_info() {
-            local q='query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){reviewThreads(first:100){pageInfo{hasNextPage} nodes{isResolved}}}}}'
-            local n  # past the first 100 threads: "N+" (one page is enough for information only)
-            n=$(gh api graphql -f query="$q" -f o="${REPO%%/*}" -f n="${REPO#*/}" -F p="$PR" \
-              --jq '.data.repository.pullRequest.reviewThreads | "\([.nodes[] | select(.isResolved | not)] | length)\(if .pageInfo.hasNextPage then "+" else "" end)"' 2>/dev/null) || n=
-            if [[ "$n" =~ ^[0-9]+\+?$ ]]; then echo "; $n unresolved thread$([ "$n" = 1 ] || echo s) at $short"; fi
-          }
-          bare() { echo "${1%; * unresolved thread*}"; }  # a restored text drops its old count
-          status() {  # status <state> <text>: the `verdict` commit status, max 140 characters; the job result is the verdict
-            local text; text=$(bare "$2")
-            local info; info=$(threads_info)
-            local desc="${text:0:$((140 - ${#info}))}$info"
-            # Not fatal: Dependabot runs get a read-only token whatever `permissions:` says, so the POST may be refused.
-            gh api -X POST "repos/$REPO/statuses/$HEAD_SHA" -f context=verdict -f state="$1" -f description="$desc" >/dev/null \
-              || echo "::warning title=verdict::could not post the verdict status (read-only token?)"
-            echo "verdict: $1, $desc" | tee -a "$GITHUB_STEP_SUMMARY"
-          }
-          red() { status failure "$1"; echo "::error title=verdict::$(bare "$1")"; exit 1; }
-          # Waiting keeps the job red (ADR-0055 playground result: a pending status does not gate a required check pinned to
-          # the Actions integration); the pending status still names the reason in the merge box.
-          hold() { status pending "$1"; echo "::error title=waiting for maintainer approval::$(bare "$1")"; exit 1; }
-          waiting() { hold "waiting for maintainer approval of $short ($1)"; }
-          # Earlier failed `verdict` jobs on this head SHA, each in its own check suite, keep the required check red even
-          # after this run is green (ADR-0059). After an owner approval, rerun them: each rerun re-evaluates with this
-          # logic, so a rerun turns green only on that same approval. Not fatal: fork and Dependabot runs get a read-only
-          # token (rerun by hand), and a moved head makes these runs irrelevant.
-          rerun_stale() {
-            if [ "$EVENT" != pull_request_review ] || [ "$RUN_ATTEMPT" != 1 ]; then return 0; fi
-            if [ "$HEAD_REPO" != "$REPO" ]; then echo "fork PR: no rerun of earlier verdict runs (read-only token)"; return 0; fi
-            if [ "$(gh api "repos/$REPO/pulls/$PR" --jq .head.sha)" != "$HEAD_SHA" ]; then echo "head moved: no rerun"; return 0; fi
-            wf=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq .workflow_id) \
-              || { echo "::warning title=verdict::could not list earlier verdict runs; rerun red ones by hand"; return 0; }
-            for run in $(gh api --paginate "repos/$REPO/actions/workflows/$wf/runs?head_sha=$HEAD_SHA&status=completed&per_page=100" \
-                --jq '.workflow_runs[] | select((.id | tostring) != $ENV.RUN_ID) | .id'); do
-              for job in $(gh api --paginate "repos/$REPO/actions/runs/$run/jobs?filter=latest&per_page=100" --jq '.jobs[]
-                  | select(.name == "verdict" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")) | .id'); do
-                if gh api -X POST "repos/$REPO/actions/jobs/$job/rerun" >/dev/null; then echo "reran verdict job $job of run $run"
-                else echo "::warning title=verdict::could not rerun verdict job $job of run $run; rerun it by hand"; fi
-              done
-            done
-          }
-          if [ "$EVENT" = pull_request_review ] && [ "$REVIEW_STATE" = commented ]; then
-            # Green, no new status: the other runs on this head keep their answers, and a red one still blocks (ADR-0059).
-            echo "review state $REVIEW_STATE ignored; the other verdict runs of $short keep their answers" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          # Latest review per user, kept when APPROVED on the head commit by the repository owner.
-          reviews=$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" --jq '.[]' | jq -s .)
-          approved=$(jq -r --arg sha "$HEAD_SHA" '
-            map(select(.state != "COMMENTED" and .state != "PENDING")) | group_by(.user.login) | map(last)
-            | map(select(.state == "APPROVED" and .commit_id == $sha and .author_association == "OWNER"))
-            | map(.user.login) | join(",")' <<<"$reviews")
-          if [ -n "$approved" ]; then status success "approved on $short by $approved"; rerun_stale; exit 0; fi
-          if [ "$EVENT" != pull_request ]; then
-            # No owner approval: restore the AI verdict of the head SHA, the newest `verdict` status this workflow posted
-            # that is not an approval (statuses are listed newest first). None yet: waiting.
-            prev=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses?per_page=100" --jq '[.[] | select(.context == "verdict"
-              and .creator.login == "github-actions[bot]" and ((.description // "") | startswith("approved on ") | not))][0]
-              | select(. != null) | "\(.state)\t\(.description // "")"')
-            prev_state=${prev%%$'\t'*}; prev_text=${prev#*$'\t'}
-            if [ "$prev_state" = failure ]; then red "$prev_text"; fi
-            if [ "$prev_state" = success ]; then status success "$prev_text"; exit 0; fi
-            if [ "$prev_state" = pending ]; then hold "$prev_text"; fi
-            waiting "no owner approval"
-          fi
-          if [ "$AUTHOR" = "dependabot[bot]" ]; then waiting "Dependabot PR, no AI review"; fi
-          if [ "$REVIEW" = skipped ]; then waiting "AI review did not run"; fi
-          if [ "$REVIEW" != success ]; then red "AI review $REVIEW and no owner approval of $short"; fi
-          labels=$(gh api "repos/$REPO/issues/$PR/labels" --jq '.[].name')
-          # Reasons from the AI review of the head commit ("**Verdict:** a; b." in its body), control characters removed.
-          why=$(jq -r --arg sha "$HEAD_SHA" '[.[] | select(.commit_id == $sha and .user.login == "github-actions[bot]")
-            | .body // "" | capture("\\*\\*Verdict:\\*\\* (?<r>[^\\n]*)") | .r | rtrimstr(".")] | last // ""' <<<"$reviews" \
-            | tr -d '[:cntrl:]')
-          if grep -qx 'ai-review: merge' <<<"$labels"; then status success "ai-review: merge on $short"; exit 0; fi
-          if grep -qx 'ai-review: human-review' <<<"$labels"; then waiting "${why:-human-review}"; fi
-          if grep -qx 'ai-review: changes-requested' <<<"$labels"; then red "changes requested on $short: ${why:-see the AI review}"; fi
-          waiting "no AI verdict label"
+        run: aiwf verdict
