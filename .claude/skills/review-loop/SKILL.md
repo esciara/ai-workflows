@@ -14,8 +14,7 @@ Run this before `as-agent gh pr create` or `gh pr ready`. Inputs: the base ref (
 - Review with a new subagent each round (Agent tool, `subagent_type: general-purpose`, `model: opus`). Never a fork, never the previous round's reviewer. Its prompt is the contents of `prompts/dev-reviewer.md` plus only: the base ref, the plan row's Done when, the spec/ADR sections touched, and in rounds 2 and 3 the previous findings and your dispositions. Never pass your own reasoning. Optionally also run `/code-review` in round 1; it does not count as a round.
 - Check the reply shape: JSON with `verdict` (`approve` or `reject`) and `findings` (each with `severity`, `file`, `line`, `claim`, `evidence`). On bad JSON, re-ask once with the same reviewer, then treat as `reject`.
 - `approve`, tests green: push and open the PR ready for review.
-- Still `reject` after round 3: push, open the PR as a draft (`gh pr create --draft`, no `verdict`, cannot merge), list the open findings in the description, and add the PR to the maintainer's batch.
-- Do not run `--auto` on a draft PR; enable auto-merge only when the PR is ready.
+- Still `reject` after round 3: push, open the PR as a draft (`gh pr create --draft`, no `verdict`, cannot merge; never enable `--auto` on it, only once ready), and `Result: escalated` in the block, list the open findings in the description, and add the PR to the maintainer's batch.
 
 ## PR description block
 
