@@ -188,7 +188,10 @@ def test_no_job_has_actions_write():
     posts = re.findall(r'"-X", "(\w+)", f"([^"]+)"', src)
     assert len(posts) == len(re.findall(r'"-X"', src)) == 2, "unparsed -X call"
     assert re.findall(r"^from aiwf\.ghapi import (.*)$", src, re.M) == ["GhRunner"], "no ghapi write helpers"
-    assert not re.search(r"event=|\"APPROVE\"", src), "verdict never approves"
+    masked = src.lower()
+    for word in ("approved", "approves", "approvals", "approval"):
+        masked = masked.replace(word, "")
+    assert "approve" not in masked and not re.search(r"event=|mutation|\"(pr|issue|run|release)\"", src), "verdict never approves"
     allowed = (r"repos/\{self\.repo\}/statuses/\{self\.sha\}", r"repos/\{repo\}/actions/jobs/\{job\}/rerun")
     for method, endpoint in posts:
         assert method == "POST" and any(re.fullmatch(a, endpoint) for a in allowed), (method, endpoint)
