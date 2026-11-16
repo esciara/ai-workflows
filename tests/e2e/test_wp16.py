@@ -5,8 +5,8 @@ own slot caller, which runs this repo at its own ref `e2e-target-<n>`; the drift
 Gating: needs the playground PR (caller-e2e-<n>.yml, notify-e2e-<n>.yml, labels `e2e-target-<n>`, normal caller gate
 = negation of the three slot gates) merged by the maintainer first, then the build PR (aiwf.e2eslot, playground.py).
 
-Run WITHOUT `AIWF_E2E_SLOT` (`AIWF_E2E=1 pytest tests/e2e/test_wp16.py -v`): the test itself holds slots 1 and 2 at the
-same time, points each slot's ref at HEAD, and opens one draft PR per slot from an `e2e/<n>/` branch. Draft PRs start
+Run WITHOUT `AIWF_E2E_SLOT` (`AIWF_E2E=1 pytest tests/e2e/test_wp16.py -v`): the test itself holds all three slots at the
+same time, points each slot's ref at HEAD (slot 3's caller runs and skips too), and opens one draft PR for slots 1 and 2 from an `e2e/<n>/` branch. Draft PRs start
 no review, so the only work is each caller's routing gate (`config`): cheap, and enough to prove routing. For each
 PR's head commit: exactly one caller ran `config` (its slot's), at `e2e-target-<n>` = the commit pushed; the normal
 caller and the other slot callers skipped it.
@@ -49,10 +49,10 @@ def runs_for(sha: str, after: str) -> dict[str, dict]:
 
 def test_two_slots_run_in_parallel_each_routed_to_its_own_caller_and_ref():
     if os.environ.get("AIWF_E2E_SLOT"):
-        pytest.fail("run test_wp16 without AIWF_E2E_SLOT: it holds slots 1 and 2 itself (not a pass)", pytrace=False)
+        pytest.fail("run test_wp16 without AIWF_E2E_SLOT: it holds the slots itself (not a pass)", pytrace=False)
     with contextlib.ExitStack() as stack:
         target = {}
-        for n in SLOTS:
+        for n in e2eslot.SLOTS:  # slot 3 too: its caller also runs (and skips) each PR, so its ref must resolve
             print(f"waiting for e2e slot {n} ...")
             assert stack.enter_context(e2eslot.hold(n)) == n
             target[n] = e2eslot.push_target(n)
