@@ -103,7 +103,7 @@ def reproduce_and_analyse(issue: dict[str, Any], files: str) -> str:
 
 NEEDS_MAINTAINER = "fix: needs-maintainer"
 FIX_MARKER = "<!-- ai-workflows:fix -->"
-ESCALATE_JOB = "triage / escalate"
+ESCALATE_JOB = "triage / fix / escalate"
 FIX_TIMEOUT = 5400  # up to 3 rounds of implementer (setup + tests in the sandbox), check and reviewer, cold runners
 ROUND = re.compile(r"/ round-(\d+) / (\w+)$")
 
