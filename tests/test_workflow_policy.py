@@ -381,9 +381,11 @@ def test_shared_token_check_fails_only_on_a_match_and_never_prints_the_token(tmp
 
     def check(token="SECRET", answer="{}", exec_path=str(exec_file), extra_path=str(extra)):
         env = {**os.environ, "TOKEN": token, "ANSWER": answer, "EXEC_FILE": exec_path, "EXTRA_FILE": extra_path}
-        return subprocess.run(["bash", "-c", run], env=env, capture_output=True, text=True)
+        # the shell a composite `shell: bash` step uses
+        return subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", run], env=env, capture_output=True, text=True)
 
     assert check().returncode == 0
+    assert check(answer="SECRET" + "x" * 200_000).returncode == 1  # grep -q exits early; no SIGPIPE miss
     assert check(exec_path="", extra_path="").returncode == 0
     assert check(token="").returncode == 1  # no token to compare with: fail closed
     for hit in ({"answer": "x SECRET y"}, {"exec_path": _write(tmp_path / "e2", "a SECRET")},

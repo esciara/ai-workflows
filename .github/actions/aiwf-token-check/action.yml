@@ -34,7 +34,8 @@ runs:
         [ -n "$TOKEN" ] || { echo "::error::no token to check against"; exit 1; }
         found=0
         if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ] && grep -qF -- "$TOKEN" "$EXEC_FILE"; then found=1; fi
-        if printf '%s' "$ANSWER" | grep -qF -- "$TOKEN"; then found=1; fi
+        # No pipe: under the composite step's `-o pipefail`, grep -q exiting early would turn printf's SIGPIPE into a miss.
+        if grep -qF -- "$TOKEN" <<< "$ANSWER"; then found=1; fi
         if [ -n "$EXTRA_FILE" ] && [ -f "$EXTRA_FILE" ] && grep -qF -- "$TOKEN" "$EXTRA_FILE"; then found=1; fi
         if [ "$found" = 1 ]; then echo "::error title=Token check::the model token appears in the agent's output"; exit 1; fi
         echo "token check passed"
