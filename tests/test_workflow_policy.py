@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import shutil
 import subprocess
 import tomllib
 from pathlib import Path
@@ -188,6 +187,8 @@ def test_no_job_has_actions_write():
     assert not re.search(r"--method\b|workflow_dispatch|/cancel|\"run\"", src), "no other write path"
     posts = re.findall(r'"-X", "(\w+)", f"([^"]+)"', src)
     assert len(posts) == len(re.findall(r'"-X"', src)) == 2, "unparsed -X call"
+    assert re.findall(r"^from aiwf\.ghapi import (.*)$", src, re.M) == ["GhRunner"], "no ghapi write helpers"
+    assert not re.search(r"event=|\bAPPROVE\b|/reviews\"?, \"-", src), "verdict never approves"
     allowed = (r"repos/\{self\.repo\}/statuses/\{self\.sha\}", r"repos/\{repo\}/actions/jobs/\{job\}/rerun")
     for method, endpoint in posts:
         assert method == "POST" and any(re.fullmatch(a, endpoint) for a in allowed), (method, endpoint)
@@ -369,6 +370,7 @@ def test_verdict_job_is_read_only_and_reruns_on_reviews():
     assert "secrets" not in job
     uses = [s["uses"] for s in job["steps"] if "uses" in s]  # only main's own checkout and setup: no agent, no third party
     assert [u.split("@")[0] for u in uses] == ["actions/checkout", "./.ai-workflows/.github/actions/aiwf-setup"]
+    assert job["steps"][1]["with"] == {"cache": "false"}, "no restored venv: a PR run could have saved a poisoned one"
     checkout = job["steps"][0]["with"]
     assert checkout["ref"] == "main" and checkout["persist-credentials"] is False, "the PR's own code never runs here"
     assert job["steps"][-1]["run"] == "aiwf verdict"
