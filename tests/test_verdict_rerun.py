@@ -4,13 +4,10 @@ import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
+import sys
 
 import pytest
 
-from aiwf import policy
-
-ROOT = Path(__file__).resolve().parents[1]
 HEAD = "new4567890"
 ME = 300
 
@@ -22,7 +19,6 @@ def _run(tmp_path, runs, jobs, state="approved", reviews=None, head_repo="o/r", 
          more_threads=False):
     """Runs the verdict step. `runs`: completed runs of the workflow on HEAD; `jobs`: {run id: [(name, conclusion)]};
     `threads`: isResolved of each review thread (None: the GraphQL query fails); `more_threads`: a next page exists."""
-    step = policy.load_workflow((ROOT / ".github/workflows/ai-review.yml").read_text())["jobs"]["verdict"]["steps"][0]
     reviews = [{"state": "APPROVED", "commit_id": HEAD, "user": {"login": "m"}, "author_association": "OWNER",
                 "body": ""}] if reviews is None else reviews
     data = {
@@ -66,7 +62,7 @@ def _run(tmp_path, runs, jobs, state="approved", reviews=None, head_repo="o/r", 
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "REPO": "o/r", "PR": "1", "AUTHOR": "app[bot]",
            "HEAD_SHA": HEAD, "HEAD_REPO": head_repo, "RUN_ID": str(ME), "RUN_ATTEMPT": attempt, "EVENT": event,
            "REVIEW": review, "REVIEW_STATE": state, "GITHUB_STEP_SUMMARY": str(tmp_path / "summary")}
-    proc = subprocess.run(["bash", "-e", "-c", step["run"]], env=env, capture_output=True, text=True)
+    proc = subprocess.run([sys.executable, "-m", "aiwf.cli", "verdict"], env=env, capture_output=True, text=True)
     lines = calls.read_text().splitlines() if calls.exists() else []
     reran = sorted(int(c.split("actions/jobs/")[1].split("/")[0]) for c in lines if c.endswith("/rerun"))
     return proc, reran, lines
