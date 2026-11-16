@@ -387,7 +387,7 @@ def test_push_cli_writes_the_record_and_outputs(monkeypatch, tmp_path, base):
     assert code == 0
     record = json.loads((tmp_path / "round/round.json").read_text())
     assert record["outcome"] == "rejected" and record["escalate"] and "forced failure" in record["check_output"]
-    assert f"head={record['head']}\nnext=false\nescalate=true\nsuperseded=false" in out
+    assert f"head={record['head']}\nnext=false\nescalate=true\nsuperseded=false\napproved=false" in out
     assert "forced failure (e2e)" in (tmp_path / "round/findings.md").read_text()
 
 
@@ -561,6 +561,10 @@ def test_rounds_are_chained_and_gated():
     assert WF["escalate"]["permissions"] == {"contents": "read", "issues": "write"}  # opens no PR (ADR-0061)
     assert all(f"needs.round-{k}-push.outputs.{o} == 'true'" in WF["escalate"]["if"]
                for k in (1, 2, 3) for o in ("escalate", "superseded"))
+    assert WF["handover"]["permissions"] == {"contents": "read", "issues": "write"}  # opens no PR either (ADR-0061)
+    assert all(f"needs.round-{k}-push.outputs.approved == 'true'" in WF["handover"]["if"] for k in (1, 2, 3))
+    assert WF["round-1-push"]["outputs"]["approved"] == "${{ steps.push.outputs.approved }}"
+    assert "handover" in WF["failed"]["needs"]
     assert WF["round-1-push"]["outputs"]["superseded"] == "${{ steps.push.outputs.superseded }}"
     failed = set(WF["failed"]["needs"])
     assert {"fix-context", "escalate"} <= failed and not {f"round-{k}-check" for k in (1, 2, 3)} & failed

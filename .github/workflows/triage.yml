@@ -854,6 +854,7 @@ jobs:
       next: ${{ steps.push.outputs.next }}
       escalate: ${{ steps.push.outputs.escalate }}
       superseded: ${{ steps.push.outputs.superseded }}  # the status line changed: the end job says so, no escalation
+      approved: ${{ steps.push.outputs.approved }}  # the round was approved: the hand-over job posts the compare link
     steps: &push-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1044,6 +1045,36 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: aiwf fix-escalate --repo "$REPO" --issue "$ISSUE" --records records
 
+  # B6 hand-over (spec B6, ADR-0061): a round was approved. No PR: one comment that mentions each maintainer, with the
+  # compare link of `ai-fix/issue-<n>` (title and label `ai-fix` pre-filled) and the PR description to paste.
+  handover:
+    needs: [fix-context, round-1-push, round-2-push, round-3-push]
+    if: ${{ !cancelled() && (needs.round-1-push.outputs.approved == 'true' || needs.round-2-push.outputs.approved == 'true' || needs.round-3-push.outputs.approved == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read  # whether the fix branch exists, the default branch
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: fix-round-*
+          path: records
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          AIWF_CONFIG: ${{ inputs.config }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: aiwf fix-handover --repo "$REPO" --issue "$ISSUE" --records records
+
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).
   # The reason names the failed jobs only. A failed chat alert (`notify`) is not an `ai: error`: triage itself worked,
@@ -1052,7 +1083,8 @@ jobs:
   failed:
     needs: [context, extract, candidates, classify, publish, repro-context, reproduce, repro-publish, analyse-context,
             analyse, analyse-publish, decide, fix-context, round-1-implement, round-1-review, round-1-push,
-            round-2-implement, round-2-review, round-2-push, round-3-implement, round-3-review, round-3-push, escalate]
+            round-2-implement, round-2-review, round-2-push, round-3-implement, round-3-review, round-3-push, escalate,
+            handover]
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     timeout-minutes: 5
