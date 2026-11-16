@@ -380,7 +380,7 @@ def test_shared_sandbox_action_writes_the_adr_0037_settings(tmp_path):
     sb = json.loads((tmp_path / "settings.json").read_text())["sandbox"]
     assert sb["enabled"] is True and sb["failIfUnavailable"] is True and sb["allowUnsandboxedCommands"] is False
     assert sb["autoAllowBashIfSandboxed"] is True and sb["network"] == {"allowedDomains": ["a.com", "b.org"]}
-    assert sb["filesystem"]["denyRead"] == [str(runner_tmp), str(home / ".claude")]
+    assert sb["filesystem"]["denyRead"][:2] == [str(runner_tmp), str(home / ".claude")]  # then runner dirs that exist
     bad = {**env, "DOMAINS": "not json"}  # a broken input fails the step, no settings written
     (tmp_path / "settings.json").unlink()
     assert subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", run], env=bad, cwd=tmp_path, capture_output=True).returncode != 0
