@@ -12,6 +12,7 @@ REQUIRED = [
     "/.claude/skills/",
     "/prompts/dev-reviewer.md",
     "/scripts/aiwf/policy.py",
+    "/.github/actions/aiwf-sandbox/",
     "/scripts/aiwf/commands.py",
     "/scripts/aiwf/review_gate.py",
     "/tests/test_devguard.py",
