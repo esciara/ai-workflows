@@ -344,27 +344,14 @@ jobs:
         with:
           name: repro-input
       - *fetch-aiwf
-      - env:
-          DOMAINS: ${{ toJSON(fromJSON(inputs.config).allowed_domains) }}
-        run: |
+      - run: |
           { cat .ai-workflows/prompts/reproducer.md; echo; cat issue.md; } > prompt.md
           mkdir work && tar -xzf target.tgz -C work && rm target.tgz
           rm -rf work/.mcp.json work/.claude  # the repo's MCP servers, settings and hooks never load (aiwf-zzn)
-          # Sandbox settings (ADR-0037), merged by base-action into the user settings that --setting-sources user loads.
-          deny='[]'
-          for d in "$RUNNER_TEMP" "$HOME/.claude" /home/runner/runners /home/runner/actions-runner /opt/actions-runner; do
-            if [ -e "$d" ]; then deny=$(jq -c --arg d "$d" '. + [$d]' <<< "$deny"); fi
-          done
-          jq -n --argjson domains "$DOMAINS" --argjson deny "$deny" '{sandbox: {enabled: true, failIfUnavailable: true,
-            allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: true, network: {allowedDomains: $domains},
-            filesystem: {denyRead: $deny}}}' > settings.json
-      # The sandbox's requirements (ADR-0037); any failure fails the job: there is no unsandboxed fallback.
-      - name: Sandbox setup
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends bubblewrap socat
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # The sandbox's settings and requirements (ADR-0037); any failure fails the job: there is no unsandboxed fallback.
+      - uses: ./.ai-workflows/.github/actions/aiwf-sandbox
+        with:
+          allowed-domains: ${{ toJSON(fromJSON(inputs.config).allowed_domains) }}
       # sandbox-settings gives the agent Bash (sandboxed, auto-allowed) and --setting-sources user (CP8 shared action).
       - id: claude
         timeout-minutes: 20  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
@@ -380,17 +367,11 @@ jobs:
       - name: Token check
         id: token-check
         if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
-        env:
-          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
-          ANSWER: ${{ steps.claude.outputs.structured_output }}
-        run: |
-          [ -n "$TOKEN" ] || { echo "::error::no token to check against"; exit 1; }
-          found=0
-          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ] && grep -qF -- "$TOKEN" "$EXEC_FILE"; then found=1; fi
-          if printf '%s' "$ANSWER" | grep -qF -- "$TOKEN"; then found=1; fi
-          if [ "$found" = 1 ]; then echo "::error title=Token check::the model token appears in the agent's output"; exit 1; fi
-          echo "token check passed"
+        uses: ./.ai-workflows/.github/actions/aiwf-token-check
+        with:
+          token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          answer: ${{ steps.claude.outputs.structured_output }}
 
   # B2 labels and comment, from the checked JSON; invalid or missing output gives `ai: error` and nothing else.
   repro-publish:
@@ -637,27 +618,16 @@ jobs:
           name: fix-round-${{ env.PREV }}
           path: prev
       - *fetch-aiwf
-      - env:
-          DOMAINS: ${{ toJSON(fromJSON(inputs.config).allowed_domains) }}
-        run: |
+      - run: |
           { cat .ai-workflows/prompts/implementer.md; echo; cat fix/brief.md
             if [ -f prev/findings.md ]; then echo; cat prev/findings.md; fi; } > prompt.md
           mkdir work && tar -xzf fix/target.tgz -C work
           if [ -s prev/patch.diff ]; then git -C work apply --binary "$GITHUB_WORKSPACE/prev/patch.diff"; fi
           rm -rf work/.mcp.json work/.claude  # the repo's MCP servers, settings and hooks never load (aiwf-zzn)
-          deny='[]'
-          for d in "$RUNNER_TEMP" "$HOME/.claude" /home/runner/runners /home/runner/actions-runner /opt/actions-runner; do
-            if [ -e "$d" ]; then deny=$(jq -c --arg d "$d" '. + [$d]' <<< "$deny"); fi
-          done
-          jq -n --argjson domains "$DOMAINS" --argjson deny "$deny" '{sandbox: {enabled: true, failIfUnavailable: true,
-            allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: true, network: {allowedDomains: $domains},
-            filesystem: {denyRead: $deny}}}' > settings.json
-      - name: Sandbox setup
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends bubblewrap socat
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # The sandbox's settings and requirements (ADR-0037); any failure fails the job: there is no unsandboxed fallback.
+      - uses: ./.ai-workflows/.github/actions/aiwf-sandbox
+        with:
+          allowed-domains: ${{ toJSON(fromJSON(inputs.config).allowed_domains) }}
       - id: claude
         timeout-minutes: 30  # time limit; a timeout fails the job: `ai: error` (ADR-0050)
         uses: ./.ai-workflows/.github/actions/aiwf-agent
@@ -691,18 +661,12 @@ jobs:
       - name: Token check
         id: token-check
         if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
-        env:
-          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
-          ANSWER: ${{ steps.claude.outputs.structured_output }}
-        run: |
-          [ -n "$TOKEN" ] || { echo "::error::no token to check against"; exit 1; }
-          found=0
-          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ] && grep -qF -- "$TOKEN" "$EXEC_FILE"; then found=1; fi
-          if printf '%s' "$ANSWER" | grep -qF -- "$TOKEN"; then found=1; fi
-          if [ -f patch.diff ] && grep -qF -- "$TOKEN" patch.diff; then found=1; fi
-          if [ "$found" = 1 ]; then echo "::error title=Token check::the model token appears in the agent's output"; exit 1; fi
-          echo "token check passed"
+        uses: ./.ai-workflows/.github/actions/aiwf-token-check
+        with:
+          token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          execution-file: ${{ steps.claude.outputs.execution_file }}
+          answer: ${{ steps.claude.outputs.structured_output }}
+          extra-file: patch.diff
       - if: steps.token-check.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

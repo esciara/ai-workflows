@@ -1,0 +1,33 @@
+# The ADR-0037 sandbox for a command-running agent (reproducer, implementer): writes ./settings.json (the sandbox on,
+# no unsandboxed fallback, network limited to the config's allowed domains, the runner's credential directories
+# unreadable) and installs the sandbox's requirements. Run it before the agent step, always (no `if`):
+# `uses: ./.ai-workflows/.github/actions/aiwf-sandbox`, then pass `sandbox-settings: ${{ github.workspace }}/settings.json`
+# to aiwf-agent, which refuses settings that do not enable the sandbox. Any failure fails the job: no unsandboxed fallback.
+# Reads no GitHub token and no secret. The caller sets CLAUDE_CODE_SUBPROCESS_ENV_SCRUB and unpacks the target code.
+name: aiwf sandbox
+description: Write the ADR-0037 sandbox settings and install bubblewrap
+inputs:
+  allowed-domains:
+    description: JSON array of the domains the agent's commands may reach (the config's allowed_domains)
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        DOMAINS: ${{ inputs.allowed-domains }}
+      run: |
+        deny='[]'
+        for d in "$RUNNER_TEMP" "$HOME/.claude" /home/runner/runners /home/runner/actions-runner /opt/actions-runner; do
+          if [ -e "$d" ]; then deny=$(jq -c --arg d "$d" '. + [$d]' <<< "$deny"); fi
+        done
+        jq -n --argjson domains "$DOMAINS" --argjson deny "$deny" '{sandbox: {enabled: true, failIfUnavailable: true,
+          allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: true, network: {allowedDomains: $domains},
+          filesystem: {denyRead: $deny}}}' > settings.json
+    - name: Sandbox setup
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends bubblewrap socat
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0

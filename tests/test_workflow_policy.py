@@ -51,7 +51,8 @@ def test_real_workflow_passes_policy(path):
 @pytest.mark.parametrize("path", sorted((ROOT / ".github" / "actions").glob("*/action.yml")), ids=lambda p: p.parent.name)
 def test_composite_actions_pin_their_actions(path):
     assert policy.pin_errors(path.read_text()) == []
-    assert policy.pin_errors(re.sub(r"@[0-9a-f]{40}", "@v7", path.read_text(), count=1))
+    if re.search(r"@[0-9a-f]{40}", path.read_text()):  # aiwf-sandbox and aiwf-token-check use no third-party action
+        assert policy.pin_errors(re.sub(r"@[0-9a-f]{40}", "@v7", path.read_text(), count=1))
 
 
 def test_every_fixture_has_an_expectation():
@@ -222,6 +223,12 @@ AGENT_ACTION_YML = ROOT / ".github" / "actions" / "aiwf-agent" / "action.yml"
 AGENT_USES = "./.ai-workflows/.github/actions/aiwf-agent"
 
 
+SANDBOX_YML = ROOT / ".github" / "actions" / "aiwf-sandbox" / "action.yml"
+SANDBOX_USES = "./.ai-workflows/.github/actions/aiwf-sandbox"
+TOKEN_CHECK_YML = ROOT / ".github" / "actions" / "aiwf-token-check" / "action.yml"
+TOKEN_CHECK_USES = "./.ai-workflows/.github/actions/aiwf-token-check"
+
+
 def _args_run() -> str:
     """The aiwf-agent step that builds claude_args, found by its id."""
     return next(s["run"] for s in yaml.safe_load(AGENT_ACTION_YML.read_text())["runs"]["steps"] if s.get("id") == "args")
@@ -337,25 +344,57 @@ def test_command_running_agents_are_sandboxed_and_scrubbed():
             where = f"{path.relative_to(ROOT)}:{name}"
             [agent] = agents
             assert job.get("env", {}).get("CLAUDE_CODE_SUBPROCESS_ENV_SCRUB") == "1", where
-            run = "\n".join(str(s.get("run", "")) for s in steps)
-            assert "bubblewrap socat" in run and "apparmor_restrict_unprivileged_userns=0" in run, where
-            assert "failIfUnavailable: true" in run and "allowUnsandboxedCommands: false" in run, where
+            sandbox = next(i for i, s in enumerate(steps) if str(s.get("uses", "")) == SANDBOX_USES)
+            assert sandbox < steps.index(agent) and "if" not in steps[sandbox], f"{where}: sandbox setup runs first, always"
+            assert steps[sandbox]["with"]["allowed-domains"] == "${{ toJSON(fromJSON(inputs.config).allowed_domains) }}", where
+            assert agent["with"]["sandbox-settings"] == "${{ github.workspace }}/settings.json", where
             # aiwf-zzn: the target repo's MCP servers, settings and hooks are deleted before the agent starts
             clean = next(i for i, s in enumerate(steps) if "rm -rf work/.mcp.json work/.claude" in str(s.get("run", "")))
             assert clean < steps.index(agent) and "if" not in steps[clean], f"{where}: repo .mcp.json/.claude removed first"
             step_run = str(steps[clean]["run"])
             assert step_run.index("rm -rf work/.mcp.json") > step_run.index("tar -xzf"), f"{where}: removed after unpacking"
-            setup = next(i for i, s in enumerate(steps) if "bubblewrap" in str(s.get("run", "")))
-            assert setup < steps.index(agent) and "if" not in steps[setup], f"{where}: sandbox setup runs first, always"
             check = next(s for s in steps if s.get("name") == "Token check")
+            assert check["uses"] == TOKEN_CHECK_USES and check["id"] == "token-check", where
             assert steps.index(check) > steps.index(agent), where
             assert "token-check.outcome == 'success'" in job["outputs"]["json"], f"{where}: answer only after the check"
             # B5: a diff the agent's work produced leaves the job only after the token check scanned it too
             for s in steps[steps.index(agent):]:
                 if str(s.get("uses", "")).startswith("actions/upload-artifact@"):
                     assert "steps.token-check.outcome == 'success'" in str(s.get("if", "")), f"{where}: upload gated"
-                    assert f"grep -qF -- \"$TOKEN\" {s['with']['path']}" in str(check["run"]), f"{where}: upload scanned"
+                    assert check["with"]["extra-file"] == s["with"]["path"], f"{where}: upload scanned"
     assert seen >= 4  # the reproducer (B2) and the implementer of each B5 round
+
+
+def test_shared_sandbox_action_turns_the_sandbox_on_with_no_fallback():
+    text = SANDBOX_YML.read_text()
+    assert not policy.TOKEN_RE.search(text) and not policy.SECRET_RE.search(text)
+    run = "\n".join(str(s.get("run", "")) for s in yaml.safe_load(text)["runs"]["steps"])
+    assert "bubblewrap socat" in run and "apparmor_restrict_unprivileged_userns=0" in run
+    assert "failIfUnavailable: true" in run and "allowUnsandboxedCommands: false" in run and "enabled: true" in run
+
+
+def test_shared_token_check_fails_only_on_a_match_and_never_prints_the_token(tmp_path):
+    run = yaml.safe_load(TOKEN_CHECK_YML.read_text())["runs"]["steps"][0]["run"]
+    exec_file, extra = tmp_path / "exec.json", tmp_path / "patch.diff"
+    exec_file.write_text("clean")
+    extra.write_text("clean")
+
+    def check(token="SECRET", answer="{}", exec_path=str(exec_file), extra_path=str(extra)):
+        env = {**os.environ, "TOKEN": token, "ANSWER": answer, "EXEC_FILE": exec_path, "EXTRA_FILE": extra_path}
+        return subprocess.run(["bash", "-c", run], env=env, capture_output=True, text=True)
+
+    assert check().returncode == 0
+    assert check(exec_path="", extra_path="").returncode == 0
+    assert check(token="").returncode == 1  # no token to compare with: fail closed
+    for hit in ({"answer": "x SECRET y"}, {"exec_path": _write(tmp_path / "e2", "a SECRET")},
+                {"extra_path": _write(tmp_path / "p2", "+SECRET")}):
+        result = check(**hit)
+        assert result.returncode == 1 and "SECRET" not in result.stdout + result.stderr, hit
+
+
+def _write(path, text) -> str:
+    path.write_text(text)
+    return str(path)
 
 
 # --- verdict check (ADR-0053, states ADR-0055): check-run plus a `verdict` commit status of the same name -----------
