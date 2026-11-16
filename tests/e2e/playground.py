@@ -53,10 +53,13 @@ def __getattr__(name: str) -> str:
         return f"{name} (no e2e slot held)"
 
 
+GH_READ_BACKOFF = (2, 5)  # seconds before retries 2 and 3 of a read that got an HTTP 5xx
+
+
 def gh(args: list[str], as_tester: bool = False, as_agent: bool = False, as_maintainer: bool = False,
        tester_repo: str | None = None) -> str:
     """Run gh: reads with the local gh login; writes as the agent App (ADR-0031), the tester App, or the maintainer
-    through scripts/dev/as-maintainer (comments, reviews, dispatch on the playground only). API failures fail the test.
+    through scripts/dev/as-maintainer (comments, reviews, dispatch on the playground only). API failures fail the test (a read gets 3 attempts on HTTP 5xx).
     `tester_repo` picks the tester App installation (default: the playground's; FORK for writes to the fork)."""
     wrapper = "as-tester" if as_tester else "as-maintainer" if as_maintainer else "as-agent" if as_agent else None
     cmd = [str(ROOT / "scripts" / "dev" / wrapper), *args] if wrapper else ["gh", *args]
@@ -64,6 +67,11 @@ def gh(args: list[str], as_tester: bool = False, as_agent: bool = False, as_main
         cmd.insert(1, "gh")
     env = {**os.environ, "AI_WORKFLOWS_TESTER_REPO": tester_repo} if as_tester and tester_repo else None
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    for delay in GH_READ_BACKOFF if wrapper is None else ():  # reads only; a write may have gone through
+        if proc.returncode == 0 or not re.search(r"HTTP 5\d\d", proc.stderr):
+            break
+        time.sleep(delay)
+        proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
     if proc.returncode != 0:
         pytest.fail(f"GitHub call failed (not a pass): {' '.join(args[:3])}: {proc.stderr.strip()[:300]}", pytrace=False)
     return proc.stdout
