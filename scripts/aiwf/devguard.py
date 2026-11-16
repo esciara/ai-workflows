@@ -7,7 +7,7 @@
   enables GitHub auto-merge; GitHub merges when the ruleset (required checks, code-owner review) is satisfied.
   A pattern match, not a boundary (the ruleset is): it matches command text, so `echo "gh pr merge"` is blocked too.
 - `maintainer_allowed(args)`: the allow-list of `scripts/dev/as-maintainer` (maintainer comments, reviews and the
-  labels-sync dispatch, on the playground only).
+  labels-sync dispatch, and two read-only GETs of the playground's Actions settings, on the playground only).
 """
 
 from __future__ import annotations
@@ -199,7 +199,8 @@ def _value(args: list[str], *flags: str) -> list[str]:
 
 def maintainer_allowed(args: list[str]) -> tuple[bool, str]:
     """Allow-list of `as-maintainer <gh args>`: maintainer comments, PR reviews and approvals, and the e2e
-    `workflow_dispatch` runs (labels-sync; reporter silence with its `labels` input, WP7), on the playground only."""
+    `workflow_dispatch` runs (labels-sync; reporter silence with its `labels` input, WP7), on the playground only.
+    Also two read-only GETs there: `actions/permissions/workflow` and `actions/secrets` (WP14 manual-setup checks)."""
     a = args[1:] if args[:1] == ["gh"] else list(args)
     if a[:2] in (["issue", "comment"], ["pr", "comment"], ["pr", "review"]):
         if not re.fullmatch(r"\d+", a[2] if len(a) > 2 else ""):
@@ -221,10 +222,12 @@ def maintainer_allowed(args: list[str]) -> tuple[bool, str]:
         ]
         if len(paths) != 1:
             return False, "exactly one API path"
-        read_only = rf"{base}actions/(permissions/workflow|secrets)(\?per_page=\d+)?"  # WP14's manual-setup checks, GET only
+        read_only = rf"{base}actions/(permissions/workflow|secrets)(\?per_page=\d+)?"  # WP14's manual-setup checks
         if re.fullmatch(read_only, paths[0]):
-            rest = [x for x in a[1:] if x != paths[0]]
-            return (True, "") if rest in ([], ["-X", "GET"], ["--method", "GET"]) else (False, "GET only, no other arguments")
+            extra = [x for x in a[1:] if x != paths[0]]
+            if extra in ([], ["-X", "GET"], ["--method", "GET"]):
+                return True, ""
+            return False, "GET only, no other arguments"
         fields_ok = next((f for p, f in allowed_paths if re.fullmatch(p, paths[0])), None)
         if fields_ok is None:
             return False, f"API path not allowed: {paths[0]}"
