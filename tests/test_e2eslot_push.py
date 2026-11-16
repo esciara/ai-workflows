@@ -7,6 +7,11 @@ from aiwf import e2eslot
 SHA = "a" * 40
 
 
+class Done:
+    def __init__(self, stdout):
+        self.stdout = stdout
+
+
 @pytest.fixture
 def no_real_git(tmp_path, monkeypatch):
     """Locks in a temp dir; `git rev-parse` answers SHA and `ls-remote` answers nothing (the ref is absent remotely)."""
@@ -16,10 +21,11 @@ def no_real_git(tmp_path, monkeypatch):
 
 def test_a_non_local_remote_is_pushed_by_the_agent_app_with_a_lease(tmp_path, monkeypatch, no_real_git):
     ran = []
-    monkeypatch.setattr(e2eslot.subprocess, "run", lambda cmd, **kw: ran.append((cmd, kw)))
+    monkeypatch.setattr(e2eslot.subprocess, "run", lambda cmd, **kw: ran.append((cmd, kw)) or Done(""))
     with e2eslot.hold(2, timeout=0):
         assert e2eslot.push_target(2, remote="origin", cwd=tmp_path) == SHA
-    [(cmd, kw)] = ran
+    [(ls, _), (cmd, kw)] = ran
+    assert ls[0].endswith("scripts/dev/as-agent") and ls[1:] == ["git", "ls-remote", "origin", "refs/heads/e2e-target-2"]
     assert cmd[0].endswith("scripts/dev/as-agent") and cmd[1:4] == ["git", "push", "--quiet"]
     assert cmd[4] == "--force-with-lease=refs/heads/e2e-target-2:"  # absent remotely: the lease expects no ref
     assert cmd[5:] == ["origin", f"{SHA}:refs/heads/e2e-target-2"]
@@ -31,7 +37,7 @@ def test_the_lease_is_the_remotes_current_value(tmp_path, monkeypatch):
     old = "b" * 40
     monkeypatch.setattr(e2eslot, "_git", lambda *a, cwd=e2eslot.ROOT: SHA if a[0] == "rev-parse" else f"{old}\trefs/x")
     ran = []
-    monkeypatch.setattr(e2eslot.subprocess, "run", lambda cmd, **kw: ran.append(cmd))
+    monkeypatch.setattr(e2eslot.subprocess, "run", lambda cmd, **kw: ran.append(cmd) or Done(f"{old}\trefs/x\n"))
     with e2eslot.hold(1, timeout=0):
         e2eslot.push_target(1, cwd=tmp_path)
-    assert ran[0][4] == f"--force-with-lease=refs/heads/e2e-target-1:{old}"
+    assert ran[1][4] == f"--force-with-lease=refs/heads/e2e-target-1:{old}"
