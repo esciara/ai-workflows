@@ -1048,7 +1048,7 @@ jobs:
   # B6 hand-over (spec B6, ADR-0061): a round was approved. No PR: one comment that mentions each maintainer, with the
   # compare link of `ai-fix/issue-<n>` (title and label `ai-fix` pre-filled) and the PR description to paste.
   handover:
-    needs: [fix-context, round-1-push, round-2-push, round-3-push]
+    needs: [round-1-push, round-2-push, round-3-push]
     if: ${{ !cancelled() && (needs.round-1-push.outputs.approved == 'true' || needs.round-2-push.outputs.approved == 'true' || needs.round-3-push.outputs.approved == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
