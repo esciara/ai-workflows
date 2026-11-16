@@ -221,6 +221,10 @@ def maintainer_allowed(args: list[str]) -> tuple[bool, str]:
         ]
         if len(paths) != 1:
             return False, "exactly one API path"
+        read_only = rf"{base}actions/(permissions/workflow|secrets)(\?per_page=\d+)?"  # WP14's manual-setup checks, GET only
+        if re.fullmatch(read_only, paths[0]):
+            rest = [x for x in a[1:] if x != paths[0]]
+            return (True, "") if rest in ([], ["-X", "GET"], ["--method", "GET"]) else (False, "GET only, no other arguments")
         fields_ok = next((f for p, f in allowed_paths if re.fullmatch(p, paths[0])), None)
         if fields_ok is None:
             return False, f"API path not allowed: {paths[0]}"

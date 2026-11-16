@@ -62,6 +62,7 @@ def body(path):
     ["issue", "comment", "3", "-R", PG, "--body", "/fix"], ["gh", "pr", "comment", "4", "--repo", PG, "-b", "/review --x"],
     ["pr", "review", "4", "-R", PG, "--approve"], ["pr", "review", "4", "-R", PG, "--request-changes", "-b", "no"],
     [*body("issues/3/comments"), "-f", "body=/fix"], [*body("pulls/4/reviews"), "-f", "event=APPROVE", "-f", "body=ok"],
+    ["api", "-X", "GET", f"repos/{PG}/actions/permissions/workflow"], ["api", "-X", "GET", f"repos/{PG}/actions/secrets?per_page=100"],
     [*body("actions/workflows/9/dispatches"), "-f", "ref=main", "-F", "return_run_details=true"],
     [*body("actions/workflows/9/dispatches"), "-f", "ref=main", "-f", "inputs[labels]=e2e-wp7-x", "-F", "return_run_details=true"],
 ])
@@ -78,6 +79,8 @@ def test_as_maintainer_allows(args):
     [*body("pulls/4/merge")], [*body("issues/3/comments"), f"repos/{PG}/issues/4/comments"], [],
     [*body("actions/workflows/9/dispatches"), "-f", "ref=main", "-f", "inputs[other]=x"],
     [*body("issues/3/comments"), "-f", "inputs[labels]=x"],
+    ["api", "-X", "PUT", f"repos/{PG}/actions/permissions/workflow"], ["api", "-X", "GET", f"repos/{PG}/actions/secrets/NAME"],
+    ["api", "-X", "GET", f"repos/{PG}/actions/permissions/workflow", "-f", "x=y"], ["api", "-X", "GET", f"repos/{PG}/actions/variables"],
 ])
 def test_as_maintainer_refuses(args):
     allowed, why = maintainer_allowed(args)
