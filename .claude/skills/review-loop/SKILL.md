@@ -11,10 +11,10 @@ Run this before `as-agent gh pr create` or `gh pr ready`. Inputs: the base ref (
 
 - Round 1: finish the implementation. Rounds 2 and 3: address the previous findings. Give each finding a disposition: `fixed <sha>`, `won't fix: <reason>`, or `already covered: <where>`.
 - Run `.venv/bin/pytest -q` and gitleaks. Green is required before review. A failure of `tests/test_workflow_policy.py` is a stop-and-ask, not a round.
-- Review with a new subagent each round (Agent tool, `subagent_type: general-purpose`, `model: opus`). Never a fork, never the previous round's reviewer. Its prompt is the contents of `prompts/dev-reviewer.md` plus only: the base ref, the plan row's Done when, the spec/ADR sections touched, and in rounds 2 and 3 the previous findings and your dispositions. Never pass your own reasoning. Optionally also run `/code-review` in round 1; it does not count as a round.
-- Check the reply shape: JSON with `verdict` (`approve` or `reject`) and `findings` (each with `severity`, `file`, `line`, `claim`, `evidence`). On bad JSON, re-ask once with the same reviewer, then treat as `reject`.
+- Review with a new subagent each round (Agent tool, `subagent_type: general-purpose`, `model: opus`). Never a fork, never the previous round's reviewer (the only reuse allowed is re-asking the same reviewer within the same round after malformed JSON, see below). Its prompt is the contents of `prompts/dev-reviewer.md` plus only: the base ref, the plan row's Done when, the spec/ADR sections touched, and in rounds 2 and 3 the previous findings and your dispositions. Never pass your own reasoning. Optionally also run `/code-review` in round 1; it does not count as a round.
+- Check the reply shape: JSON with `verdict` (`approve` or `reject`) and `findings` (each with `severity`, `file`, `line`, `claim`, `evidence`). On bad JSON, re-ask the same round's reviewer once (the only allowed reuse; never carry a reviewer into the next round), then treat the round as `reject`.
 - `approve`, tests green: push and open the PR ready for review.
-- Still `reject` after round 3: push, open the PR as a draft (`gh pr create --draft`, no `verdict`, cannot merge; never enable `--auto` on it, only once ready), and `Result: escalated` in the block, list the open findings in the description, and add the PR to the maintainer's batch.
+- Still `reject` after round 3: push and open the PR as a draft (`gh pr create --draft`; a draft has no `verdict` and cannot merge, so never enable `--auto` on it, only once it is ready). Put `Result: escalated` in the description block, list the open findings there, and add the PR to the maintainer's batch.
 
 ## PR description block
 

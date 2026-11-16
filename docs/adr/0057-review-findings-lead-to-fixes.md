@@ -77,6 +77,6 @@ Why: findings become fixes before push on our own PRs (cheaper than A rounds), A
 
 ## Follow-ups (own PRs, after acceptance)
 
-- WP17 (plan): review-loop skill, `prompts/adversarial-reviewer.md`, A dev-mode check, CLAUDE.md line, CODEOWNERS `/.claude/skills/` (exception PR).
+- WP17 (plan): review-loop skill, `prompts/dev-reviewer.md`, A dev-mode check, CLAUDE.md line, CODEOWNERS `/.claude/skills/` (exception PR).
 - WP18 (plan): A replies to and resolves its own fixed threads; "N threads open" in the summary and the `verdict` text; install guide recommendation.
 - WP19 (plan, slice 4, after WP10): A's findings back into B5.
