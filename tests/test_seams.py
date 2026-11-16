@@ -147,6 +147,7 @@ def test_controller_takes_the_slot_and_exports_it_to_workers(monkeypatch):
 
     monkeypatch.setattr(e2eslot, "hold", hold)
     monkeypatch.setattr(e2eslot, "push_target", lambda n, remote: f"sha-of-{n}-on-{remote}")
+    monkeypatch.setattr(pg, "close_stale_fixtures", lambda: [])  # no network
     for var in ("AIWF_E2E_SLOT_HELD", "AIWF_E2E_TARGET_SHA", "AIWF_E2E_REMOTE"):
         monkeypatch.setenv(var, "")  # recorded, so the values the configure hook sets are undone after the test
         monkeypatch.delenv(var)
