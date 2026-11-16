@@ -28,7 +28,8 @@ FIX_AGENTS = {f"round-{k}-{j}" for k in (1, 2, 3) for j in ("implement", "review
 # `written`: agent jobs whose steps are spelled out; the other B5 rounds reuse round 1's steps (YAML anchor).
 @pytest.mark.parametrize("name,agents,written", [
     ("review.yml", {"pass", "verify"}, 2),
-    ("triage.yml", {"extract", "classify", "reproduce", "analyse"} | FIX_AGENTS, 6)])
+    ("triage.yml", {"extract", "classify", "reproduce", "analyse"}, 4),
+    ("fix.yml", FIX_AGENTS, 2)])
 def test_every_agent_job_fetches_with_the_one_shared_step(name, agents, written):
     text = (WORKFLOWS / name).read_text()
     assert text.count("&fetch-aiwf") == 1 and text.count("*fetch-aiwf") == written - 1

@@ -93,3 +93,14 @@ def test_workflow_level_permissions_are_inherited():
 def test_unknown_scope_gives_clear_message():
     with pytest.raises(AssertionError, match="unknown permission scope 'issuse'"):
         uncovered({}, {"j": {"permissions": {"issuse": "read"}}})
+
+
+def test_nested_workflow_jobs_are_covered_by_the_job_that_calls_them():
+    """triage.yml calls fix.yml (aiwf-vqm): the calling job's permissions are the ceiling of the called jobs, and the
+    caller template covers the calling job (test_caller_job_covers_called_workflow), so by induction covers fix.yml."""
+    triage = policy.load_workflow((ROOT / ".github" / "workflows" / "triage.yml").read_text())
+    nested = {n: j for n, j in triage["jobs"].items() if str(j.get("uses", "")).startswith("./.github/workflows/")}
+    assert set(nested) == {"fix"}
+    for name, job in nested.items():
+        called = policy.load_workflow((ROOT / job["uses"]).read_text())
+        assert uncovered(_effective(job, triage) or {}, called["jobs"], called) == [], name
