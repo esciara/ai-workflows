@@ -21,7 +21,8 @@ URL = "https://github.com/o/r/issues/1#issuecomment-77"
 APPROVED = f"fix approved by @esciara ([comment]({URL})); guidance: keep Cart.total <b>"
 EVENT = {"comment": {"id": 77, "user": {"login": "esciara"}}}
 ROOT = Path(__file__).resolve().parents[1]
-WF = yaml.safe_load((ROOT / ".github/workflows/triage.yml").read_text())["jobs"]
+TRIAGE = yaml.safe_load((ROOT / ".github/workflows/triage.yml").read_text())["jobs"]
+WF = yaml.safe_load((ROOT / ".github/workflows/fix.yml").read_text())["jobs"]  # B5 lives in fix.yml (aiwf-vqm)
 BASE = "b" * 40
 
 
@@ -537,8 +538,13 @@ def test_decide_outputs_fix_only_for_a_recorded_fix(monkeypatch, tmp_path, comma
 # --- wiring -----------------------------------------------------------------------------------------------------------
 
 def test_rounds_are_chained_and_gated():
-    assert WF["decide"]["outputs"]["fix"] == "${{ steps.decide.outputs.fix }}"
-    assert WF["fix-context"]["if"] == "needs.decide.outputs.fix == 'true'"
+    assert TRIAGE["decide"]["outputs"]["fix"] == "${{ steps.decide.outputs.fix }}"
+    call = TRIAGE["fix"]  # triage.yml's one job for B5: gated on decide, grants what fix.yml's jobs ask for, no more
+    assert call["needs"] == "decide" and call["if"] == "needs.decide.outputs.fix == 'true'"
+    assert call["uses"] == "./.github/workflows/fix.yml" and call["permissions"] == {"contents": "write", "issues": "write"}
+    assert call["with"] == {"config": "${{ inputs.config }}"}
+    assert call["secrets"] == {"CLAUDE_CODE_OAUTH_TOKEN": "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"}
+    assert "needs" not in WF["fix-context"] and "if" not in WF["fix-context"]
     assert "needs.fix-context.outputs.start == 'true'" in WF["round-1-implement"]["if"]
     for k in (1, 2, 3):
         j = {s: WF[f"round-{k}-{s}"] for s in ("implement", "check", "review", "push")}
@@ -564,10 +570,10 @@ def test_rounds_are_chained_and_gated():
     assert WF["handover"]["permissions"] == {"contents": "read", "issues": "write"}  # opens no PR either (ADR-0061)
     assert all(f"needs.round-{k}-push.outputs.approved == 'true'" in WF["handover"]["if"] for k in (1, 2, 3))
     assert WF["round-1-push"]["outputs"]["approved"] == "${{ steps.push.outputs.approved }}"
-    assert "handover" in WF["failed"]["needs"]
+    assert "fix" in TRIAGE["failed"]["needs"]
     assert WF["round-1-push"]["outputs"]["superseded"] == "${{ steps.push.outputs.superseded }}"
-    failed = set(WF["failed"]["needs"])
-    assert {"fix-context", "escalate"} <= failed and not {f"round-{k}-check" for k in (1, 2, 3)} & failed
+    failed = set(TRIAGE["failed"]["needs"])
+    assert "fix" in failed and not {j for j in failed if j.startswith("round-") or j in ("fix-context", "escalate", "handover")}
 
 
 def test_check_runs_project_commands_as_another_user_with_output_to_a_file():
