@@ -52,7 +52,7 @@ def test_real_workflow_passes_policy(path):
 @pytest.mark.parametrize("path", sorted((ROOT / ".github" / "actions").glob("*/action.yml")), ids=lambda p: p.parent.name)
 def test_composite_actions_pin_their_actions(path):
     assert policy.pin_errors(path.read_text()) == []
-    if re.search(r"@[0-9a-f]{40}", path.read_text()):  # aiwf-sandbox and aiwf-token-check use no third-party action
+    if re.search(r"@[0-9a-f]{40}", path.read_text()):  # aiwf-sandbox uses no third-party action
         assert policy.pin_errors(re.sub(r"@[0-9a-f]{40}", "@v7", path.read_text(), count=1))
 
 
@@ -222,8 +222,6 @@ AGENT_USES = "./.ai-workflows/.github/actions/aiwf-agent"
 
 SANDBOX_YML = ROOT / ".github" / "actions" / "aiwf-sandbox" / "action.yml"
 SANDBOX_USES = "./.ai-workflows/.github/actions/aiwf-sandbox"
-TOKEN_CHECK_YML = ROOT / ".github" / "actions" / "aiwf-token-check" / "action.yml"
-TOKEN_CHECK_USES = "./.ai-workflows/.github/actions/aiwf-token-check"
 
 
 def _args_run() -> str:
@@ -351,14 +349,13 @@ def test_command_running_agents_are_sandboxed_and_scrubbed():
             step_run = str(steps[clean]["run"])
             assert step_run.index("rm -rf work/.mcp.json") > step_run.index("tar -xzf"), f"{where}: removed after unpacking"
             check = next(s for s in steps if s.get("name") == "Token check")
-            assert check["uses"] == TOKEN_CHECK_USES and check["id"] == "token-check", where
             assert steps.index(check) > steps.index(agent), where
             assert "token-check.outcome == 'success'" in job["outputs"]["json"], f"{where}: answer only after the check"
             # B5: a diff the agent's work produced leaves the job only after the token check scanned it too
             for s in steps[steps.index(agent):]:
                 if str(s.get("uses", "")).startswith("actions/upload-artifact@"):
                     assert "steps.token-check.outcome == 'success'" in str(s.get("if", "")), f"{where}: upload gated"
-                    assert check["with"]["extra-file"] == s["with"]["path"], f"{where}: upload scanned"
+                    assert f"grep -qF -- \"$TOKEN\" {s['with']['path']}" in str(check["run"]), f"{where}: upload scanned"
     assert seen >= 4  # the reproducer (B2) and the implementer of each B5 round
 
 
@@ -370,30 +367,12 @@ def test_shared_sandbox_action_turns_the_sandbox_on_with_no_fallback():
     assert "failIfUnavailable: true" in run and "allowUnsandboxedCommands: false" in run and "enabled: true" in run
 
 
-def test_shared_token_check_fails_only_on_a_match_and_never_prints_the_token(tmp_path):
-    run = yaml.safe_load(TOKEN_CHECK_YML.read_text())["runs"]["steps"][0]["run"]
-    exec_file, extra = tmp_path / "exec.json", tmp_path / "patch.diff"
-    exec_file.write_text("clean")
-    extra.write_text("clean")
-
-    def check(token="SECRET", answer="{}", exec_path=str(exec_file), extra_path=str(extra)):
-        env = {**os.environ, "TOKEN": token, "ANSWER": answer, "EXEC_FILE": exec_path, "EXTRA_FILE": extra_path}
-        # the shell a composite `shell: bash` step uses
-        return subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", run], env=env, capture_output=True, text=True)
-
-    assert check().returncode == 0
-    assert check(answer="SECRET" + "x" * 200_000).returncode == 1  # grep -q exits early; no SIGPIPE miss
-    assert check(exec_path="", extra_path="").returncode == 0
-    assert check(token="").returncode == 1  # no token to compare with: fail closed
-    for hit in ({"answer": "x SECRET y"}, {"exec_path": _write(tmp_path / "e2", "a SECRET")},
-                {"extra_path": _write(tmp_path / "p2", "+SECRET")}):
-        result = check(**hit)
-        assert result.returncode == 1 and "SECRET" not in result.stdout + result.stderr, hit
-
-
-def _write(path, text) -> str:
-    path.write_text(text)
-    return str(path)
+def test_the_token_check_stays_inline_in_the_workflow():
+    # The agent's sandboxed Bash can write anywhere in the workspace, .ai-workflows/ included: a check loaded from there
+    # after the agent ran could be replaced. Only steps that run before the agent may come from .ai-workflows/.
+    for where, job, step in _agent_steps():
+        if step.get("name") == "Token check":
+            assert "uses" not in step and "grep -qF" in step["run"], where
 
 
 # --- verdict check (ADR-0053, states ADR-0055): check-run plus a `verdict` commit status of the same name -----------

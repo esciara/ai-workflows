@@ -367,11 +367,17 @@ jobs:
       - name: Token check
         id: token-check
         if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
-        uses: ./.ai-workflows/.github/actions/aiwf-token-check
-        with:
-          token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          execution-file: ${{ steps.claude.outputs.execution_file }}
-          answer: ${{ steps.claude.outputs.structured_output }}
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+          ANSWER: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          [ -n "$TOKEN" ] || { echo "::error::no token to check against"; exit 1; }
+          found=0
+          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ] && grep -qF -- "$TOKEN" "$EXEC_FILE"; then found=1; fi
+          if printf '%s' "$ANSWER" | grep -qF -- "$TOKEN"; then found=1; fi
+          if [ "$found" = 1 ]; then echo "::error title=Token check::the model token appears in the agent's output"; exit 1; fi
+          echo "token check passed"
 
   # B2 labels and comment, from the checked JSON; invalid or missing output gives `ai: error` and nothing else.
   repro-publish:
@@ -661,12 +667,18 @@ jobs:
       - name: Token check
         id: token-check
         if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
-        uses: ./.ai-workflows/.github/actions/aiwf-token-check
-        with:
-          token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          execution-file: ${{ steps.claude.outputs.execution_file }}
-          answer: ${{ steps.claude.outputs.structured_output }}
-          extra-file: patch.diff
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+          ANSWER: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          [ -n "$TOKEN" ] || { echo "::error::no token to check against"; exit 1; }
+          found=0
+          if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ] && grep -qF -- "$TOKEN" "$EXEC_FILE"; then found=1; fi
+          if printf '%s' "$ANSWER" | grep -qF -- "$TOKEN"; then found=1; fi
+          if [ -f patch.diff ] && grep -qF -- "$TOKEN" patch.diff; then found=1; fi
+          if [ "$found" = 1 ]; then echo "::error title=Token check::the model token appears in the agent's output"; exit 1; fi
+          echo "token check passed"
       - if: steps.token-check.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
