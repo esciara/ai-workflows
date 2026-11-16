@@ -367,6 +367,22 @@ def test_shared_sandbox_action_turns_the_sandbox_on_with_no_fallback():
     assert "failIfUnavailable: true" in run and "allowUnsandboxedCommands: false" in run and "enabled: true" in run
 
 
+def test_shared_sandbox_action_writes_the_adr_0037_settings(tmp_path):
+    run = yaml.safe_load(SANDBOX_YML.read_text())["runs"]["steps"][0]["run"]
+    home, runner_tmp = tmp_path / "home", tmp_path / "rt"
+    (home / ".claude").mkdir(parents=True)
+    runner_tmp.mkdir()
+    env = {**os.environ, "HOME": str(home), "RUNNER_TEMP": str(runner_tmp), "DOMAINS": '["a.com","b.org"]'}
+    subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", run], env=env, cwd=tmp_path, check=True)
+    sb = json.loads((tmp_path / "settings.json").read_text())["sandbox"]
+    assert sb["enabled"] is True and sb["failIfUnavailable"] is True and sb["allowUnsandboxedCommands"] is False
+    assert sb["autoAllowBashIfSandboxed"] is True and sb["network"] == {"allowedDomains": ["a.com", "b.org"]}
+    assert sb["filesystem"]["denyRead"] == [str(runner_tmp), str(home / ".claude")]
+    bad = {**env, "DOMAINS": "not json"}  # a broken input fails the step, no settings written
+    (tmp_path / "settings.json").unlink()
+    assert subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", run], env=bad, cwd=tmp_path, capture_output=True).returncode != 0
+
+
 def test_the_token_check_stays_inline_in_the_workflow():
     # The agent's sandboxed Bash can write anywhere in the workspace, .ai-workflows/ included: a check loaded from there
     # after the agent ran could be replaced. Only steps that run before the agent may come from .ai-workflows/.

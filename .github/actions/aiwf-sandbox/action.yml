@@ -13,10 +13,12 @@ inputs:
 runs:
   using: composite
   steps:
-    - shell: bash
+    - name: Sandbox settings
+      shell: bash
       env:
         DOMAINS: ${{ inputs.allowed-domains }}
       run: |
+        set -euo pipefail
         deny='[]'
         for d in "$RUNNER_TEMP" "$HOME/.claude" /home/runner/runners /home/runner/actions-runner /opt/actions-runner; do
           if [ -e "$d" ]; then deny=$(jq -c --arg d "$d" '. + [$d]' <<< "$deny"); fi
