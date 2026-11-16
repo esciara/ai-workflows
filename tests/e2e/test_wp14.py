@@ -130,9 +130,9 @@ def test_playground_set_up_from_the_guide_reviews_a_pr_with_the_release(tmp_path
     sha, tag, paths = release_pin(TEMPLATE.read_text())
 
     # The second install, as the guide sets it up (manual checklist step 1).
-    perms = pg.api(f"repos/{pg.REPO}/actions/permissions/workflow")
+    perms = pg.api(f"repos/{pg.REPO}/actions/permissions/workflow", as_maintainer=True)
     assert perms["can_approve_pull_request_reviews"] is False, f"{APPROVE_SETTING!r} is on in {pg.REPO}"
-    secrets = {s["name"] for s in pg.api(f"repos/{pg.REPO}/actions/secrets?per_page=100")["secrets"]}
+    secrets = {s["name"] for s in pg.api(f"repos/{pg.REPO}/actions/secrets?per_page=100", as_maintainer=True)["secrets"]}
     assert "CLAUDE_CODE_OAUTH_TOKEN" in secrets, f"{pg.REPO} lacks the CLAUDE_CODE_OAUTH_TOKEN secret"
     caller = pg.api(f"repos/{pg.REPO}/contents/.github/workflows/ai-workflows.yml")
     caller_sha, caller_tag, caller_paths = release_pin(base64.b64decode(caller["content"]).decode())
