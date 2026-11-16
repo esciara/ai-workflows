@@ -205,7 +205,7 @@ def test_silent_reporter_is_pinged_then_stale_then_closed_and_keep_open_is_exemp
     dispatch_silence(scope)  # close - stale is under a day: stale and close in one run
     closed = issue_state(silent["number"])
     print(f"#{silent['number']} after stale: {sorted(labels(silent['number']))}, {closed['state']}")
-    assert STALE in labels(silent["number"])
+    assert STALE not in labels(silent["number"]) and NO_RESPONSE not in labels(silent["number"])  # silence-closed took them off
     assert closed["state"] == "closed" and closed["state_reason"] == "not_planned", (closed["state"], closed["state_reason"])
     warned, reopen = bot_texts(silent["number"], "will close"), bot_texts(silent["number"], "reopen")
     assert len(warned) == 1 and len(reopen) == 1, (warned, reopen)
