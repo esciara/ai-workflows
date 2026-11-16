@@ -120,11 +120,24 @@ def dispatch(ref: str = "main") -> int:
     return json.loads(out)["workflow_run_id"]
 
 
+def api_retry_404(path: str, timeout: float = 30, interval: float = 3, sleep: Callable[[float], None] = time.sleep) -> Any:
+    """GET `path`, retrying only on HTTP 404 for `timeout` seconds (a just-dispatched run is not visible at once).
+    Any other failure fails immediately."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            return api(path)
+        except pytest.fail.Exception as e:
+            if "HTTP 404" not in str(e) or time.monotonic() >= deadline:
+                raise
+            sleep(interval)
+
+
 def completed(run_id: int) -> dict[str, Any]:
     """The finished run. GitHub can mark a run completed while a job's conclusion is still null, so wait for those too."""
 
     def done() -> dict[str, Any] | None:
-        run = api(f"repos/{REPO}/actions/runs/{run_id}")
+        run = api_retry_404(f"repos/{REPO}/actions/runs/{run_id}")
         if run["status"] != "completed" or None in jobs(run_id).values():
             return None
         return run
