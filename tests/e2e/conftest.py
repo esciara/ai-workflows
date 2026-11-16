@@ -21,6 +21,9 @@ def pytest_configure(config):
     fixture and the playground helpers read them."""
     if os.environ.get("AIWF_E2E") != "1" or hasattr(config, "workerinput"):
         return
+    closed = pg.close_stale_fixtures()  # leftovers of crashed runs would be found as duplicates by B1
+    if closed:
+        print(f"closed stale e2e fixture issues: {closed}")
     try:
         slot = e2eslot.parse_slot(os.environ.get("AIWF_E2E_SLOT"))
     except ValueError as e:
