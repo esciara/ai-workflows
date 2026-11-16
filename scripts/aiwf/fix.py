@@ -11,7 +11,8 @@
   the status line is still the approval and the branch head is still the commit pushed last. Writes the round record.
   A changed status line (a later B2, `/no-fix`, another `/fix`) stops the loop without escalating (`superseded`); a moved head or the round cap
   escalates.
-- Escalation (`aiwf fix-escalate`, module `fix_escalate`) reads the round records.
+- Escalation (`aiwf fix-escalate`, module `fix_escalate`) and the approved hand-over (`aiwf fix-handover`, module
+  `fix_handover`, spec B6) read the round records.
 """
 
 from __future__ import annotations
@@ -342,7 +343,8 @@ def cmd_push(args: argparse.Namespace) -> int:
     if out:
         cli.write_outputs(out, {"head": record["head"], "next": str(record["next"]).lower(),
                                 "escalate": str(record["escalate"]).lower(),
-                                "superseded": str(record["superseded"]).lower()})
+                                "superseded": str(record["superseded"]).lower(),
+                                "approved": str(record["outcome"] == "approved").lower()})
     return 0
 
 
