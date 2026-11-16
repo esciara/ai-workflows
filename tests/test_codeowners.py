@@ -9,6 +9,8 @@ REQUIRED = [
     "/scripts/dev/as-*",
     "/scripts/aiwf/devguard.py",
     "/.claude/settings.json",
+    "/.claude/skills/",
+    "/prompts/dev-reviewer.md",
     "/scripts/aiwf/policy.py",
     "/scripts/aiwf/commands.py",
     "/scripts/aiwf/review_gate.py",
