@@ -8,6 +8,10 @@
 # install, so its code always comes from the checkout, never from the cache.
 name: aiwf setup
 description: Set up Python and the aiwf CLI from the .ai-workflows checkout
+inputs:
+  cache:
+    description: "'false' skips the venv cache: a job that gates merges (verdict) installs fresh, so a cache a PR's run saved cannot supply its code"
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -16,6 +20,7 @@ runs:
       with:
         python-version: '3.12'
     - id: venv
+      if: inputs.cache != 'false'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.aiwf-venv
