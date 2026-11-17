@@ -152,6 +152,28 @@ def apply_patch(tree: Path, patch: Path) -> str:
     return ""
 
 
+def pin_test(tree: Path, meta: dict[str, Any]) -> str:
+    """Put B2's reproduction test over its recorded path in the index, as the exit check does in the tree it runs (spec
+    B5), so what is pushed is what was checked, not the implementer's copy (aiwf-yal). '' or why it cannot be done."""
+    path, code = meta.get("test_path") or "", meta.get("test_code") or ""
+    if not path or not code.strip():
+        return ""  # nothing recorded: the check failed closed
+    parts = path.split("/")
+    for i in range(1, len(parts) + 1):  # a symlink on the path: the check would write through it, a push cannot
+        listing = git(tree, "ls-files", "-s", "--", "/".join(parts[:i]))
+        if listing.startswith("120000 "):
+            return "B2's reproduction test path goes through a symlink the diff added; it was not pushed."
+    listing = git(tree, "ls-files", "-s", "--", path)
+    mode = listing.split(" ", 1)[0] if listing else "100644"
+    blob = subprocess.run(["git", "-C", str(tree), "hash-object", "-w", "--stdin"], input=code.encode(), check=True,
+                          capture_output=True, env=LITERAL).stdout.decode().strip()
+    try:
+        git(tree, "update-index", "--add", "--cacheinfo", f"{mode},{blob},{path}")
+    except subprocess.CalledProcessError:
+        return "B2's reproduction test could not be put at its recorded path; the diff was not pushed."
+    return ""
+
+
 def changes(tree: Path) -> list[tuple[str, str, str]]:
     """(status, path, mode) of every path the index changes against its base commit."""
     raw = git(tree, "diff", "--cached", "--no-renames", "--name-status", "-z", "HEAD").split("\0")
@@ -271,6 +293,8 @@ def run_round(gh: GhRunner, repo: str, issue: int, k: int, cap: int, meta: dict[
         findings += review_findings(review)
         suspicious = review["suspicious_instructions"]
     why = apply_patch(tree, patch)
+    if not why and patch.is_file() and patch.stat().st_size:
+        why = pin_test(tree, meta)
     paths = [] if why else changes(tree)
     why = why or unpushable(paths, patch.stat().st_size if patch.is_file() else 0)
     if why:
