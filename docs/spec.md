@@ -285,7 +285,7 @@ reporter_silence_days: {ping: 4, stale: 14, close: 21}
 notify: slack                   # slack, telegram, or both: slack,telegram
 fork_prs: on-command            # public repos: review fork PRs only after /review
 workflows: {review: true, triage: false}   # Workflow A, Workflow B
-linked_issue: issue             # issue | issue-or-plan-ref: a PR needs a linked issue, else ai-review: human-review (optional)
+linked_issue: issue             # optional; issue (a PR needs a linked issue, else human-review) | issue-or-plan-ref (a WP id or docs/plan.md in the PR text also counts, ADR-0053)
 model: claude-sonnet-4-5        # optional model override for agent runs
 required_checks: [test]         # optional; default: CI gate waits on all checks on the head SHA except ours
 ```
