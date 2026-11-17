@@ -19,10 +19,9 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qs, urlsplit
 
-from test_wp6 import bot_comments, labels
-from test_wp7 import e2e_config
-from test_wp8 import COUPON_BUG, COUPON_FILES, GUIDANCE, open_as_reporter, reproduce_and_analyse
-from test_wp9 import NEEDS_MAINTAINER, ESCALATE_JOB, FIX_MARKER, fix, fix_branch, fix_prs, opened, rounds, tag  # noqa: F401
+from triage_core import bot_comments, e2e_config, labels
+from triage_fix import (COUPON_BUG, COUPON_FILES, ESCALATE_JOB, FIX_MARKER, GUIDANCE, NEEDS_MAINTAINER, fix, fix_branch,
+                        fix_prs, open_as_reporter, opened, reproduce_and_analyse, rounds, tag)  # noqa: F401 (fixtures)
 import playground as pg
 
 HANDOVER_MARKER = "<!-- ai-workflows:fix-pr -->"

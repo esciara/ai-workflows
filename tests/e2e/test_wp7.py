@@ -36,20 +36,17 @@ The ping's other selection rules (an author reply with no new ask yet, no marker
 
 from __future__ import annotations
 
-import base64
 import json
 import time
 from datetime import datetime
 from typing import Any, Iterator
 
 import pytest
-import yaml
 
 import playground as pg
-from test_wp6 import NEEDS_INFO, NEEDS_INFO_MARKER, REPRODUCE_JOB, REPRODUCED, bot_comments, comment_run, item_run, \
-    labels
+from triage_core import (E2E_CONFIG, NEEDS_INFO, NEEDS_INFO_MARKER, REPRODUCE_JOB, REPRODUCED, bot_comments, comment_run,
+                         e2e_config, item_run, labels)
 
-E2E_CONFIG = ".github/ai-workflows-e2e.yml"  # the slot callers' config (ADR-0050)
 NO_RESPONSE = "triage: no-response"
 STALE = "stale"
 KEEP_OPEN = "keep-open"
@@ -86,11 +83,6 @@ def opened() -> Iterator[list[int]]:
     for n in numbers:
         if pg.api(f"repos/{pg.REPO}/issues/{n}")["state"] == "open":
             pg.api(f"repos/{pg.REPO}/issues/{n}", "state=closed", "state_reason=not_planned", method="PATCH")
-
-
-def e2e_config() -> dict[str, Any]:
-    raw = pg.api(f"repos/{pg.REPO}/contents/{E2E_CONFIG}")
-    return yaml.safe_load(base64.b64decode(raw["content"]))
 
 
 def silence_seconds(cfg: dict[str, Any]) -> dict[str, float]:

@@ -29,7 +29,6 @@ The trusted-author path (B2 starts on its own for a maintainer's issue) and the 
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from typing import Any, Iterator
@@ -37,18 +36,11 @@ from typing import Any, Iterator
 import pytest
 
 import playground as pg
+from triage_core import (ERROR, NEEDS_HUMAN, NEEDS_INFO, NEEDS_INFO_MARKER, REPRODUCE_JOB, REPRODUCED, bot_comments,
+                         comment_run, item_run, labels)
 
-E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 TRIAGE_MARKER = "<!-- ai-workflows:triage -->"
 REPRO_MARKER = "<!-- ai-workflows:reproduce -->"
-NEEDS_INFO_MARKER = "<!-- ai-workflows:needs-info -->"
-REPRODUCED = "triage: reproduced"
-NEEDS_INFO = "triage: needs-info"
-NEEDS_HUMAN = "triage: needs-human"
-ERROR = "ai: error"
-REPRODUCE_JOB = "triage / reproduce"
-REPRO_TIMEOUT = 1500  # B1 or a comment run, then setup + tests in the sandbox, on a cold runner
-
 CLEAR_BUG = (
     "Coupon discount is kept after removing items",
     "Steps:\n\n```python\nfrom minicart.cart import Cart\nfrom minicart.discounts import apply_coupon\n"
@@ -99,43 +91,6 @@ def open_as_reporter(kind: str, report: tuple[str, str], tag: str, opened: list[
     author = full["user"]["login"]
     assert author.endswith("[bot]") and author != pg.BOT, f"#{issue['number']} not opened by the tester App: {author}"
     return {**issue, "created_at": full["created_at"], "author": author}
-
-
-def item_run(event: str, title: str, after: str, timeout: int = REPRO_TIMEOUT) -> dict[str, Any]:
-    """The first completed run of the e2e caller for this item (by display title) and event, created since `after`."""
-
-    def find() -> int | None:
-        got = pg.api(f"repos/{pg.REPO}/actions/runs?event={event}&created=%3E%3D{after}&per_page=100")
-        hits = [r for r in got["workflow_runs"]
-                if r["name"] == E2E_WORKFLOW and r["display_title"] == title and r["created_at"] >= after]
-        return min(hits, key=lambda r: (r["created_at"], r["id"]))["id"] if hits else None
-
-    run_id = pg.poll(find, f"the e2e {event} run of {title!r}", timeout=timeout)
-
-    def done() -> dict | None:
-        run = pg.api(f"repos/{pg.REPO}/actions/runs/{run_id}")
-        return run if run["status"] == "completed" else None
-
-    run = pg.poll(done, f"run {run_id} to complete", timeout=timeout)
-    run["jobs"] = pg.jobs(run_id)
-    print(f"{title}: run {run_id} {run['html_url']} -> {run['conclusion']}, jobs {run['jobs']}")
-    return run
-
-
-def comment_run(issue: dict[str, Any], body: str, *, as_tester: bool) -> dict[str, Any]:
-    """Post a comment (maintainer or reporter) and return that comment's completed run."""
-    c = pg.comment(issue["number"], body, as_tester=as_tester)
-    return item_run("issue_comment", issue["title"], c["created_at"])
-
-
-def labels(number: int) -> set[str]:
-    return {lb["name"] for lb in pg.api(f"repos/{pg.REPO}/issues/{number}/labels?per_page=100")}
-
-
-def bot_comments(number: int, marker: str) -> list[dict]:
-    out = pg.gh(["api", "--paginate", f"repos/{pg.REPO}/issues/{number}/comments?per_page=100", "--jq", ".[]"])
-    comments = [json.loads(line) for line in out.splitlines() if line.strip()]
-    return [c for c in comments if c["user"]["login"] == pg.BOT and (c["body"] or "").startswith(marker)]
 
 
 def step_conclusion(run_id: int, job: str, step: str) -> str | None:

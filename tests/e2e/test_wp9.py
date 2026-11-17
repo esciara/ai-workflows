@@ -37,93 +37,25 @@ from __future__ import annotations
 
 import base64
 import re
-from typing import Any, Iterator
+from typing import Any
 
 import pytest
 import yaml
 
 import playground as pg
-from test_wp6 import ERROR, REPRODUCED, bot_comments, labels
-from test_wp7 import e2e_config
-from test_wp8 import (AWAITING, COUPON_BUG, COUPON_FILES, DECLINED, GUIDANCE, GUIDANCE_TEXT, TAX_BUG, TAX_FILES,
-                      analysis, command, open_as_reporter, reproduce_and_analyse, status)
+from triage_core import bot_comments, e2e_config, labels
+from triage_fix import (COUPON_BUG, COUPON_FILES, ESCALATE_JOB, FIX_MARKER, GUIDANCE, GUIDANCE_TEXT, NEEDS_MAINTAINER, TAX_BUG,
+                        TAX_FILES, analysis, branch_sha, fix, fix_branch, fix_prs, open_as_reporter, opened,
+                        reproduce_and_analyse, rounds, status, tag)  # noqa: F401 (fixtures)
 
-NEEDS_MAINTAINER = "fix: needs-maintainer"
-FIX_MARKER = "<!-- ai-workflows:fix -->"
 FAIL_LABEL = "e2e-fix-fail"
 FAIL_CONFIG = ".github/ai-workflows-e2e-fix-fail.yml"
-ESCALATE_JOB = "triage / escalate"
-FIX_TIMEOUT = 5400  # up to 3 rounds of implementer (setup + tests in the sandbox), check and reviewer, cold runners
-ROUND = re.compile(r"/ round-(\d+) / (\w+)$")
-
-
-@pytest.fixture
-def tag(testrun_uid: str) -> str:
-    return testrun_uid[:8]
-
-
-@pytest.fixture
-def opened() -> Iterator[list[int]]:
-    """Issues this test opened. At teardown: their `ai-fix/issue-<n>` PRs closed and branches deleted (as the agent
-    App, test cleanup only), then the issues closed as not planned (never deleted)."""
-    numbers: list[int] = []
-    yield numbers
-    for n in numbers:
-        branch = fix_branch(n)
-        for pr in fix_prs(n):
-            if pr["state"] == "open":
-                pg.api(f"repos/{pg.REPO}/pulls/{pr['number']}", "state=closed", method="PATCH")
-        if branch_sha(branch):
-            pg.api(f"repos/{pg.REPO}/git/refs/heads/{branch}", method="DELETE")
-        pg.api(f"repos/{pg.REPO}/issues/{n}", "state=closed", "state_reason=not_planned", method="PATCH")
-
-
-def fix_branch(number: int) -> str:
-    return f"ai-fix/issue-{number}"
-
-
-def branch_sha(branch: str) -> str | None:
-    refs = pg.api(f"repos/{pg.REPO}/git/matching-refs/heads/{branch}")
-    hit = [r for r in refs if r["ref"] == f"refs/heads/{branch}"]
-    return hit[0]["object"]["sha"] if hit else None
-
-
-def fix_prs(number: int) -> list[dict[str, Any]]:
-    owner = pg.REPO.split("/")[0]
-    return pg.api(f"repos/{pg.REPO}/pulls?head={owner}:{fix_branch(number)}&state=all&per_page=10")
-
-
-def rounds(run: dict[str, Any]) -> dict[int, dict[str, str]]:
-    """Round number -> {job: conclusion} from the run's `round-<k>` jobs (skipped rounds left out)."""
-    got: dict[int, dict[str, str]] = {}
-    for name, conclusion in run["jobs"].items():
-        m = ROUND.search(name)
-        if m and conclusion != "skipped":
-            got.setdefault(int(m.group(1)), {})[m.group(2)] = conclusion
-    print(f"rounds: {got}")
-    return got
-
-
 def fail_config() -> dict[str, Any]:
     raw = pg.api(f"repos/{pg.REPO}/contents/{FAIL_CONFIG}")
     cfg = yaml.safe_load(base64.b64decode(raw["content"]))
     if "exit 1" not in str(cfg.get("test", "")):
         pytest.fail(f"{FAIL_CONFIG} has no always-failing test command; not a pass", pytrace=False)
     return cfg
-
-
-def fix(issue: dict[str, Any], body: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The maintainer's `/fix` and its completed run, which ran the decision and B5."""
-    c, run = command(issue, body, timeout=FIX_TIMEOUT)
-    assert run["conclusion"] == "success", run["jobs"]
-    got = labels(issue["number"])
-    print(f"#{issue['number']}: labels {sorted(got)}")
-    assert REPRODUCED in got and not got & {AWAITING, DECLINED, ERROR}, sorted(got)
-    line = status(analysis(issue["number"]))
-    print(line)
-    assert re.match(rf"fix approved by @{re.escape(c['user'])}\b", line, re.I), line
-    assert f"issuecomment-{c['id']}" in line, "the status does not link the maintainer's /fix comment"
-    return c, run
 
 
 def test_fix_with_guidance_runs_the_fix_loop_to_an_approved_branch(e2e_target, tag, opened):
