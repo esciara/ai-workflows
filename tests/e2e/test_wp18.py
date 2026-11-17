@@ -29,8 +29,8 @@ import re
 import time
 
 import playground as pg
-from test_wp3 import (BUG_LINE, CART, FIX_LINE, bot_review_comments, head_sha, put_file, read_file,
-                      review_run, seeded_pr, summary)
+from review_seeded import (BUG_LINE, CART, FIX_LINE, bot_review_comments, head_sha, put_file, read_file,
+                           review_run, seeded_pr, summary)
 
 THREADS_OPEN_RE = re.compile(r"(\d+) threads? open")
 STATE_RE = re.compile(r"<!-- ai-review:state (\{.*?\}) -->\s*\Z", re.S)  # A's state block ends the summary

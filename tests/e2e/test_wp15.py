@@ -9,7 +9,7 @@ The metrics line is read from the run's `ai-workflows-metrics` artifact (`metric
 from __future__ import annotations
 
 import playground as pg
-from test_wp2 import check_review, head_sha, review_run
+from review_core import check_review, head_sha, review_run
 
 
 def test_a_review_run_records_exactly_one_metrics_line(e2e_target, tmp_path):

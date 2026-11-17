@@ -32,7 +32,7 @@ import re
 
 import playground as pg
 from aiwf import policy
-from test_wp2 import check_review, head_sha
+from review_core import check_review, head_sha
 
 AIWF_REPO = os.environ.get("AIWF_REPO", "esciara/ai-workflows")
 TEMPLATE = pg.ROOT / "templates" / "caller.yml"
