@@ -756,3 +756,24 @@ def test_a_symlink_on_the_test_path_is_not_pushed(base):
     meta = {**META, "test_code": "B2 code\n", "test_path": "link/t.py"}
     assert "symlink" in fix.pin_test(tree, meta)
     assert fix.pin_test(tree, {**META, "test_code": " \n"}) == ""  # nothing recorded: the check failed closed
+
+
+def test_a_symlink_beside_the_test_path_is_no_reason_to_reject(base):
+    tree, patch = base(FIXED)
+    git(tree, "apply", "--cached", "--binary", str(patch))
+    sym = subprocess.run(["git", "-C", str(tree), "hash-object", "-w", "--stdin"], input=b"x", check=True,
+                         capture_output=True).stdout.decode().strip()
+    git(tree, "update-index", "--add", "--cacheinfo", f"120000,{sym},tests/a_link")
+    assert fix.pin_test(tree, {**META, "test_code": "B2 code\n"}) == ""
+
+
+def test_the_mode_is_kept_and_a_deleted_test_comes_back(base):
+    tree, patch = base(FIXED)
+    git(tree, "apply", "--cached", "--binary", str(patch))
+    sha = git(tree, "ls-files", "-s", "tests/test_repro.py").split()[1]
+    git(tree, "update-index", "--cacheinfo", f"100755,{sha},tests/test_repro.py")
+    assert fix.pin_test(tree, {**META, "test_code": "B2 code\n"}) == ""
+    assert fix.index_mode(tree, "tests/test_repro.py") == "100755"
+    git(tree, "rm", "-q", "--cached", "tests/test_repro.py")
+    assert fix.pin_test(tree, {**META, "test_code": "B2 code\n"}) == ""
+    assert fix.index_mode(tree, "tests/test_repro.py") == "100644"
