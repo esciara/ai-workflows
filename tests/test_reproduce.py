@@ -272,3 +272,11 @@ def test_needs_info_body_without_a_known_author_mentions_nobody():
             "suspicious_instructions": []}
     body = pr.needs_info_body(data, "", 1, 2, "https://run/9")
     assert "@" not in body.split("\n", 2)[1] and body.splitlines()[1].startswith("Thanks for the report.")
+
+
+def test_not_reproduced_survives_an_unreadable_issue(monkeypatch):
+    gh = FakeGh(author="rep")
+    del gh.issues[1]  # the issue read fails: the publisher sees {} (used to raise KeyError 'user')
+    publish_answer(gh, monkeypatch)
+    [body] = gh.comment_bodies()
+    assert body.startswith(pr.NEEDS_INFO_MARKER) and "@" not in body.splitlines()[1]
