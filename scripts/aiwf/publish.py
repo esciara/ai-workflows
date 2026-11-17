@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import json
 import pkgutil
+import re
 from functools import cache
 from pathlib import Path
 from typing import Any, Callable
@@ -49,8 +50,11 @@ def validate(kind: str, raw: str | None) -> dict[str, Any]:
 def clean(text: str, limit: int = 600) -> str:
     """One table-safe line: no mentions, HTML, markers, pipes, links or images."""
     text = " ".join(str(text).split())[:limit]
-    return text.replace("\\", "\\\\").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")\
+    text = text.replace("\\", "\\\\").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")\
         .replace("[", "\\[").replace("]", "\\]").replace("!", "\\!")
+    text = re.sub(r"(?i)\b([a-z][a-z0-9+.-]*)://", r"\1:&#8203;//", text)  # bare URLs stop autolinking
+    text = re.sub(r"(?i)\bwww\.", "www&#8203;.", text)
+    return re.sub(r"(?<!&)#(?=\d)", "#&#8203;", text)  # #123 stops cross-referencing (no GitHub ping or timeline event)
 
 
 def injection_line(quotes: list[str]) -> str:

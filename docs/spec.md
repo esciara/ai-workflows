@@ -224,9 +224,9 @@ The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrato
 | --- | --- | --- | --- | --- |
 | Orchestrator | No (passes structured outputs only) | Labels, comments, branches via the workflow's GITHUB\_TOKEN; opens no PRs, permissions scoped per job | CLAUDE\_CODE\_OAUTH\_TOKEN for the model; GITHUB\_TOKEN never handed to agent steps ([SEC-05](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | A, B |
 | Classifier | Yes | Nothing; returns JSON | None | B1 |
-| Reproducer | Yes | Its own sandbox only | None; egress allowlist ([SEC-06](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | B2 |
+| Reproducer | Yes | Its own sandbox only; Bash runs sandboxed | Model token only, scrubbed from every Bash environment (ADR-0037); egress allowlist ([SEC-06](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | B2 |
 | Analyst | Repro output, code | Nothing; returns the report | None | B3 |
-| Implementer | Brief, findings, code | Sandbox; pushes to `ai-fix/*` only, via the orchestrator | None | B5 |
+| Implementer | Brief, findings, code | Sandbox; pushes to `ai-fix/*` only, via the orchestrator | Model token only, scrubbed from every Bash environment (ADR-0037) | B5 |
 | Adversarial reviewer | Diff, issue, repro | Nothing; returns verdict JSON | None | B5 |
 | PR reviewer passes | Diff, PR text | Nothing; returns findings JSON | None | A |
 
@@ -272,6 +272,7 @@ maintainers: [esciara]          # B4 questions, assignments, pings, allowed comm
 default_branch: main
 setup: npm ci                   # how an agent installs the project in its sandbox
 test: npm test                  # B2 repro and B5 exit condition
+allowed_domains: [registry.npmjs.org]  # sandbox egress for setup/test (B2, B5); default [] = no network
 risk_paths:
   high: ["src/auth/**", "migrations/**", ".github/**", "infra/**"]
 limits:
@@ -283,6 +284,10 @@ limits:
 reporter_silence_days: {ping: 4, stale: 14, close: 21}
 notify: slack                   # slack, telegram, or both: slack,telegram
 fork_prs: on-command            # public repos: review fork PRs only after /review
+workflows: {review: true, triage: false}   # Workflow A, Workflow B
+linked_issue: issue             # issue | issue-or-plan-ref: a PR needs a linked issue, else ai-review: human-review (optional)
+model: claude-sonnet-4-5        # optional model override for agent runs
+required_checks: [test]         # optional; default: CI gate waits on all checks on the head SHA except ours
 ```
 
 **Deployment modes.** Where the workflows can run depends on your rights on the repo.

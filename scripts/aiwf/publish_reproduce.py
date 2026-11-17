@@ -82,7 +82,7 @@ def questions(data: dict[str, Any]) -> list[str]:
 
 
 def needs_info_body(data: dict[str, Any], author: str, n: int, cap: int, run_url: str) -> str:
-    lines = [NEEDS_INFO_MARKER, f"@{author} thanks for the report. The bug could not be reproduced yet "
+    lines = [NEEDS_INFO_MARKER, f"{'@' + author + ' t' if author else 'T'}hanks for the report. The bug could not be reproduced yet "
              f"(request {n} of {cap}).", "",
              f"**Tried:** {publish.clean(data['tried'] or data['summary'], 1500)}", "",
              f"**What happened:** {publish.clean(data['happened'] or 'not stated', 1500)}", "",
@@ -167,7 +167,7 @@ def publish_result(data: dict[str, Any], repo: str, issue: int, run_url: str, gh
         print(f"not reproduced {repo}#{issue}: {asked} requests made, {NEEDS_HUMAN}")
         return
     set_labels(gh, repo, issue, current, NEEDS_INFO, (*stale, NEEDS_HUMAN, REPRODUCED))
-    publish.comment(gh, repo, issue, needs_info_body(data, item["user"]["login"], asked + 1, cap, run_url))
+    publish.comment(gh, repo, issue, needs_info_body(data, (item.get("user") or {}).get("login", ""), asked + 1, cap, run_url))
     print(f"not reproduced {repo}#{issue}: request {asked + 1} of {cap}")
 
 
