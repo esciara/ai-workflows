@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Usage: scripts/dev/verify-wp <WP id> [--print-pack]   (reviews tests/e2e/test_wp<N>.py against the Done-when)
-# Exit 0 pass, 1 fail, 2 error. Uses the repo's .venv python when present (needs jsonschema).
+# Exit 0 pass, 1 fail, 2 error. Uses this checkout's .venv python, else the main checkout's .venv (fresh worktree), else python3 (needs jsonschema).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 py="$root/.venv/bin/python"
-[ -x "$py" ] || py=python3
+if [ ! -x "$py" ]; then
+  main="$(cd "$root" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/\.git$||' || true)"
+  [ -n "$main" ] && [ -x "$main/.venv/bin/python" ] && py="$main/.venv/bin/python" || py=python3
+fi
+"$py" -c 'import jsonschema' 2>/dev/null || { echo "verify-wp: $py lacks jsonschema; run scripts/dev/bootstrap in this worktree" >&2; exit 2; }
 PYTHONPATH="$root/scripts${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -c 'import sys; from aiwf.acceptance_review import main; sys.exit(main(sys.argv[1:]))' "$@"
