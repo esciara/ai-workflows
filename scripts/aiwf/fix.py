@@ -152,6 +152,15 @@ def apply_patch(tree: Path, patch: Path) -> str:
     return ""
 
 
+def index_mode(tree: Path, path: str) -> str:
+    """The index mode of exactly `path` ('' when it is no entry: `ls-files` also lists everything under a directory)."""
+    for line in git(tree, "ls-files", "-s", "-z", "--", path).split("\0"):
+        meta, _, name = line.partition("\t")
+        if name == path:
+            return meta.split(" ", 1)[0]
+    return ""
+
+
 def pin_test(tree: Path, meta: dict[str, Any]) -> str:
     """Put B2's reproduction test over its recorded path in the index, as the exit check does in the tree it runs (spec
     B5), so what is pushed is what was checked, not the implementer's copy (aiwf-yal). '' or why it cannot be done."""
@@ -160,11 +169,9 @@ def pin_test(tree: Path, meta: dict[str, Any]) -> str:
         return ""  # nothing recorded: the check failed closed
     parts = path.split("/")
     for i in range(1, len(parts) + 1):  # a symlink on the path: the check would write through it, a push cannot
-        listing = git(tree, "ls-files", "-s", "--", "/".join(parts[:i]))
-        if listing.startswith("120000 "):
-            return "B2's reproduction test path goes through a symlink the diff added; it was not pushed."
-    listing = git(tree, "ls-files", "-s", "--", path)
-    mode = listing.split(" ", 1)[0] if listing else "100644"
+        if index_mode(tree, "/".join(parts[:i])) == "120000":
+            return "B2's reproduction test path goes through a symlink; it was not pushed."
+    mode = index_mode(tree, path) or "100644"
     blob = subprocess.run(["git", "-C", str(tree), "hash-object", "-w", "--stdin"], input=code.encode(), check=True,
                           capture_output=True, env=LITERAL).stdout.decode().strip()
     try:
