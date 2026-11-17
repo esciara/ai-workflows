@@ -66,6 +66,7 @@ jobs:
             fix/target.tgz
           retention-days: 7
 
+  # Job header values (runner, timeout, permissions, scrub env) are anchored in round 1 and aliased in rounds 2 and 3.
   # B5 rounds (spec B5), up to `limits.fix_rounds` (1 to 3); round k+1 runs only when round k's push job says so
   # (rejected, loop not stopped, k < fix_rounds). Each round is four jobs, their steps shared through YAML anchors:
   # - implement: the implementer (ADR-0037, as the reproducer: sandboxed Bash only, env scrubbed, repo .mcp.json and
@@ -85,14 +86,14 @@ jobs:
     name: round-1 / implement
     needs: fix-context
     if: ${{ !cancelled() && needs.fix-context.outputs.start == 'true' }}
-    runs-on: ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
-    timeout-minutes: 45
-    permissions: {}
+    runs-on: &sandbox-runner ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
+    timeout-minutes: &round-job-timeout 45
+    permissions: &no-permissions {}
     env:
       ROUND: "1"
       PREV: "0"
-      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"  # ADR-0037: no credential in any Bash command's environment
-      CLAUDE_WORKING_DIR: ${{ github.workspace }}/work
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: &env-scrub "1"  # ADR-0037: no credential in any Bash command's environment
+      CLAUDE_WORKING_DIR: &work-dir ${{ github.workspace }}/work
     outputs: &implement-outputs
       json: ${{ steps.token-check.outcome == 'success' && steps.claude.outputs.structured_output || '' }}
     steps: &implement-steps
@@ -189,10 +190,10 @@ jobs:
     name: round-1 / check
     needs: [fix-context, round-1-implement]
     if: ${{ !cancelled() && needs.round-1-implement.result == 'success' }}
-    runs-on: ubuntu-24.04  # same image as the implementer, so both run the commands alike
-    timeout-minutes: 45
-    continue-on-error: true  # a failed check rejects the round; the run goes on
-    permissions: {}
+    runs-on: *sandbox-runner  # same image as the implementer, so both run the commands alike
+    timeout-minutes: *round-job-timeout
+    continue-on-error: &reject-on-fail true  # a failed check rejects the round; the run goes on
+    permissions: *no-permissions
     env:
       ROUND: "1"
     outputs: &check-outputs
@@ -272,9 +273,9 @@ jobs:
     name: round-1 / review
     needs: [fix-context, round-1-check]
     if: ${{ !cancelled() && needs.round-1-check.outputs.ok == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions: {}
+    runs-on: &hosted-runner ubuntu-latest
+    timeout-minutes: &review-timeout 15
+    permissions: *no-permissions
     env:
       ROUND: "1"
     outputs: &review-outputs
@@ -312,9 +313,9 @@ jobs:
     name: round-1 / push
     needs: [fix-context, round-1-implement, round-1-check, round-1-review]
     if: ${{ !cancelled() && needs.round-1-implement.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.round-1-review.result) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
+    runs-on: *hosted-runner
+    timeout-minutes: &push-timeout 10
+    permissions: &push-permissions
       contents: write  # the fix branch, through the Git data API
       issues: read
     env:
@@ -374,14 +375,14 @@ jobs:
     name: round-2 / implement
     needs: round-1-push
     if: ${{ !cancelled() && needs.round-1-push.outputs.next == 'true' }}
-    runs-on: ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
-    timeout-minutes: 45
-    permissions: {}
+    runs-on: *sandbox-runner
+    timeout-minutes: *round-job-timeout
+    permissions: *no-permissions
     env:
       ROUND: "2"
       PREV: "1"
-      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"  # ADR-0037: no credential in any Bash command's environment
-      CLAUDE_WORKING_DIR: ${{ github.workspace }}/work
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: *env-scrub  # ADR-0037
+      CLAUDE_WORKING_DIR: *work-dir
     outputs: *implement-outputs  # anchored in round-1-implement
     steps: *implement-steps
 
@@ -389,10 +390,10 @@ jobs:
     name: round-2 / check
     needs: [fix-context, round-2-implement]
     if: ${{ !cancelled() && needs.round-2-implement.result == 'success' }}
-    runs-on: ubuntu-24.04  # same image as the implementer, so both run the commands alike
-    timeout-minutes: 45
-    continue-on-error: true
-    permissions: {}
+    runs-on: *sandbox-runner
+    timeout-minutes: *round-job-timeout
+    continue-on-error: *reject-on-fail
+    permissions: *no-permissions
     env:
       ROUND: "2"
     outputs: *check-outputs  # anchored in round-1-check
@@ -402,9 +403,9 @@ jobs:
     name: round-2 / review
     needs: [fix-context, round-2-check]
     if: ${{ !cancelled() && needs.round-2-check.outputs.ok == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions: {}
+    runs-on: *hosted-runner
+    timeout-minutes: *review-timeout
+    permissions: *no-permissions
     env:
       ROUND: "2"
     outputs: *review-outputs  # anchored in round-1-review
@@ -414,11 +415,9 @@ jobs:
     name: round-2 / push
     needs: [fix-context, round-1-push, round-2-implement, round-2-check, round-2-review]
     if: ${{ !cancelled() && needs.round-2-implement.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.round-2-review.result) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write  # the fix branch, through the Git data API
-      issues: read
+    runs-on: *hosted-runner
+    timeout-minutes: *push-timeout
+    permissions: *push-permissions
     env:
       ROUND: "2"
       PREV_HEAD: ${{ needs.round-1-push.outputs.head }}
@@ -432,14 +431,14 @@ jobs:
     name: round-3 / implement
     needs: round-2-push
     if: ${{ !cancelled() && needs.round-2-push.outputs.next == 'true' }}
-    runs-on: ubuntu-24.04  # the sandbox cannot start on ubuntu-26.04; unpin with bead aiwf-5t2
-    timeout-minutes: 45
-    permissions: {}
+    runs-on: *sandbox-runner
+    timeout-minutes: *round-job-timeout
+    permissions: *no-permissions
     env:
       ROUND: "3"
       PREV: "2"
-      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"  # ADR-0037: no credential in any Bash command's environment
-      CLAUDE_WORKING_DIR: ${{ github.workspace }}/work
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: *env-scrub  # ADR-0037
+      CLAUDE_WORKING_DIR: *work-dir
     outputs: *implement-outputs  # anchored in round-1-implement
     steps: *implement-steps
 
@@ -447,10 +446,10 @@ jobs:
     name: round-3 / check
     needs: [fix-context, round-3-implement]
     if: ${{ !cancelled() && needs.round-3-implement.result == 'success' }}
-    runs-on: ubuntu-24.04  # same image as the implementer, so both run the commands alike
-    timeout-minutes: 45
-    continue-on-error: true
-    permissions: {}
+    runs-on: *sandbox-runner
+    timeout-minutes: *round-job-timeout
+    continue-on-error: *reject-on-fail
+    permissions: *no-permissions
     env:
       ROUND: "3"
     outputs: *check-outputs  # anchored in round-1-check
@@ -460,9 +459,9 @@ jobs:
     name: round-3 / review
     needs: [fix-context, round-3-check]
     if: ${{ !cancelled() && needs.round-3-check.outputs.ok == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions: {}
+    runs-on: *hosted-runner
+    timeout-minutes: *review-timeout
+    permissions: *no-permissions
     env:
       ROUND: "3"
     outputs: *review-outputs  # anchored in round-1-review
@@ -472,11 +471,9 @@ jobs:
     name: round-3 / push
     needs: [fix-context, round-2-push, round-3-implement, round-3-check, round-3-review]
     if: ${{ !cancelled() && needs.round-3-implement.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.round-3-review.result) }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write  # the fix branch, through the Git data API
-      issues: read
+    runs-on: *hosted-runner
+    timeout-minutes: *push-timeout
+    permissions: *push-permissions
     env:
       ROUND: "3"
       PREV_HEAD: ${{ needs.round-2-push.outputs.head }}
