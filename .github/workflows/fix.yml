@@ -66,7 +66,7 @@ jobs:
             fix/target.tgz
           retention-days: 7
 
-  # Job header values (runner, timeout, permissions, scrub env) are anchored in round 1 and aliased in rounds 2 and 3.
+  # Job header values (runner, timeout, permissions, continue-on-error, scrub env, working dir) are anchored in round 1 and aliased in rounds 2 and 3.
   # B5 rounds (spec B5), up to `limits.fix_rounds` (1 to 3); round k+1 runs only when round k's push job says so
   # (rejected, loop not stopped, k < fix_rounds). Each round is four jobs, their steps shared through YAML anchors:
   # - implement: the implementer (ADR-0037, as the reproducer: sandboxed Bash only, env scrubbed, repo .mcp.json and
