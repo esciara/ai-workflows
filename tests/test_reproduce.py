@@ -265,3 +265,10 @@ def test_schema_rejects_unsafe_test_paths(path):
 
 def test_schema_rejects_a_test_on_a_not_reproduced_answer():
     assert schema_errors(reproduced=False, test=REPRO)
+
+
+def test_needs_info_body_without_a_known_author_mentions_nobody():
+    data = {"tried": "t", "happened": "h", "summary": "s", "questions": ["q?"], "commands": [], "environment": "",
+            "suspicious_instructions": []}
+    body = pr.needs_info_body(data, "", 1, 2, "https://run/9")
+    assert "@" not in body.split("\n", 2)[1] and body.splitlines()[1].startswith("Thanks for the report.")

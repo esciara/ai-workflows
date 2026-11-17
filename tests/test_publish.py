@@ -98,3 +98,11 @@ def test_review_publisher_cleans_free_text():
     f = {"severity": "major", "path": EVIL, "id": "k", "line": 1, "still_open": False, "title": EVIL, "detail": EVIL, "suggested_fix": EVIL, "also": [{"path": EVIL}]}
     assert_inert(publish_review.row(1, f))
     assert_inert(publish_review.inline_comment(f, {})["body"])
+
+
+def test_clean_neutralises_bare_urls_and_issue_refs():
+    out = publish.clean("see https://evil.example/x www.evil.example ftp://h and #123, o/r#4")
+    assert "://" not in out and "www." not in out
+    assert not re.search(r"(?<!&)#(?=\d)", out) and out.count("#&#8203;") == 2
+    assert publish.clean("@a") == "@&#8203;a"  # earlier entities stay intact
+    assert publish.clean("src/a.py#L42") == "src/a.py#L42"  # a line anchor is not an issue ref

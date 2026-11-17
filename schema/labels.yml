@@ -5,8 +5,8 @@ labels:
   - {name: "type: feature", color: "a2eeef", description: "Issue class: feature (B1); out of scope, labelled only"}
   - {name: "type: question", color: "d876e3", description: "Issue class: question (B1); out of scope, labelled only"}
   # B1-B4 triage
-  - {name: "triage: needs-info", color: "fbca04", description: "Waiting on the reporter; ping at day 4, stale at 14, closed at 21 (B2)"}
-  - {name: "triage: no-response", color: "f9d0c4", description: "Reporter silent 4 days; maintainer pinged (B2)"}
+  - {name: "triage: needs-info", color: "fbca04", description: "Waiting on the reporter; ping, stale and close after reporter_silence_days (B2)"}
+  - {name: "triage: no-response", color: "f9d0c4", description: "Reporter silent past the ping day; maintainer pinged (B2)"}
   - {name: "triage: reproduced", color: "0e8a16", description: "Repro test stored (B2)"}
   - {name: "triage: awaiting-maintainer", color: "1d76db", description: "Analysis posted, waiting for /fix or /no-fix (B4)"}
   - {name: "triage: needs-human", color: "b60205", description: "Agent stopped; a person takes over (B1, B2)"}
@@ -23,5 +23,5 @@ labels:
   # Guardrails and reporter silence
   - {name: "ai: off", color: "000000", description: "Kill switch: no AI run on this issue or PR"}
   - {name: "ai: error", color: "b60205", description: "An AI run failed; see the run link"}
-  - {name: "stale", color: "ffffff", description: "No reply from the reporter for 14 days; closes in 7 (actions/stale)"}
+  - {name: "stale", color: "ffffff", description: "No reply from the reporter past the stale day; closes later (actions/stale)"}
   - {name: "keep-open", color: "c2e0c6", description: "Exempt from the reporter-silence ping, stale and close (B2)"}
