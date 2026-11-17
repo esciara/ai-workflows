@@ -41,18 +41,28 @@ OURS = {"referenced_workflows": [{"path": "esciara/ai-workflows/.github/workflow
 THEIRS = {"referenced_workflows": [{"path": "o/r/.github/workflows/build.yml@main"}]}
 
 
-def fake_gh(runs_by_id, checks=None, calls=None):
+class RunsGh(RecordingGh):
     """gh stub: the check-runs page, and each workflow run by id (a missing id fails like run_gh does)."""
-    def gh(args):
-        if calls is not None:
-            calls.append(args[-1])
+
+    def __init__(self, runs_by_id, checks=None):
+        super().__init__()
+        self.runs_by_id, self.checks = runs_by_id, checks
+
+    def respond(self, args):
         if "/check-runs" in args[-1]:
-            return json.dumps([{"check_runs": checks or []}])
+            return json.dumps([{"check_runs": self.checks or []}])
         rid = args[-1].rsplit("/", 1)[1]
-        if rid not in runs_by_id:
+        if rid not in self.runs_by_id:
             raise RuntimeError("HTTP 403: Resource not accessible by integration")
-        return json.dumps(runs_by_id[rid])
-    return gh
+        return json.dumps(self.runs_by_id[rid])
+
+    @property
+    def paths(self):
+        return [c[-1] for c in self.calls]
+
+
+def fake_gh(runs_by_id, checks=None):
+    return RunsGh(runs_by_id, checks)
 
 
 def ci_of(gh):
@@ -94,19 +104,18 @@ def test_own_runs_does_not_cache_an_unreadable_run(capsys):
 
 
 def test_ci_check_of_another_app_is_never_ours():
-    calls = []
-    gh = fake_gh({}, [run("review / verify", conclusion="failure", run_id=3, app="circleci")], calls)
+    gh = fake_gh({}, [run("review / verify", conclusion="failure", run_id=3, app="circleci")])
     assert ci_of(gh) == "red"
-    assert not [c for c in calls if "/actions/runs/" in c]  # nothing to look up
+    assert not [c for c in gh.paths if "/actions/runs/" in c]  # nothing to look up
 
 
 def test_own_runs_caches_answers_across_polls():
-    calls, known = [], {}
-    gh = fake_gh({"3": OURS, "4": THEIRS}, calls=calls)
+    known = {}
+    gh = fake_gh({"3": OURS, "4": THEIRS})
     checks = [run("a", run_id=3), run("b", run_id=4), run("c", run_id=3)]
     assert review.own_runs(gh, "o/r", checks, known) == {"3"}
     assert review.own_runs(gh, "o/r", checks, known) == {"3"}
-    assert sorted(calls) == ["repos/o/r/actions/runs/3", "repos/o/r/actions/runs/4"]
+    assert sorted(gh.paths) == ["repos/o/r/actions/runs/3", "repos/o/r/actions/runs/4"]
 
 
 @pytest.mark.parametrize("runs,state", [
