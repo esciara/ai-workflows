@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
@@ -714,3 +715,44 @@ def test_the_check_fails_closed_without_b2s_test(tmp_path, meta):
 def test_the_reviewer_is_told_when_the_diff_is_cut():
     step = next(s["run"] for s in WF["round-1-review"]["steps"] if "adversarial-reviewer" in str(s.get("run", "")))
     assert "head -c 150000" in step and "TRUNCATED" in step and "do not approve" in step
+
+
+def pushed_blobs(gh):
+    return {base64.b64decode(b["content"]).decode() for m, u, b in gh.posted if u.endswith("/git/blobs")}
+
+
+def run_with(gh, tree, patch, meta):
+    return fix.run_round(gh, REPO, 1, 1, 3, meta, tree, patch, True, "", impl(), review(), "", BASE, RUN)
+
+
+def test_the_pushed_test_is_b2s_not_the_implementers_copy(base):
+    """aiwf-yal: the exit check runs B2's test over the implementer's copy; the push carries what was checked."""
+    tree, patch = base({**FIXED, "tests/test_repro.py": "def test_neg():\n    pass  # weakened copy\n"})
+    gh = Gh(comments=[comment(ANALYSIS)])
+    assert run_with(gh, tree, patch, {**META, "test_code": "B2 code\n"})["outcome"] == "approved"
+    assert "B2 code\n" in pushed_blobs(gh) and not any("weakened" in b for b in pushed_blobs(gh))
+
+
+def test_a_test_the_diff_never_added_comes_from_b2s_record(base):
+    tree, patch = base({"src/cart.py": FIXED["src/cart.py"]})
+    gh = Gh(comments=[comment(ANALYSIS)])
+    run_with(gh, tree, patch, {**META, "test_code": "B2 code\n"})
+    [tree_call] = [b for m, u, b in gh.posted if u.endswith("/git/trees")]
+    assert sorted(e["path"] for e in tree_call["tree"]) == ["src/cart.py", "tests/test_repro.py"]
+
+
+def test_an_empty_round_stays_empty_with_b2s_test_recorded(base):
+    gh = Gh(comments=[comment(ANALYSIS)])
+    rec = run_with(gh, *base({}), {**META, "test_code": "B2 code\n"})
+    assert "changed nothing" in rec["findings"][-1] and gh.posted == []
+
+
+def test_a_symlink_on_the_test_path_is_not_pushed(base):
+    tree, patch = base(FIXED)
+    git(tree, "apply", "--cached", "--binary", str(patch))
+    sym = subprocess.run(["git", "-C", str(tree), "hash-object", "-w", "--stdin"], input=b"tests", check=True,
+                         capture_output=True).stdout.decode().strip()
+    git(tree, "update-index", "--add", "--cacheinfo", f"120000,{sym},link")
+    meta = {**META, "test_code": "B2 code\n", "test_path": "link/t.py"}
+    assert "symlink" in fix.pin_test(tree, meta)
+    assert fix.pin_test(tree, {**META, "test_code": " \n"}) == ""  # nothing recorded: the check failed closed
