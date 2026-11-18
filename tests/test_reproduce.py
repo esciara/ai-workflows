@@ -164,9 +164,14 @@ def test_a_token_across_the_tail_cut_is_redacted_before_slicing(monkeypatch):
     token = "ghp_" + "a1B2" * 9
     gh = FakeGh(author="rep")
     publish_answer(gh, monkeypatch, reproduced=True, test=REPRO,
-                   commands=[{"command": "c", "exit_code": 0, "output": "x" * 262 + token + "y" * 40}])
+                   commands=[{"command": "c", "exit_code": 0, "output": "x" * 280 + " " + token + " " + "y" * 280}])
     [body] = gh.comment_bodies()
     assert "a1B2a1B2" not in body and "p_a1B2" not in body
+
+
+def test_a_token_glued_to_a_word_char_is_redacted():
+    token = "ghp_" + "a1B2" * 9
+    assert "a1B2" not in publish.scrub_secrets(f"token=abcdef{token}")
 
 
 def test_redaction_keeps_ordinary_text():
