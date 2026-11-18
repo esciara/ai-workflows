@@ -55,7 +55,7 @@ def commands_table(cmds: list[dict[str, Any]]) -> list[str]:
     if not cmds:
         return []
     rows = ["| Command | Exit code | Output (end) |", "|---|---|---|"]
-    rows += [f"| {inline(publish.scrub_secrets(c['command']))} | {c['exit_code']} | {clean(c['output'][-300:], 300)} |" for c in cmds]
+    rows += [f"| {inline(publish.scrub_secrets(c['command']))} | {c['exit_code']} | {clean(publish.scrub_secrets(c['output'])[-300:], 300)} |" for c in cmds]
     return ["<details><summary>Commands run</summary>", "", *rows, "", "</details>"]
 
 
@@ -75,7 +75,7 @@ def reproduced_body(data: dict[str, Any], run_url: str) -> str:
     lines = [MARKER, f"**Reproduced.** {clean(data['summary'], 400)}", "",
              f"**Test** {inline(t['path'])}, run with {inline(t['command'], 300)}:", "",
              fence(t["code"], "python" if t["path"].endswith(".py") else "", scrub=False), "",
-             "**Output**", "", fence(t["output"][-6000:])]
+             "**Output**", "", fence(publish.scrub_secrets(t["output"])[-6000:])]
     return "\n".join(tail(lines, data, run_url))
 
 

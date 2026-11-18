@@ -160,6 +160,15 @@ def test_secret_shaped_strings_are_redacted_everywhere_the_reproducer_text_is_po
     assert body.count("[redacted]") >= 6
 
 
+def test_a_token_across_the_tail_cut_is_redacted_before_slicing(monkeypatch):
+    token = "ghp_" + "a1B2" * 9
+    gh = FakeGh(author="rep")
+    publish_answer(gh, monkeypatch, reproduced=True, test=REPRO,
+                   commands=[{"command": "c", "exit_code": 0, "output": "x" * 262 + token + "y" * 40}])
+    [body] = gh.comment_bodies()
+    assert "a1B2a1B2" not in body and "p_a1B2" not in body
+
+
 def test_redaction_keeps_ordinary_text():
     plain = "commit " + "a" * 40 + " in tests/test_some_really_long_snake_case_name_with_digits_123456789.py::test_x"
     assert publish.scrub_secrets(plain) == plain

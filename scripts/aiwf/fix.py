@@ -293,7 +293,7 @@ def run_round(gh: GhRunner, repo: str, issue: int, k: int, cap: int, meta: dict[
     suspicious: list[str] = []
     if not check_ok:
         findings.append("The orchestrator's check (setup, test, reproduction test) failed; its output is below.")
-        check_output = check_log[-MAX_CHECK_TAIL:] or "The check did not finish."
+        check_output = publish.scrub_secrets(check_log)[-MAX_CHECK_TAIL:] or "The check did not finish."
     else:
         review = publish.validate("fix-review", review_raw)
         approved = review["verdict"] == "approve" and not review["findings"]
