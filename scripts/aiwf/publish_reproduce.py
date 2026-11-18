@@ -38,7 +38,8 @@ FALLBACK_QUESTIONS = (
 
 
 def fence(text: str, lang: str = "") -> str:
-    """A fenced block longer than any backtick run in `text`, so the text cannot close it."""
+    """A fenced block longer than any backtick run in `text`, so the text cannot close it; secret-shaped strings redacted."""
+    text = publish.scrub_secrets(text)
     longest = max((len(m) for m in re.findall(r"`+", text)), default=0)
     ticks = "`" * max(3, longest + 1)
     return f"{ticks}{lang}\n{text.rstrip()}\n{ticks}"
@@ -48,7 +49,7 @@ def commands_table(cmds: list[dict[str, Any]]) -> list[str]:
     if not cmds:
         return []
     rows = ["| Command | Exit code | Output (end) |", "|---|---|---|"]
-    rows += [f"| {inline(c['command'])} | {c['exit_code']} | {publish.clean(c['output'][-300:], 300)} |" for c in cmds]
+    rows += [f"| {inline(publish.scrub_secrets(c['command']))} | {c['exit_code']} | {publish.clean(c['output'][-300:], 300)} |" for c in cmds]
     return ["<details><summary>Commands run</summary>", "", *rows, "", "</details>"]
 
 
@@ -66,7 +67,7 @@ def tail(lines: list[str], data: dict[str, Any], run_url: str) -> list[str]:
 def reproduced_body(data: dict[str, Any], run_url: str) -> str:
     t = data["test"]
     lines = [MARKER, f"**Reproduced.** {publish.clean(data['summary'], 400)}", "",
-             f"**Test** {inline(t['path'])}, run with {inline(t['command'], 300)}:", "",
+             f"**Test** {inline(t['path'])}, run with {inline(publish.scrub_secrets(t['command']), 300)}:", "",
              fence(t["code"], "python" if t["path"].endswith(".py") else ""), "",
              "**Output**", "", fence(t["output"][-6000:])]
     return "\n".join(tail(lines, data, run_url))
