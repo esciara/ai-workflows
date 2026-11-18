@@ -49,7 +49,7 @@ def validate(kind: str, raw: str | None) -> dict[str, Any]:
 
 SECRET_SHAPES = re.compile(
     r"sk-ant-[A-Za-z0-9_-]{8,}"  # Anthropic keys and OAuth tokens
-    r"|\bgh[pousr]_[A-Za-z0-9]{16,}"  # GitHub PAT, OAuth, user, server and refresh tokens
+    r"|gh[pousr]_[A-Za-z0-9]{16,}"  # GitHub PAT, OAuth, user, server and refresh tokens
     r"|github_pat_[A-Za-z0-9_]{16,}"
     r"|\b[A-Fa-f0-9]{64,}\b"  # long hex (a git SHA is 40 and survives)
     r"|(?<![A-Za-z0-9+/=])(?=[A-Za-z0-9+=]*[A-Za-z])(?=[A-Za-z0-9+=]*\d)[A-Za-z0-9+=]{44,}(?![A-Za-z0-9+/=])")  # long base64-like run
