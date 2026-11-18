@@ -435,6 +435,12 @@ def rec(k, **extra):
 COMPARE = "https://github.com/o/r/compare/trunk...ai-fix/issue-1"
 
 
+def test_escalation_redacts_secret_shaped_check_output():
+    token = "ghp_" + "a1B2" * 9
+    body = esc.round_lines(rec(1, check_output=f"env: TOKEN={token}\nFAILED"))
+    assert token not in "\n".join(body) and "[redacted]" in "\n".join(body)
+
+
 def test_escalation_comments_with_the_compare_link_labels_and_assigns_the_issue_and_opens_no_pr(monkeypatch):
     monkeypatch.delenv("GITHUB_SERVER_URL", raising=False)
     gh = Gh(head="h" * 40)
