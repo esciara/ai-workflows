@@ -60,3 +60,12 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Upgrade trigger (ADR-0037): move to a credential proxy plus container when a target repo goes public with outside contributors, on any sign of token misuse, when a sandbox or scrub bypass becomes known, or when a Claude Code upgrade weakens a setting.
 - Priority: P1 (was aiwf-3nh); WP6 (reproduce) depends on it.
 - ADR: [ADR-0037](adr/0037-command-running-agents-sandbox-scrub-and-trusted-gate.md)
+
+### Workflow A's `resolve-threads` job holds `contents: write`, and callers must grant it
+
+- Date: 2026-11-18
+- What: GitHub refuses `resolveReviewThread` with `GITHUB_TOKEN` without `contents: write`, so since ADR-0062 the `resolve-threads` job of review.yml holds it (and `publish` only `contents: read`), and every caller's `review` job must grant `contents: write` so the called workflow can use it.
+- Why it matters: a token with repository write scope exists in a job of every installed repo; a tampered job could push code. The job runs no agent, reads no PR text, checks out only this repo at the workflow SHA, and takes shape-checked node ids.
+- Current mitigation: the policy test pins that only `resolve-threads` writes contents in review.yml, with no agent step and no PR checkout; the job runs from the pinned release SHA.
+- Priority: P3, until GitHub allows the mutation with a narrower scope.
+- ADR: [ADR-0062](adr/0062-thread-resolve-in-its-own-write-job.md)

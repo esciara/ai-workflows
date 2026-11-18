@@ -1,7 +1,7 @@
 """Workflow A, write side (steps 6-9): the verifier's decisions applied to the 4 passes' findings, the verdict, the one
 summary comment found by its marker (with the last run's findings marked resolved or still open), the run's one GitHub
-review carrying the new inline comments (never Approve; ADR-0041), the verdict label. A replies to and resolves its own
-inline thread of each finding the verify pass marks resolved (ADR-0057), and counts the PR's open threads.
+review carrying the new inline comments (never Approve; ADR-0041), the verdict label. A replies in its own
+inline thread of each finding the verify pass marks resolved (ADR-0057; the `resolve-threads` job resolves it, ADR-0062), and counts the PR's open threads.
 
 Workflow A publishes with `aiwf review-publish` rather than a `publish --kind` publisher, because the comment needs the
 context job's facts (tier, CI, SHA) as well as the agent's JSON. Agent text is untrusted: every string is cleaned
@@ -338,34 +338,50 @@ def review_threads(gh: GhRunner, repo: str, number: int) -> tuple[list[dict[str,
     return out, False
 
 
-def open_threads(gh: GhRunner, repo: str, number: int) -> int | str | None:
-    """Unresolved review threads on the PR, A's and others; "N+" when not all pages were read; None (and a warning)
-    when GitHub does not answer."""
+def open_threads(gh: GhRunner, repo: str, number: int, pending: frozenset[str] = frozenset()) -> int | str | None:
+    """Unresolved review threads on the PR, A's and others, less the `pending` ones the resolve-threads job is about
+    to resolve; "N+" when not all pages were read; None (and a warning) when GitHub does not answer."""
     try:
         threads, complete = review_threads(gh, repo, number)
-        n = sum(not t["resolved"] for t in threads)
+        n = sum(not t["resolved"] and t["id"] not in pending for t in threads)
         return n if complete else f"{n}+"
     except RuntimeError as exc:
         print(f"::warning title=Threads not counted::{str(exc)[:300]}")
         return None
 
 
-def close_threads(gh: GhRunner, repo: str, number: int, sha: str, history: list[dict[str, Any]]) -> list[str]:
+def resolve_threads(gh: GhRunner, ids: list[str]) -> int:
+    """The `resolve-threads` job (ADR-0062): resolve each thread by node id, the only call that needs `contents: write`.
+    Failures never fail the run: a warning each; returns how many failed."""
+    failed = 0
+    for tid in ids:
+        try:
+            gh(["api", "graphql", "-f", f"query={RESOLVE_M}", "-f", f"id={tid}"])
+        except RuntimeError as exc:
+            print(f"::warning title=Thread not resolved::{tid}: {str(exc)[:300]}")
+            failed += 1
+    return failed
+
+
+def close_threads(gh: GhRunner, repo: str, number: int, sha: str,
+                  history: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
     """Step 9 (ADR-0057): reply `resolved in <sha>: <reason>` in A's own thread of each finding the verify pass marks
-    resolved, then resolve the thread. A thread is A's only when its first comment's id is the one A recorded in its
+    resolved; returns the notes for the summary and the node ids of the threads to resolve, which the separate
+    `resolve-threads` job does (ADR-0062; this job holds no `contents: write`). A thread is A's only when its first comment's id is the one A recorded in its
     state (never by author login); a thread already resolved, or one that already holds A's reply, is not replied to
     twice. Failures never fail the run: a warning, and a note for the summary."""
     todo = [(h, int(m.group(1))) for h in history
             if h["status"] == "resolved" and (m := THREAD_ID_RE.search(h.get("thread") or ""))]
     if not todo:
-        return []
-    note = "Could not reply to or resolve {} thread(s) of fixed findings; see the run log."
+        return [], []
+    note = "Could not reply to {} thread(s) of fixed findings; see the run log."
     try:
         threads = {t["first"]: t for t in review_threads(gh, repo, number)[0] if t["first"] is not None}
     except RuntimeError as exc:
         print(f"::warning title=Threads not closed::{str(exc)[:300]}")
-        return [note.format(len(todo))]
+        return [note.format(len(todo))], []
     failed = 0
+    ids: list[str] = []
     for h, cid in todo:
         t = threads.get(cid)
         if t is None or t["resolved"]:
@@ -378,12 +394,8 @@ def close_threads(gh: GhRunner, repo: str, number: int, sha: str, history: list[
                 print(f"::warning title=Thread reply failed::{cid}: {str(exc)[:300]}")
                 failed += 1
                 continue
-        try:
-            gh(["api", "graphql", "-f", f"query={RESOLVE_M}", "-f", f"id={t['id']}"])
-        except RuntimeError as exc:
-            print(f"::warning title=Thread not resolved::{cid}: {str(exc)[:300]}")
-            failed += 1
-    return [note.format(failed)] if failed else []
+        ids.append(t["id"])
+    return ([note.format(failed)] if failed else []), ids
 
 
 def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str, Any], repo: str, number: int,
@@ -433,9 +445,10 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
         got = json.loads(out or "{}")
         return got.get("id", cid), got.get("html_url", "")
 
-    closed = close_threads(gh, repo, number, facts["sha"], history)  # never changes the verdict
+    closed, to_resolve = close_threads(gh, repo, number, facts["sha"], history)  # never changes the verdict
+    pending = frozenset(to_resolve)  # resolved by the next job; not counted as open
     data["notes"] = closed
-    data["threads_open"] = open_threads(gh, repo, number)  # after the replies and resolves
+    data["threads_open"] = open_threads(gh, repo, number, pending)
     comment_id, summary_url = upsert(comment_id)
     had = {f["id"] for f in findings if f.get("thread")}
     notes = send_review(gh, repo, number, facts, label, findings, summary_url)
@@ -443,13 +456,13 @@ def publish_review(passes_raw: dict[str, str], verify_raw: str, facts: dict[str,
     if notes or new_threads:
         data["notes"] = closed + notes
         if new_threads:
-            data["threads_open"] = open_threads(gh, repo, number)
+            data["threads_open"] = open_threads(gh, repo, number, pending)
         upsert(comment_id)  # now with links to the new inline threads, the new count and any notes
     set_verdict_label(gh, repo, number, label)
     guard.clear_error(gh, repo, number, run_url)  # an earlier run's sticky error comment no longer applies
     if os.environ.get("GITHUB_OUTPUT"):  # for the metrics line (spec: Usage per run)
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-            fh.write(f"verdict={label}\n")
+            fh.write(f"verdict={label}\nresolve={json.dumps(to_resolve)}\n")
     print(f"{repo}#{number}: {label} ({'; '.join(reasons)}); verification {json.dumps(counts)}")
     print("placement: " + json.dumps({p: sum(f["place"] == p for f in findings)
                                       for p in (placement.INLINE, placement.COLLAPSED, placement.GENERAL)}))
@@ -482,6 +495,22 @@ def cmd_review_publish(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+NODE_ID_RE = re.compile(r"[A-Za-z0-9_=-]{1,100}")
+
+
+def cmd_review_resolve(args: argparse.Namespace) -> int:
+    """Resolve the threads the publish job listed (env THREADS, a JSON list of node ids); each id is shape-checked."""
+    try:
+        ids = json.loads(os.environ.get("THREADS") or "[]")
+    except ValueError:
+        ids = None
+    if not isinstance(ids, list) or not all(isinstance(i, str) and NODE_ID_RE.fullmatch(i) for i in ids):
+        print("::warning title=Threads not resolved::the thread list is not a list of node ids")
+        return 0
+    resolve_threads(config.run_gh, ids[:100])
+    return 0
+
+
 def register(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("review-publish",
                        help="Workflow A: verify, verdict, summary comment, label (env VERIFY_JSON, FACTS)")
@@ -491,3 +520,6 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--passes-dir", required=True, help="the passes' answers, <pass>.json")
     p.add_argument("--head-sha", default="", help="the head the gate chose; no `ai: error` when the PR moved on")
     p.set_defaults(func=cmd_review_publish)
+    p = sub.add_parser("review-resolve", help="Workflow A: resolve the fixed findings' threads (env THREADS, ADR-0062)")
+    p.add_argument("--repo", required=True)
+    p.set_defaults(func=cmd_review_resolve)
