@@ -19,15 +19,15 @@ LINE = re.compile(r"^Possibly fixed on the default branch by https://[A-Za-z0-9.
 
 
 def before_fix(gh: GhRunner, repo: str, kind: str, ref: str) -> str | None:
-    """The 40-hex SHA just before the fix: a commit's first parent, a merged PR's base commit; None when unknown."""
+    """The 40-hex SHA just before the fix: a commit's first parent, or the first parent of a merged PR's merge commit."""
+    sha = None
+    if kind == "pull" and ref.isdigit():
+        pr = get_or_none(gh, f"repos/{repo}/pulls/{ref}") or {}
+        merge = pr.get("merge_commit_sha") if pr.get("merged_at") else None
+        ref, kind = (merge, "commit") if isinstance(merge, str) else ("", "")
     if kind == "commit" and SHA.fullmatch(ref):
         parents = (get_or_none(gh, f"repos/{repo}/commits/{ref}") or {}).get("parents") or []
         sha = (parents[0] or {}).get("sha") if parents else None
-    elif kind == "pull" and ref.isdigit():
-        pr = get_or_none(gh, f"repos/{repo}/pulls/{ref}") or {}
-        sha = (pr.get("base") or {}).get("sha") if pr.get("merged_at") else None
-    else:
-        return None
     return sha if isinstance(sha, str) and SHA.fullmatch(sha) else None
 
 

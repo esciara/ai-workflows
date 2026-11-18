@@ -81,7 +81,7 @@ def fixed_body(data: dict[str, Any], hint: dict[str, Any], run_url: str) -> str:
     what = f"commit {hint['ref'][:7]}" if hint["kind"] == "commit" else f"PR #&#8203;{hint['ref']}"
     lines = [FIX_MARKER, f"**Confirmed fixed.** {publish.clean(data['summary'], 400)}", "",
              f"A test for the report fails on {hint['before'][:7]}, just before {what}, and passes on the default "
-             f"branch. Labelled `{FIXED}`; a person decides what to do. Not closed.", "",
+             f"branch, so the bug was fixed since then; {what} is the triage's suggested cause. Labelled `{FIXED}`; a person decides what to do. Not closed.", "",
              f"**Evidence:** {publish.clean(data['fix_check']['evidence'], 600)}"]
     return "\n".join(tail(lines, data, run_url))
 
