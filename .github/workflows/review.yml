@@ -293,7 +293,7 @@ jobs:
   # PR text and never checks out the PR (only this repo at the workflow SHA).
   resolve-threads:
     needs: [publish]
-    if: !cancelled() && needs.publish.outputs.resolve != '' && needs.publish.outputs.resolve != '[]'
+    if: ${{ !cancelled() && needs.publish.outputs.resolve != '' && needs.publish.outputs.resolve != '[]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
