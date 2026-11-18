@@ -208,8 +208,7 @@ META = {"approval": APPROVED, "repro_command": "pytest tests/test_repro.py", "te
 
 
 def impl(**extra):
-    return json.dumps({"summary": "Clamp the total.", "files_changed": ["src/cart.py"], "tests_passed": True,
-                       "suspicious_instructions": [], **extra})
+    return json.dumps({"summary": "Clamp the total.", "suspicious_instructions": [], **extra})
 
 
 def review(verdict="approve", findings=(), **extra):
@@ -359,7 +358,8 @@ def test_deleted_files_are_pushed_as_deletions(base):
 
 @pytest.mark.parametrize("impl_raw, review_raw, check_ok", [
     ("not json", review(), True),
-    (impl(tests_passed="yes"), review(), True),
+    (impl(summary=""), review(), True),
+    (impl(tests_passed=True), review(), True),  # dropped fields are no longer allowed
     (impl(), '{"verdict": "lgtm"}', True),
     (impl(), "", True),
 ])
