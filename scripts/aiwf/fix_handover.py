@@ -17,7 +17,7 @@ from typing import Any
 from urllib.parse import quote
 
 from aiwf import config, guard, publish, publish_analysis, publish_reproduce, triage
-from aiwf.fix import repro_command
+from aiwf.fix import current_status, repro_command
 from aiwf.fix_escalate import compare_link, maintainers, records
 from aiwf.ghapi import GhRunner, find_marker_comment, upsert_marker_comment
 from aiwf.mdtext import run_link
@@ -83,12 +83,17 @@ def body(logins: list[str], link: str, text: str, run_url: str) -> str:
         "PR description to paste:", "", fence(text, "markdown")])
 
 
-def handover(gh: GhRunner, repo: str, issue: int, cfg: dict[str, Any], rounds: list[dict[str, Any]], run_url: str) -> str:
+def handover(gh: GhRunner, repo: str, issue: int, cfg: dict[str, Any], rounds: list[dict[str, Any]], run_url: str,
+             approval: str) -> str:
+    """`approval` is the status line this run's `/fix` recorded (meta.json). B5 checked it before each push, but a
+    `/no-fix` or a re-analysis can land after the last push, so it is checked again before saying "Fix ready"."""
     if not rounds or rounds[-1].get("outcome") != "approved":
         return f"#{issue}: no approved round, nothing to hand over"
     link = compare_link(gh, repo, issue)
     if not link:  # the branch was deleted since the push: the approved work is gone, so say nothing misleading
         return f"#{issue}: the fix branch no longer exists, nothing to hand over"
+    if current_status(gh, repo, issue) != approval:
+        return f"#{issue}: the analysis status changed since this run's approval, nothing to hand over"
     item = triage.get_json(gh, f"repos/{repo}/issues/{issue}")
     analysis = find_marker_comment(gh, repo, issue, publish_analysis.MARKER) or {}
     repro = find_marker_comment(gh, repo, issue, publish_reproduce.MARKER) or {}
@@ -104,7 +109,9 @@ def cmd_handover(args: argparse.Namespace) -> int:
         print(f"::notice title=ai: off::#{args.issue} has '{guard.OFF_LABEL}': not handed over")
         return 0
     cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
-    print(handover(config.run_gh, args.repo, args.issue, cfg, records(Path(args.records)), os.environ.get("RUN_URL", "")))
+    approval = json.loads(Path(args.meta).read_text(encoding="utf-8"))["approval"]
+    print(handover(config.run_gh, args.repo, args.issue, cfg, records(Path(args.records)), os.environ.get("RUN_URL", ""),
+                   approval))
     return 0
 
 
@@ -113,4 +120,5 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--repo", required=True)
     p.add_argument("--issue", required=True, type=int)
     p.add_argument("--records", required=True, help="folder holding each round's round.json")
+    p.add_argument("--meta", required=True, help="the run's meta.json (holds the approval status line)")
     p.set_defaults(func=cmd_handover)
