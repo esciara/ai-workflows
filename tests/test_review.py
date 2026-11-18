@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -506,7 +508,23 @@ def verify(*decisions, previous=(), summary="Does what the issue asks.", suspici
 
 
 def publish(gh, raw_passes, raw_verify, facts=FACTS):
-    return pr.publish_review(raw_passes, raw_verify, facts, "o/r", 5, "https://run/1", "f" * 40, gh)
+    """The publish job, then the resolve-threads job on the thread ids it listed (ADR-0062)."""
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out == str(OUTPUT):
+        OUTPUT.write_text("")  # one job's outputs
+    ok = pr.publish_review(raw_passes, raw_verify, facts, "o/r", 5, "https://run/1", "f" * 40, gh)
+    text = Path(out).read_text() if out == str(OUTPUT) else ""
+    pr.resolve_threads(gh, json.loads(text.split("resolve=")[1].splitlines()[0]) if "resolve=" in text else [])
+    return ok
+
+
+OUTPUT = Path(tempfile.mkdtemp()) / "out"
+
+
+@pytest.fixture(autouse=True)
+def github_output(monkeypatch):
+    OUTPUT.write_text("")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(OUTPUT))
 
 
 def state_of(gh):
@@ -618,7 +636,7 @@ def test_publish_writes_the_verdict_to_github_output(monkeypatch, tmp_path):
     out.write_text("earlier=1\n")
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     assert publish(FakeGh(), passes(correctness=[FINDING]), verify(("correctness-1", "confirmed", "blocking", "r")))
-    assert out.read_text() == "earlier=1\nverdict=ai-review: changes-requested\n"
+    assert out.read_text() == "earlier=1\nverdict=ai-review: changes-requested\nresolve=[]\n"
 
 
 def test_invalid_output_writes_no_verdict_to_github_output(monkeypatch, tmp_path):
@@ -1026,7 +1044,7 @@ def test_failed_reply_or_resolve_does_not_fail_the_run_or_change_the_verdict(fai
     assert publish(gh, passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40})
     body = gh.comments[0]["body"]
     assert state_of(gh)["verdict"] == "ai-review: merge"
-    assert "Could not reply to or resolve 1 thread(s) of fixed findings" in body
+    assert ("Could not reply to 1 thread(s) of fixed findings" in body) == (fail != "resolve")  # a failed resolve only warns
     assert "::warning title=" in capsys.readouterr().out
     assert (re.search(r"\d+ threads? open", body) is not None) == (fail != "threads")  # no count when GitHub does not answer
 
@@ -1041,3 +1059,28 @@ def test_first_run_counts_the_new_inline_thread():
 def test_threads_open_wording(n, text):
     assert pr.since_last(None, [], {}, n) == [f"**Since last run:** first run · {text}."]
     assert pr.since_last(None, [], {}) == ["**Since last run:** first run."]
+
+
+def test_publish_job_never_calls_resolve_it_hands_the_thread_ids_to_the_resolve_threads_job():
+    gh = FakeGh()
+    blocking_run(gh)
+    fid = state_of(gh)["open"][0]["id"]
+    OUTPUT.write_text("")
+    assert pr.publish_review(passes(), verify(previous=[(fid, "resolved", "fixed", None)]), {**PFACTS, "sha": "b" * 40},
+                             "o/r", 5, "https://run/1", "f" * 40, gh)
+    assert not any("resolveReviewThread" in " ".join(c) for c in gh.calls)  # the publish job holds no contents: write
+    assert not gh.threads[0]["isResolved"] and len(gh.threads[0]["comments"]) == 2  # replied, not yet resolved
+    assert "resolve=" + json.dumps([gh.threads[0]["id"]]) in OUTPUT.read_text()
+    assert "· 0 threads open." in gh.comments[0]["body"]  # the pending one is not counted as open
+
+
+def test_review_resolve_takes_only_node_ids(monkeypatch, capsys):
+    gh = FakeGh(threads=[{"id": "T1", "isResolved": False, "comments": [{"databaseId": 1, "body": "x"}]}])
+    monkeypatch.setattr(pr.config, "run_gh", gh)
+    monkeypatch.setenv("THREADS", json.dumps(["T1"]))
+    assert pr.cmd_review_resolve(None) == 0 and gh.threads[0]["isResolved"]
+    n = len(gh.calls)
+    for bad in ('["a b"]', '[1]', '{"a": 1}', "nope"):
+        monkeypatch.setenv("THREADS", bad)
+        assert pr.cmd_review_resolve(None) == 0
+    assert len(gh.calls) == n and "not a list of node ids" in capsys.readouterr().out

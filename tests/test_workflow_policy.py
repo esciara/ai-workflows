@@ -427,20 +427,24 @@ def test_only_the_verdict_job_writes_statuses():
                 assert (path.name, name) == ("ai-review.yml", "verdict"), f"{path.name}:{name}"
 
 
-def test_in_workflow_a_only_the_publish_job_writes_contents():
-    # ADR-0057 amendment: resolveReviewThread needs `contents: write`; in review.yml only the publish job (orchestrator,
-    # no agent) has it; the callers' `review` job grants it so the called workflow can narrow it to that one job.
+def test_in_workflow_a_only_the_resolve_threads_job_writes_contents():
+    # ADR-0062 (amends ADR-0057): resolveReviewThread needs `contents: write`; in review.yml only the resolve-threads
+    # job (orchestrator, no agent, no PR checkout) has it; the callers' `review` job grants it so the called workflow
+    # can narrow it to that one job.
     def writes(job):
         perms = job.get("permissions")
         return perms == "write-all" or (isinstance(perms, dict) and perms.get("contents") == "write")
     jobs = _doc(".github/workflows/review.yml")["jobs"]
-    assert {name for name, job in jobs.items() if writes(job)} == {"publish"}
-    for step in jobs["publish"]["steps"]:  # the agent action and claude-code-action never run there
+    assert {name for name, job in jobs.items() if writes(job)} == {"resolve-threads"}
+    assert jobs["publish"]["permissions"]["contents"] == "read"
+    for step in jobs["resolve-threads"]["steps"]:  # no agent, and the only checkout is this repo at the workflow SHA
         assert AGENT_USES not in str(step.get("uses", "")) and policy.AGENT_ACTION not in str(step.get("uses", ""))
         assert "claude" not in step.get("run", ""), "no model call in the job that holds contents: write"
+        if "actions/checkout" in str(step.get("uses", "")):
+            assert step["with"]["repository"] == "${{ job.workflow_repository }}"
+            assert step["with"]["ref"] == "${{ job.workflow_sha }}"
     for path in (".github/workflows/ai-review.yml", "templates/caller.yml"):
         assert writes(_doc(path)["jobs"]["review"]), path
-
 
 
 # --- supply chain: jobs holding a write token install third-party Python packages only from the hashed lock ----------

@@ -61,7 +61,7 @@ jobs:
     if: needs.config.outputs.review == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
     uses: esciara/ai-workflows/.github/workflows/review.yml@f7c7daa32e31de8fc79d9af5d11155a6adb04037 # v0.3.3
     permissions:
-      contents: write  # the publish job resolves A's fixed threads (ADR-0057); the agents get none of it (docs/install.md).
+      contents: write  # the resolve-threads job resolves A's fixed threads (ADR-0062); the agents get none of it (docs/install.md).
       pull-requests: write
       issues: write
       checks: read

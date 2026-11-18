@@ -256,9 +256,10 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
-      contents: write  # resolveReviewThread is refused without it (ADR-0057, probe: playground PR #220); no agent runs here
+      contents: read  # the resolve call needs contents: write and lives in `resolve-threads` (ADR-0062); no agent runs here
     outputs:
       verdict: ${{ steps.publish.outputs.verdict }}
+      resolve: ${{ steps.publish.outputs.resolve }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -286,6 +287,31 @@ jobs:
         run: >-
           aiwf review-publish --repo "$REPO" --pr "$PR" --run-url "$RUN_URL" --passes-dir passes
           --head-sha "$HEAD_SHA"
+
+  # The only job with `contents: write` (ADR-0062): resolveReviewThread is refused without it (ADR-0057, probe:
+  # playground PR #220). It resolves the thread ids `publish` listed, shape-checked; no agent runs here, it reads no
+  # PR text and never checks out the PR (only this repo at the workflow SHA).
+  resolve-threads:
+    needs: [publish]
+    if: always() && needs.publish.outputs.resolve != '' && needs.publish.outputs.resolve != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .ai-workflows
+          persist-credentials: false
+      - uses: ./.ai-workflows/.github/actions/aiwf-setup
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          THREADS: ${{ needs.publish.outputs.resolve }}
+        run: aiwf review-resolve --repo "$REPO"
 
   # Per-run metrics (spec: Usage per run, ADR-0052): one JSON line, artifact `ai-workflows-metrics` (metrics.jsonl)
   # and the log. Reads only the agents' usage numbers and the run's facts; writes nothing to GitHub.
