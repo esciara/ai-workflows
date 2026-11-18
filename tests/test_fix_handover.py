@@ -6,7 +6,7 @@ import json
 from urllib.parse import parse_qs, urlsplit
 
 from aiwf import cli, fix_handover as ho
-from test_fix import ANALYSIS, COMPARE, REPO, REPRO, RUN, CFG, Gh, comment, rec
+from test_fix import ANALYSIS, APPROVED, COMPARE, REPO, REPRO, RUN, CFG, Gh, comment, rec
 
 
 def approved(k=1, **extra):
@@ -27,8 +27,8 @@ class IssueGh(Gh):
 ANALYSIS_RC = ANALYSIS.replace("Root cause here.", "**Root cause** — [a.py#L3](https://x): total ignores coupon.")
 
 
-def run(fake, rounds, cfg=CFG):
-    return ho.handover(fake, REPO, 1, cfg, rounds, RUN)
+def run(fake, rounds, cfg=CFG, approval=APPROVED):
+    return ho.handover(fake, REPO, 1, cfg, rounds, RUN, approval)
 
 
 def pasted_text(fake):
@@ -75,7 +75,7 @@ def test_title_and_text_are_length_capped():
 
 
 def test_a_rerun_updates_the_one_comment_in_place():
-    fake = IssueGh(comments=[comment(f"{ho.MARKER}\nold", cid=9)], head="h" * 40)
+    fake = IssueGh(comments=[comment(f"{ho.MARKER}\nold", cid=9), comment(ANALYSIS)], head="h" * 40)
     run(fake, [approved()])
     [call] = fake.writes()
     assert fake.method(call) == "PATCH" and fake.url(call).endswith("/issues/comments/9")
@@ -89,8 +89,17 @@ def test_nothing_to_hand_over_without_an_approved_last_round_or_branch():
     assert fake.writes() == [] and gone.writes() == []
 
 
+def test_no_handover_when_the_status_line_no_longer_matches_the_approval():
+    declined = ANALYSIS.replace(APPROVED, "fix declined by @esciara")
+    other = ANALYSIS.replace(APPROVED, APPROVED.replace("comment]", "comment2]"))
+    for comments in ([comment(declined)], [comment(other)], []):  # `/no-fix`, a later `/fix`, the analysis gone
+        fake = IssueGh(comments=comments, head="h" * 40)
+        assert "status changed" in run(fake, [approved()])
+        assert fake.writes() == []
+
+
 def test_missing_analysis_and_repro_comments_fall_back_to_pointers():
-    fake = IssueGh(head="h" * 40)
+    fake = IssueGh(comments=[comment(ANALYSIS)], head="h" * 40)
     run(fake, [approved()], {"maintainers": []})
     [text] = fake.comment_bodies()
     assert "Maintainers:" in text and "see the analysis comment" in text and "see the reproduction comment" in text
@@ -99,9 +108,11 @@ def test_missing_analysis_and_repro_comments_fall_back_to_pointers():
 def test_handover_cli_reads_the_records_and_respects_ai_off(monkeypatch, tmp_path):
     (tmp_path / "records/fix-round-1").mkdir(parents=True)
     (tmp_path / "records/fix-round-1/round.json").write_text(json.dumps(approved()))
+    (tmp_path / "meta.json").write_text(json.dumps({"approval": APPROVED}))
     monkeypatch.setenv("AIWF_CONFIG", json.dumps(CFG))
     for labels, n in (([], 1), (["ai: off"], 0)):
         fake = IssueGh(comments=[comment(ANALYSIS_RC)], head="h" * 40, labels=labels)
         monkeypatch.setattr(ho.config, "run_gh", fake)
-        assert cli.main(["fix-handover", "--repo", REPO, "--issue", "1", "--records", str(tmp_path / "records")]) == 0
+        assert cli.main(["fix-handover", "--repo", REPO, "--issue", "1", "--records", str(tmp_path / "records"),
+                         "--meta", str(tmp_path / "meta.json")]) == 0
         assert len(fake.comment_bodies()) == n
