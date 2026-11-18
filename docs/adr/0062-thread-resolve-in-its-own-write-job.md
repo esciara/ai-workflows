@@ -29,5 +29,5 @@ Why: the write scope shrinks from the whole orchestrator job to one command with
 ## Consequences
 
 - The remaining write is an accepted risk (`docs/known-issues.md`): the token in `resolve-threads` could, if the job's code were tampered with, write repository contents; the callers' `review` job must still grant `contents: write`.
-- If a resolve fails after the reply, the thread stays open and the summary count was optimistic by one until the next run, which retries without a second reply.
+- If a resolve fails after the reply, the thread stays open for good: the finding has left A's state, so no later run retries it, and the summary count (which assumed the resolve) says one fewer than GitHub shows. The failure is a warning in the `resolve-threads` job log only, because that job holds no `issues: write` to edit the summary. A person resolves the thread by hand, as before ADR-0057.
 - One more job per review run, only when there are threads to resolve.
