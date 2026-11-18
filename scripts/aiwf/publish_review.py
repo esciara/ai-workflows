@@ -507,6 +507,8 @@ def cmd_review_resolve(args: argparse.Namespace) -> int:
     if not isinstance(ids, list) or not all(isinstance(i, str) and NODE_ID_RE.fullmatch(i) for i in ids):
         print("::warning title=Threads not resolved::the thread list is not a list of node ids")
         return 0
+    if len(ids) > 100:
+        print(f"::warning title=Threads not resolved::{len(ids) - 100} thread(s) past the first 100 are left open")
     resolve_threads(config.run_gh, ids[:100])
     return 0
 
