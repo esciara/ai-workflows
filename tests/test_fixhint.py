@@ -31,9 +31,9 @@ def test_commit_hint_resolves_to_its_first_parent():
     assert fixhint.find(fake(), REPO, 1) == {"kind": "commit", "ref": FIX, "before": BEFORE}
 
 
-def test_merged_pr_hint_resolves_to_its_base_commit():
+def test_merged_pr_hint_resolves_to_its_merge_commits_parent():
     g = fake(triage_comment(f"https://github.com/{REPO}/pull/12"))
-    g.pulls = {12: {"merged_at": "2026-01-01", "base": {"sha": BEFORE}}}
+    g.pulls = {12: {"merged_at": "2026-01-01", "merge_commit_sha": FIX, "base": {"sha": "c" * 40}}}
     assert fixhint.find(g, REPO, 1) == {"kind": "pull", "ref": "12", "before": BEFORE}
 
 
@@ -55,7 +55,7 @@ def test_unresolvable_fixes_give_no_hint():
     bad = FakeGh(commits={FIX: {"sha": FIX, "parents": [{"sha": "main"}]}}, comments=[triage_comment()])
     assert fixhint.find(bad, REPO, 1) is None
     unmerged = fake(triage_comment(f"https://github.com/{REPO}/pull/12"))
-    unmerged.pulls = {12: {"merged_at": None, "base": {"sha": BEFORE}}}
+    unmerged.pulls = {12: {"merged_at": None, "merge_commit_sha": FIX}}
     assert fixhint.find(unmerged, REPO, 1) is None
 
 
