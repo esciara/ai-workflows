@@ -144,6 +144,29 @@ def test_reproduced_labels_and_one_sticky_comment(monkeypatch):
     assert "| `curl -sS https://example.com` | 7 | blocked \\| by proxy |" in body
 
 
+SECRETS = ["sk-ant-oat01-AbCdEfGh12345678-xyz_9", "ghp_" + "a1B2" * 9, "ghs_" + "Z9" * 12, "github_pat_11ABCDEF0_" + "x" * 30,
+           "d41d8cd98f00b204e9800998ecf8427e" * 2, "QWxhZGRpbjpvcGVuIHNlc2FtZSBhbmQgbW9yZSBzdHVmZjEyMzQ1Njc4OTA="]
+
+
+def test_secret_shaped_strings_are_redacted_everywhere_the_reproducer_text_is_posted(monkeypatch):
+    leak = " ".join(SECRETS)
+    gh = FakeGh(author="rep")
+    publish_answer(gh, monkeypatch, reproduced=True, summary=f"token {SECRETS[0]}", environment=f"TOKEN={SECRETS[1]}",
+                   test={**REPRO, "code": f"KEY = '{SECRETS[2]}'\n", "output": leak, "command": f"run --key {SECRETS[3]}"},
+                   commands=[{"command": f"echo {SECRETS[4]}", "exit_code": 0, "output": SECRETS[5]}])
+    [body] = gh.comment_bodies()
+    for secret in SECRETS:
+        assert secret not in body
+    assert body.count("[redacted]") >= 7
+
+
+def test_redaction_keeps_ordinary_text():
+    plain = "commit " + "a" * 40 + " in tests/test_some_really_long_snake_case_name_with_digits_123456789.py::test_x"
+    assert publish.scrub_secrets(plain) == plain
+    assert publish.scrub_secrets("ghp_short sk-ant-") == "ghp_short sk-ant-"
+    assert publish.clean(f"see {SECRETS[0]}") == r"see \[redacted\]"  # clean() escapes brackets
+
+
 def test_reproduced_updates_the_existing_comment(monkeypatch):
     ours = {"id": 5, "user": {"login": BOT}, "body": f"{pr.MARKER}\nold"}
     gh = FakeGh(author="rep", comments=[ours, {"id": 6, "user": {"login": "mallory"}, "body": f"{pr.MARKER}\nx"}])

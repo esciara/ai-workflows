@@ -47,9 +47,24 @@ def validate(kind: str, raw: str | None) -> dict[str, Any]:
     return data
 
 
+SECRET_SHAPES = re.compile(
+    r"sk-ant-[A-Za-z0-9_-]{8,}"  # Anthropic keys and OAuth tokens
+    r"|\bgh[pousr]_[A-Za-z0-9]{16,}"  # GitHub PAT, OAuth, user, server and refresh tokens
+    r"|github_pat_[A-Za-z0-9_]{16,}"
+    r"|\b[A-Fa-f0-9]{64,}\b"  # long hex (a git SHA is 40 and survives)
+    r"|(?<![A-Za-z0-9+/=])(?=[A-Za-z0-9+=]*[A-Za-z])(?=[A-Za-z0-9+=]*\d)[A-Za-z0-9+=]{44,}(?![A-Za-z0-9+/=])")  # long base64-like run
+
+
+def scrub_secrets(text: str) -> str:
+    """Replace anything shaped like a token or key with `[redacted]`. Defence in depth, a tripwire for agent text that is
+    posted verbatim (reproducer and check output, ADR-0037): it misses a secret that is transformed or split, so the
+    sandbox, the env scrub and the literal token check remain the controls."""
+    return SECRET_SHAPES.sub("[redacted]", str(text))
+
+
 def clean(text: str, limit: int = 600) -> str:
-    """One table-safe line: no mentions, HTML, markers, pipes, links or images."""
-    text = " ".join(str(text).split())[:limit]
+    """One table-safe line: no mentions, HTML, markers, pipes, links or images; secret-shaped strings redacted."""
+    text = " ".join(scrub_secrets(text).split())[:limit]
     text = text.replace("\\", "\\\\").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")\
         .replace("[", "\\[").replace("]", "\\]").replace("!", "\\!")
     text = re.sub(r"(?i)\b([a-z][a-z0-9+.-]*)://", r"\1:&#8203;//", text)  # bare URLs stop autolinking
