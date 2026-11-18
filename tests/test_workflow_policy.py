@@ -527,3 +527,11 @@ def test_test_lock_pins_the_test_extra_with_hashes():
     for req in tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["optional-dependencies"]["test"]:
         assert re.match(r"[A-Za-z0-9._-]+", req).group(0).lower() in pinned, f"{req} not in requirements-test.lock"
     assert pinned >= set(re.findall(r"(?m)^([a-z0-9][a-z0-9._-]*)==", LOCK.read_text()))
+
+
+def test_reporter_reply_clause_of_repro_context_needs_an_open_issue():
+    # aiwf-m1p: a comment after the close ("thanks") must not start a sandbox run that errors on a closed issue.
+    path = next(p for p in REAL if p.name == "triage.yml")
+    cond = policy.load_workflow(path.read_text())["jobs"]["repro-context"]["if"]
+    clause = next(c for c in cond.split("||") if "triage: needs-info" in c)
+    assert "github.event.issue.state == 'open'" in clause

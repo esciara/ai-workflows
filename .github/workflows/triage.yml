@@ -265,7 +265,8 @@ jobs:
   # branch's code (persist-credentials false: no token is left in the tarball's .git). Pattern: docs/patterns.md.
   # Which events run B2 (ADR-0037), each its own clause: B1 publish handed on a trusted author's bug; `/reproduce` from a
   # maintainer (config.yml parsed the comment, ADR-0005); or the reporter's reply, a comment that is no command, by the
-  # issue's author, while the issue has `triage: needs-info`, which only B2 sets, so only after a trusted start.
+  # issue's author, while the issue is open and has `triage: needs-info`, which only B2 sets, so only after a trusted
+  # start (a comment after the close, like 'thanks', runs nothing, aiwf-m1p).
   repro-context:
     needs: publish
     if: >-
@@ -275,6 +276,7 @@ jobs:
             && fromJSON(inputs.config).command == 'reproduce')
         || (github.event_name == 'issue_comment' && !github.event.issue.pull_request
             && fromJSON(inputs.config).command == ''
+            && github.event.issue.state == 'open'
             && github.event.comment.user.login == github.event.issue.user.login
             && contains(github.event.issue.labels.*.name, 'triage: needs-info'))
       ) }}
