@@ -152,19 +152,29 @@ def test_secret_shaped_strings_are_redacted_everywhere_the_reproducer_text_is_po
     leak = " ".join(SECRETS)
     gh = FakeGh(author="rep")
     publish_answer(gh, monkeypatch, reproduced=True, summary=f"token {SECRETS[0]}", environment=f"TOKEN={SECRETS[1]}",
-                   test={**REPRO, "code": f"KEY = '{SECRETS[2]}'\n", "output": leak, "command": f"run --key {SECRETS[3]}"},
+                   test={**REPRO, "output": leak},
                    commands=[{"command": f"echo {SECRETS[4]}", "exit_code": 0, "output": SECRETS[5]}])
     [body] = gh.comment_bodies()
     for secret in SECRETS:
         assert secret not in body
-    assert body.count("[redacted]") >= 7
+    assert body.count("[redacted]") >= 6
 
 
 def test_redaction_keeps_ordinary_text():
     plain = "commit " + "a" * 40 + " in tests/test_some_really_long_snake_case_name_with_digits_123456789.py::test_x"
     assert publish.scrub_secrets(plain) == plain
     assert publish.scrub_secrets("ghp_short sk-ant-") == "ghp_short sk-ant-"
-    assert publish.clean(f"see {SECRETS[0]}") == r"see \[redacted\]"  # clean() escapes brackets
+    assert publish.clean(f"see {SECRETS[0]}") == f"see {SECRETS[0]}"  # shared clean() (Workflow A too) is untouched
+    assert pr.clean(f"see {SECRETS[0]}") == r"see \[redacted\]"  # clean() escapes brackets
+
+
+def test_the_stored_test_code_and_command_stay_byte_identical_for_b5():
+    from aiwf import fix
+    t = {**REPRO, "code": f"def test_x():\n    assert h(b'x') == '{SECRETS[4]}'\n    assert e() == '{SECRETS[5]}'\n",
+         "command": f"pytest tests/test_repro.py -k {SECRETS[4]}"}
+    body = pr.reproduced_body(answer(reproduced=True, test=t), "https://run/9")
+    assert fix.repro_code(body) == t["code"].rstrip()  # fence() has always dropped the final newline
+    assert fix.repro_command(body) == (t["path"], t["command"])
 
 
 def test_reproduced_updates_the_existing_comment(monkeypatch):

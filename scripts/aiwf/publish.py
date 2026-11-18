@@ -57,14 +57,14 @@ SECRET_SHAPES = re.compile(
 
 def scrub_secrets(text: str) -> str:
     """Replace anything shaped like a token or key with `[redacted]`. Defence in depth, a tripwire for agent text that is
-    posted verbatim (reproducer and check output, ADR-0037): it misses a secret that is transformed or split, so the
-    sandbox, the env scrub and the literal token check remain the controls."""
+    posted verbatim (reproducer and check output, ADR-0037): it misses a secret that is transformed or split, URL-safe base64
+    (no `-` or `_`), a base64 run holding `/`, and anything under the length floors, so the sandbox, the env scrub and the literal token check remain the controls."""
     return SECRET_SHAPES.sub("[redacted]", str(text))
 
 
 def clean(text: str, limit: int = 600) -> str:
-    """One table-safe line: no mentions, HTML, markers, pipes, links or images; secret-shaped strings redacted."""
-    text = " ".join(scrub_secrets(text).split())[:limit]
+    """One table-safe line: no mentions, HTML, markers, pipes, links or images."""
+    text = " ".join(str(text).split())[:limit]
     text = text.replace("\\", "\\\\").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")\
         .replace("[", "\\[").replace("]", "\\]").replace("!", "\\!")
     text = re.sub(r"(?i)\b([a-z][a-z0-9+.-]*)://", r"\1:&#8203;//", text)  # bare URLs stop autolinking

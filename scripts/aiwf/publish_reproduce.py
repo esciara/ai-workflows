@@ -37,26 +37,32 @@ FALLBACK_QUESTIONS = (
 )
 
 
-def fence(text: str, lang: str = "") -> str:
-    """A fenced block longer than any backtick run in `text`, so the text cannot close it; secret-shaped strings redacted."""
-    text = publish.scrub_secrets(text)
+def fence(text: str, lang: str = "", scrub: bool = True) -> str:
+    """A fenced block longer than any backtick run in `text`, so the text cannot close it; secret-shaped strings redacted unless `scrub` is off
+    (the stored test code is read back by B5 and must stay byte-identical)."""
+    text = publish.scrub_secrets(text) if scrub else text
     longest = max((len(m) for m in re.findall(r"`+", text)), default=0)
     ticks = "`" * max(3, longest + 1)
     return f"{ticks}{lang}\n{text.rstrip()}\n{ticks}"
+
+
+def clean(text: str, limit: int = 600) -> str:
+    """`publish.clean` with secret-shaped strings redacted first (B2's posted prose and command output)."""
+    return publish.clean(publish.scrub_secrets(text), limit)
 
 
 def commands_table(cmds: list[dict[str, Any]]) -> list[str]:
     if not cmds:
         return []
     rows = ["| Command | Exit code | Output (end) |", "|---|---|---|"]
-    rows += [f"| {inline(publish.scrub_secrets(c['command']))} | {c['exit_code']} | {publish.clean(c['output'][-300:], 300)} |" for c in cmds]
+    rows += [f"| {inline(publish.scrub_secrets(c['command']))} | {c['exit_code']} | {clean(c['output'][-300:], 300)} |" for c in cmds]
     return ["<details><summary>Commands run</summary>", "", *rows, "", "</details>"]
 
 
 def tail(lines: list[str], data: dict[str, Any], run_url: str) -> list[str]:
     out = ["", *commands_table(data["commands"])]
     if data["environment"].strip():
-        out += ["", f"Environment: {publish.clean(data['environment'], 500)}"]
+        out += ["", f"Environment: {clean(data['environment'], 500)}"]
     if data["suspicious_instructions"]:
         out += ["", publish.injection_line(data["suspicious_instructions"])]
     if run_url:
@@ -66,15 +72,15 @@ def tail(lines: list[str], data: dict[str, Any], run_url: str) -> list[str]:
 
 def reproduced_body(data: dict[str, Any], run_url: str) -> str:
     t = data["test"]
-    lines = [MARKER, f"**Reproduced.** {publish.clean(data['summary'], 400)}", "",
-             f"**Test** {inline(t['path'])}, run with {inline(publish.scrub_secrets(t['command']), 300)}:", "",
-             fence(t["code"], "python" if t["path"].endswith(".py") else ""), "",
+    lines = [MARKER, f"**Reproduced.** {clean(data['summary'], 400)}", "",
+             f"**Test** {inline(t['path'])}, run with {inline(t['command'], 300)}:", "",
+             fence(t["code"], "python" if t["path"].endswith(".py") else "", scrub=False), "",
              "**Output**", "", fence(t["output"][-6000:])]
     return "\n".join(tail(lines, data, run_url))
 
 
 def questions(data: dict[str, Any]) -> list[str]:
-    qs = [publish.clean(q, 300) for q in data["questions"] if q.strip()][:4]
+    qs = [clean(q, 300) for q in data["questions"] if q.strip()][:4]
     for q in FALLBACK_QUESTIONS:
         if len(qs) >= 2:
             break
@@ -85,8 +91,8 @@ def questions(data: dict[str, Any]) -> list[str]:
 def needs_info_body(data: dict[str, Any], author: str, n: int, cap: int, run_url: str) -> str:
     lines = [NEEDS_INFO_MARKER, f"{'@' + author + ' t' if author else 'T'}hanks for the report. The bug could not be reproduced yet "
              f"(request {n} of {cap}).", "",
-             f"**Tried:** {publish.clean(data['tried'] or data['summary'], 1500)}", "",
-             f"**What happened:** {publish.clean(data['happened'] or 'not stated', 1500)}", "",
+             f"**Tried:** {clean(data['tried'] or data['summary'], 1500)}", "",
+             f"**What happened:** {clean(data['happened'] or 'not stated', 1500)}", "",
              "Could you answer these?", ""]
     lines += [f"{i}. {q}" for i, q in enumerate(questions(data), 1)]
     lines += ["", "A reply here reruns the reproduction."]
@@ -96,8 +102,8 @@ def needs_info_body(data: dict[str, Any], author: str, n: int, cap: int, run_url
 def stop_body(data: dict[str, Any], cap: int, run_url: str) -> str:
     lines = [STOP_MARKER, f"**Not reproduced after {cap} requests for details.** Labelled `{NEEDS_HUMAN}`; a person "
              "takes over. A maintainer can comment `/reproduce` to try again.", "",
-             f"**Tried:** {publish.clean(data['tried'] or data['summary'], 1500)}", "",
-             f"**What happened:** {publish.clean(data['happened'] or 'not stated', 1500)}"]
+             f"**Tried:** {clean(data['tried'] or data['summary'], 1500)}", "",
+             f"**What happened:** {clean(data['happened'] or 'not stated', 1500)}"]
     return "\n".join(tail(lines, data, run_url))
 
 
