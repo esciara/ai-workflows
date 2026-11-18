@@ -63,10 +63,12 @@ def comments(gh: GhRunner, repo: str, number: int) -> list[dict[str, Any]]:
 
 
 def needs_info_gone(cfg: dict[str, Any], event_name: str, issue: dict[str, Any]) -> bool:
-    """A reporter's reply run (a comment, no command) whose issue no longer has `triage: needs-info`, read live: the run
+    """A reporter's reply run (a comment, no command) whose issue is closed or no longer has `triage: needs-info`, read live: the run
     ahead in the queue answered it (aiwf-1q2), so this one must not start another B2."""
     if event_name != "issue_comment" or cfg.get("command"):
         return False
+    if issue.get("state", "open") != "open":  # closed while the run queued (the workflow's `if` skips a closed issue)
+        return True
     return NEEDS_INFO not in [(lb or {}).get("name") for lb in issue.get("labels") or []]
 
 

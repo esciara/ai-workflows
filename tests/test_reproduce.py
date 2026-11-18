@@ -95,9 +95,10 @@ def test_reply_run_skips_b2_when_needs_info_is_gone_live(monkeypatch, tmp_path):
     ("issue_comment", "", [], True),
     ("issue_comment", "reproduce", [], False),  # a maintainer's /reproduce never depends on needs-info
     ("issues", "", [], False),  # B1 handed on
+    ("issue_comment", "", ["triage: needs-info", "closed"], True),  # closed while queued (aiwf-m1p)
 ])
 def test_needs_info_gone_only_for_reply_runs(event, command, labels, gone):
-    issue = {"labels": [{"name": n} for n in labels]}
+    issue = {"labels": [{"name": n} for n in labels if n != "closed"], "state": "closed" if "closed" in labels else "open"}
     assert reproduce.needs_info_gone({"command": command}, event, issue) is gone
 
 
