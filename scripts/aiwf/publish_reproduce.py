@@ -2,6 +2,9 @@
 
 - Reproduced: label `triage: reproduced` and one sticky comment holding the failing test, its output and the commands
   run; that comment is the stored repro record. Job output `reproduced=true`: B3 runs next in this run.
+- Confirmed fixed (B1 named a fix, B2's test fails just before it and passes now; the hint is re-read from our own
+  triage comment, never taken from the agent): label `triage: fixed` and one sticky comment, no question to the
+  reporter, no B3, never closed. Rejected or unclear answers take the two paths below.
 - Either outcome removes `triage: awaiting-maintainer` and `fix: declined`; reproduced sets an earlier analysis
   comment to "re-analysing", not reproduced marks it superseded (spec B3). A failed run changes neither.
 - Not reproduced: a new comment to the reporter (`@author`) with what was tried, the environment, what happened and two
@@ -19,16 +22,18 @@ import os
 import re
 from typing import Any
 
-from aiwf import guard, publish, publish_analysis
+from aiwf import fixhint, guard, publish, publish_analysis
 from aiwf.ghapi import BOT, GhRunner, get_or_none, remove_label, upsert_marker_comment
 from aiwf.mdtext import inline
 from aiwf.publish_triage import NEEDS_HUMAN
 
 MARKER = "<!-- ai-workflows:reproduce -->"
 NEEDS_INFO_MARKER = "<!-- ai-workflows:needs-info -->"
+FIX_MARKER = "<!-- ai-workflows:fix-check -->"
 STOP_MARKER = "<!-- ai-workflows:reproduce-stop -->"
 REPRODUCED = "triage: reproduced"
 NEEDS_INFO = "triage: needs-info"
+FIXED = "triage: fixed"
 SILENCE = ("triage: no-response", "stale")  # a reply restarts B2 (spec: Reporter silence)
 DECISION = (publish_analysis.AWAITING, publish_analysis.DECLINED)  # any B2 outcome clears an earlier B4 decision (spec B3)
 FALLBACK_QUESTIONS = (
@@ -70,6 +75,30 @@ def reproduced_body(data: dict[str, Any], run_url: str) -> str:
              fence(t["code"], "python" if t["path"].endswith(".py") else ""), "",
              "**Output**", "", fence(t["output"][-6000:])]
     return "\n".join(tail(lines, data, run_url))
+
+
+def fixed_body(data: dict[str, Any], hint: dict[str, Any], run_url: str) -> str:
+    what = f"commit {hint['ref'][:7]}" if hint["kind"] == "commit" else f"PR #&#8203;{hint['ref']}"
+    lines = [FIX_MARKER, f"**Confirmed fixed.** {publish.clean(data['summary'], 400)}", "",
+             f"A test for the report fails on {hint['before'][:7]}, just before {what}, and passes on the default "
+             f"branch. Labelled `{FIXED}`; a person decides what to do. Not closed.", "",
+             f"**Evidence:** {publish.clean(data['fix_check']['evidence'], 600)}"]
+    return "\n".join(tail(lines, data, run_url))
+
+
+def confirmed_fix(gh: GhRunner, repo: str, issue: int, data: dict[str, Any]) -> dict[str, Any] | None:
+    """The hint when the answer says confirmed AND B1 really named a fix (read back, not taken from the agent)."""
+    check = data.get("fix_check") or {}
+    if data["reproduced"] or check.get("result") != "confirmed" or not str(check.get("evidence", "")).strip():
+        return None
+    return fixhint.find(gh, repo, issue)
+
+
+def unfix(gh: GhRunner, repo: str, issue: int, current: set[str], run_url: str) -> None:
+    """A later outcome other than confirmed: the earlier "confirmed fixed" note no longer stands."""
+    if FIXED in current:
+        upsert_marker_comment(gh, repo, issue, FIX_MARKER, f"{FIX_MARKER}\nSuperseded: [a later run]({run_url}) did not "
+                              "confirm the fix.")
 
 
 def questions(data: dict[str, Any]) -> list[str]:
@@ -147,7 +176,8 @@ def publish_result(data: dict[str, Any], repo: str, issue: int, run_url: str, gh
     if data["reproduced"]:
         if not t["code"].strip() or not t["output"].strip():
             raise RuntimeError("reproducer says reproduced but returned no test code or output")  # job fails: ai: error
-        set_labels(gh, repo, issue, current, REPRODUCED, (*stale, NEEDS_INFO, NEEDS_HUMAN))
+        set_labels(gh, repo, issue, current, REPRODUCED, (*stale, NEEDS_INFO, NEEDS_HUMAN, FIXED))
+        unfix(gh, repo, issue, current, run_url)
         upsert_marker_comment(gh, repo, issue, MARKER, reproduced_body(data, run_url))
         publish_analysis.reanalyse(gh, repo, issue, run_url)  # an earlier decision stops being current
         out = os.environ.get("GITHUB_OUTPUT")
@@ -159,14 +189,20 @@ def publish_result(data: dict[str, Any], repo: str, issue: int, run_url: str, gh
     if sandbox_failed(data["commands"]):  # a runner problem, not the reporter's: ask them nothing
         raise RuntimeError("the sandbox could not start: every command failed before running")  # job fails: ai: error
     publish_analysis.supersede(gh, repo, issue, run_url)  # the analysis no longer stands (spec B3)
+    if hint := confirmed_fix(gh, repo, issue, data):
+        set_labels(gh, repo, issue, current, FIXED, (*stale, NEEDS_INFO, NEEDS_HUMAN, REPRODUCED))
+        upsert_marker_comment(gh, repo, issue, FIX_MARKER, fixed_body(data, hint, run_url))
+        print(f"confirmed fixed {repo}#{issue} by {hint['kind']} {hint['ref']}")
+        return
+    unfix(gh, repo, issue, current, run_url)
     cap = int(json.loads(os.environ.get("AIWF_CONFIG") or "{}").get("limits", {}).get("info_requests", 2))
     asked = requests_since_stop(all_comments(gh, repo, issue))
     if asked >= cap:
-        set_labels(gh, repo, issue, current, NEEDS_HUMAN, (*stale, NEEDS_INFO, REPRODUCED))
+        set_labels(gh, repo, issue, current, NEEDS_HUMAN, (*stale, NEEDS_INFO, REPRODUCED, FIXED))
         publish.comment(gh, repo, issue, stop_body(data, cap, run_url))
         print(f"not reproduced {repo}#{issue}: {asked} requests made, {NEEDS_HUMAN}")
         return
-    set_labels(gh, repo, issue, current, NEEDS_INFO, (*stale, NEEDS_HUMAN, REPRODUCED))
+    set_labels(gh, repo, issue, current, NEEDS_INFO, (*stale, NEEDS_HUMAN, REPRODUCED, FIXED))
     publish.comment(gh, repo, issue, needs_info_body(data, (item.get("user") or {}).get("login", ""), asked + 1, cap, run_url))
     print(f"not reproduced {repo}#{issue}: request {asked + 1} of {cap}")
 

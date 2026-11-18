@@ -8,6 +8,7 @@ labels:
   - {name: "triage: needs-info", color: "fbca04", description: "Waiting on the reporter; ping, stale and close after reporter_silence_days (B2)"}
   - {name: "triage: no-response", color: "f9d0c4", description: "Reporter silent past the ping day; maintainer pinged (B2)"}
   - {name: "triage: reproduced", color: "0e8a16", description: "Repro test stored (B2)"}
+  - {name: "triage: fixed", color: "0e8a16", description: "B2 confirmed a possible fix B1 named; a person decides (B2)"}
   - {name: "triage: awaiting-maintainer", color: "1d76db", description: "Analysis posted, waiting for /fix or /no-fix (B4)"}
   - {name: "triage: needs-human", color: "b60205", description: "Agent stopped; a person takes over (B1, B2)"}
   - {name: "triage: duplicate", color: "cfd3d7", description: "Duplicate or already fixed; see the linked item (B1)"}

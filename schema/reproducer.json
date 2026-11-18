@@ -40,6 +40,16 @@
       },
       "description": "Every command run from the steps in the report, plus setup and the test run, each with its exact exit code."
     },
+    "fix_check": {
+      "type": "object",
+      "description": "Only when the context names a possible fix: the result of re-running the test on the commit just before it. confirmed: the test passes now and fails there; rejected: it still fails now; unclear: anything else.",
+      "properties": {
+        "result": {"enum": ["confirmed", "rejected", "unclear"]},
+        "evidence": {"type": "string", "maxLength": 600, "description": "One or two plain sentences: the test and both outcomes."}
+      },
+      "required": ["result", "evidence"],
+      "additionalProperties": false
+    },
     "suspicious_instructions": {
       "type": "array",
       "maxItems": 5,

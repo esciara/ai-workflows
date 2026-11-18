@@ -134,7 +134,8 @@ The two highlighted steps are the only places the flow waits on a person, apart 
 1. Extract steps, expected vs actual behaviour, versions and environment from the issue.
 2. Turn them into an automated failing test (preferred) or, in a repo with no test harness, a script whose captured output shows the failure (enough to pass B2).
 3. **Reproduced:** store the test and its output on the session record, label `triage: reproduced`, go to B3.
-4. **Not reproduced:** comment to the reporter (`@author`) with what was tried, the environment used, what happened, and two to four specific questions; label `triage: needs-info`. A reply from the reporter restarts B2. After 2 unsuccessful requests (answers that still give no repro), label `triage: needs-human` and stop.
+4. **Possible fix named by B1:** when B1's comment says "possibly fixed by X", the context also carries the commit just before the fix (the commit's first parent, or the merged PR's base commit), read by the orchestrator from the workflow's own triage comment and checked against the repo, never taken from the issue text. If the test passes on HEAD, B2 checks that commit out in the sandbox and runs the same test: it fails there and passes now means **confirmed fixed** (comment "confirmed fixed by X" with the evidence, label `triage: fixed`, no question to the reporter, no B3, never closed); it still fails on HEAD means rejected and B2 goes on as in 3; anything else is unclear and goes on as in 5. The publish step honours "confirmed" only when it finds that triage comment's hint itself. A maintainer's `/reproduce` or a later B2 run replaces the outcome.
+5. **Not reproduced:** comment to the reporter (`@author`) with what was tried, the environment used, what happened, and two to four specific questions; label `triage: needs-info`. A reply from the reporter restarts B2. After 2 unsuccessful requests (answers that still give no repro), label `triage: needs-human` and stop.
 
 **Who starts B2 (v1, ADR-0037).** B2 runs code, so it starts on its own only when the issue's author is trusted: in `maintainers`, with write or admin permission, which covers the maintainer and any collaborator listed there. On anyone else's bug, B1 stops with `triage: needs-human` and a note until a maintainer comments `/reproduce`, which starts or restarts B2; after that, a reply from the reporter while the issue has `triage: needs-info` restarts B2 as above.
 
@@ -237,6 +238,7 @@ The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrato
 | `type: bug` / `feature` / `question` | B1 | Issue class |
 | `triage: needs-info` | B2 | Waiting on the reporter; `maintainers` pinged at `ping` days (triage: no-response), stale at `stale`, closed at `close` (defaults 4/14/21) |
 | `triage: reproduced` | B2 | Repro test stored |
+| `triage: fixed` | B2 | B2 confirmed the fix B1 named; a person decides |
 | `triage: awaiting-maintainer` | B4 | Analysis posted, waiting for `/fix` |
 | `triage: needs-human` / `duplicate` | B1, B2 | Agent stopped; a person takes over |
 | `fix: declined` / `fix: needs-maintainer` | B4, B5 | Maintainer said no / 3 rounds failed; the branch, if any, waits for the maintainer |
