@@ -308,6 +308,15 @@ jobs:
           aiwf repro-context --repo "$REPO" --issue "$ISSUE" --out issue.md
           if grep -qx 'proceed=false' "$GITHUB_OUTPUT"; then exit 0; fi  # reply run, needs-info gone: B2 is skipped
           echo "sha=$(git -C target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # B1 named a fix (aiwf-1st): the 40-hex commit just before it, put there by repro-context from our own triage
+          # comment, is fetched alone (depth 1) so the sandbox can re-run the test on it; no other history goes in.
+          before=$(sed -n 's/^before=//p' "$GITHUB_OUTPUT" | head -n 1)
+          if [[ "$before" =~ ^[0-9a-f]{40}$ ]]; then
+            auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+            echo "::add-mask::$auth"
+            git -C target -c "http.${GITHUB_SERVER_URL}/.extraheader=AUTHORIZATION: basic $auth" \
+              fetch --no-tags --depth=1 origin "$before" || echo "::notice title=B2::could not fetch $before; the fix check will be unclear"
+          fi
           tar -czf target.tgz -C target .
       - if: steps.tree.outputs.proceed != 'false'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

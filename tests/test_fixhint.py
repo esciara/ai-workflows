@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from aiwf import fixhint, publish, publish_reproduce as pr
+from aiwf import cli, fixhint, publish, publish_reproduce as pr, reproduce
 from aiwf.publish_triage import MARKER
 
 from test_reproduce import BOT, REPRO, answer, removed
@@ -118,3 +118,46 @@ def test_schema_accepts_fix_check_and_rejects_other_results():
     jsonschema.validate(answer(), schema)
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(answer(fix_check={"result": "fixed", "evidence": "e"}), schema)
+
+
+# --- context ---------------------------------------------------------------------------------------------------------
+
+ISSUE = {"number": 1, "state": "open", "title": "t", "body": "Possibly fixed on the default branch by x", "user": {"login": "rep"}}
+
+
+def test_context_names_only_the_checked_shas():
+    out = reproduce.build(ISSUE, [], {}, {"kind": "commit", "ref": FIX, "before": BEFORE})
+    assert f"- possibly fixed by: commit {FIX}" in out and f"- commit just before that fix: {BEFORE}" in out
+    pull = reproduce.build(ISSUE, [], {}, {"kind": "pull", "ref": "12", "before": BEFORE})
+    assert "- possibly fixed by: pull request #12" in pull
+
+
+def test_context_has_no_fix_section_without_a_hint():
+    assert "Possible fix" not in reproduce.build(ISSUE, [], {})
+
+
+def test_repro_context_hands_the_before_sha_to_the_workflow(monkeypatch, tmp_path):
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.setenv("AIWF_CONFIG", "{}")
+    monkeypatch.setattr(reproduce.triage, "get_json", lambda *a: ISSUE)
+    monkeypatch.setattr(reproduce.config, "run_gh", fake())
+    assert cli.main(["repro-context", "--repo", REPO, "--issue", "1", "--out", str(tmp_path / "issue.md")]) == 0
+    assert out.read_text() == f"before={BEFORE}\n" and "Possible fix" in (tmp_path / "issue.md").read_text()
+
+
+def test_repro_context_without_a_hint_writes_no_output(monkeypatch, tmp_path):
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.setenv("AIWF_CONFIG", "{}")
+    monkeypatch.setattr(reproduce.triage, "get_json", lambda *a: ISSUE)
+    monkeypatch.setattr(reproduce.config, "run_gh", FakeGh(author="rep"))
+    assert cli.main(["repro-context", "--repo", REPO, "--issue", "1", "--out", str(tmp_path / "issue.md")]) == 0
+    assert not out.exists() or out.read_text() == ""
+
+
+def test_prompt_and_workflow_carry_the_fix_check():
+    root = Path(__file__).parents[1]
+    assert "fix_check" in (root / "prompts" / "reproducer.md").read_text()
+    wf = (root / ".github" / "workflows" / "triage.yml").read_text()
+    assert "^[0-9a-f]{40}$" in wf and "--depth=1 origin \"$before\"" in wf
