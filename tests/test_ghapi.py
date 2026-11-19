@@ -129,8 +129,20 @@ def test_default_branch_falls_back_to_the_api_without_config(monkeypatch):
 
 
 def test_every_module_resolves_the_default_branch_through_ghapi():
-    import pathlib
-    for path in pathlib.Path("scripts/aiwf").glob("*.py"):
+    paths = [p for p in (Path(__file__).parent.parent / "scripts" / "aiwf").glob("*.py") if p.name not in ("ghapi.py", "config.py")]
+    assert paths
+    for path in paths:
         text = path.read_text()
-        if path.name != "ghapi.py":
-            assert '.get("default_branch")' not in text and '["default_branch"]' not in text, path.name
+        assert '.get("default_branch")' not in text and '["default_branch"]' not in text, path.name
+
+
+def test_the_schema_has_no_default_branch_default_so_the_api_fallback_holds():
+    schema = json.loads((Path(__file__).parent.parent / "schema" / "ai-workflows.schema.json").read_text())
+    assert "default" not in schema["properties"]["default_branch"]
+
+
+def test_default_branch_unreadable_metadata_is_a_runtime_error(monkeypatch):
+    monkeypatch.delenv("AIWF_CONFIG", raising=False)
+    for answer in ("{}", ""):
+        with pytest.raises(RuntimeError):
+            ghapi.default_branch(lambda a, answer=answer: answer, "o/r")

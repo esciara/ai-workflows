@@ -20,7 +20,12 @@ def default_branch(gh: GhRunner, repo: str) -> str:
     """The one source for the default branch (aiwf-nmr): `default_branch` of the config job's output (env AIWF_CONFIG),
     else the repo's own default branch from the API. Raises RuntimeError when the API refuses."""
     cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
-    return cfg.get("default_branch") or get_json(gh, f"repos/{repo}")["default_branch"]
+    if cfg.get("default_branch"):
+        return cfg["default_branch"]
+    try:
+        return get_json(gh, f"repos/{repo}")["default_branch"]
+    except (KeyError, TypeError):
+        raise RuntimeError(f"no default_branch in the repo metadata of {repo}") from None
 
 
 def get_or_none(gh: GhRunner, path: str, notice: str = "") -> Any | None:

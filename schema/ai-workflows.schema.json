@@ -14,7 +14,7 @@
       "items": {"type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$"},
       "description": "GitHub logins: B4 questions, assignments, pings, allowed command authors."
     },
-    "default_branch": {"type": "string", "minLength": 1, "default": "main"},
+    "default_branch": {"type": "string", "minLength": 1},
     "setup": {"type": "string", "minLength": 1, "description": "How an agent installs the project in its sandbox."},
     "test": {"type": "string", "minLength": 1, "description": "B2 repro and B5 exit condition."},
     "allowed_domains": {
