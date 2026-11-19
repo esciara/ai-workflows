@@ -61,7 +61,7 @@ In the Actions tab, open "AI workflows", click "Run workflow" on the default bra
 
 ## 7. Block merges on Request changes (optional)
 
-In Settings → Rules → Rulesets (or Branches → branch protection) for the default branch: require a pull request before merging, with at least one approval. A Request changes review from Workflow A then blocks the merge until a maintainer approves.
+In Settings → Rules → Rulesets (or Branches → branch protection) for the default branch of your repo (not ai-workflows): require a pull request before merging, with at least one approval. A Request changes review from Workflow A then blocks the merge until a maintainer approves.
 
 ## 8. Check it works
 

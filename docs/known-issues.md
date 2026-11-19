@@ -7,7 +7,7 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 ### `verdict` approval rule assumes a personal repo
 
 - Date: 2026-11-13
-- What: the `verdict` approval rule (PR #90, draft) identifies the maintainer by the review's `author_association == OWNER`. That works for personal repos, not org-owned ones, where a CODEOWNERS lookup would be needed.
+- What: the `verdict` approval rule (`scripts/aiwf/verdict.py`) identifies the maintainer by the review's `author_association == OWNER`. That works for personal repos, not org-owned ones, where a CODEOWNERS lookup would be needed.
 - Why it matters: on an org-owned repo a maintainer's approval would not turn `verdict` green.
 - Current mitigation: this repo is personal; none needed yet.
 - Priority: P3, before an org-owned repo adopts the rule.
