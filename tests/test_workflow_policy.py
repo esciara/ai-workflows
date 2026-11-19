@@ -411,7 +411,7 @@ def test_verdict_job_is_read_only_and_reruns_on_reviews():
     assert [u.split("@")[0] for u in uses] == ["actions/checkout", "./.ai-workflows/.github/actions/aiwf-setup"]
     assert job["steps"][1]["with"] == {"cache": "false"}, "no restored venv: a PR run could have saved a poisoned one"
     checkout = job["steps"][0]["with"]
-    assert checkout["ref"] == "main" and checkout["persist-credentials"] is False, "the PR's own code never runs here"
+    assert checkout["ref"] == "${{ github.event.repository.default_branch }}" and checkout["persist-credentials"] is False, "the PR's own code never runs here"
     assert job["steps"][-1]["run"] == "aiwf verdict"
     assert "pull_request_review" in doc["jobs"]["config"]["if"], "no config/review job on review events"
     assert "pull_request'" in doc["jobs"]["review"]["if"] and "pull_request_review" not in doc["jobs"]["review"]["if"]

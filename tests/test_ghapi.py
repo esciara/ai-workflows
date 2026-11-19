@@ -112,3 +112,25 @@ def test_review_yml_candidates_cannot_close_their_tag(tmp_path):
     subprocess.run(["bash", "-c", verify_script()], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **PASSES_ENV})
     text = (tmp_path / "candidates.json").read_text()
     assert "<" not in text and json.loads(text) == review.candidates({"security": forged})
+
+
+# --- one source for the default branch (aiwf-nmr) ---------------------------------------------------------------------
+
+def test_default_branch_prefers_the_config_over_the_api(monkeypatch):
+    from aiwf import ghapi
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"default_branch": "trunk"}))
+    assert ghapi.default_branch(lambda a: pytest.fail("no API call when the config says"), "o/r") == "trunk"
+
+
+def test_default_branch_falls_back_to_the_api_without_config(monkeypatch):
+    from aiwf import ghapi
+    monkeypatch.delenv("AIWF_CONFIG", raising=False)
+    assert ghapi.default_branch(lambda a: json.dumps({"default_branch": "dev"}), "o/r") == "dev"
+
+
+def test_every_module_resolves_the_default_branch_through_ghapi():
+    import pathlib
+    for path in pathlib.Path("scripts/aiwf").glob("*.py"):
+        text = path.read_text()
+        if path.name != "ghapi.py":
+            assert '.get("default_branch")' not in text and '["default_branch"]' not in text, path.name

@@ -17,7 +17,7 @@ from typing import Any
 
 from aiwf import config, guard, publish, publish_analysis
 from aiwf.fix import branch_head, branch_name
-from aiwf.ghapi import GhRunner, upsert_marker_comment
+from aiwf.ghapi import GhRunner, default_branch, upsert_marker_comment
 from aiwf.mdtext import run_link
 from aiwf.publish_reproduce import fence
 
@@ -41,7 +41,7 @@ def compare_link(gh: GhRunner, repo: str, issue: int) -> str:
     try:
         if not branch_head(gh, repo, branch):
             return ""
-        base = json.loads(gh(["api", f"repos/{repo}"]) or "{}").get("default_branch") or "main"
+        base = default_branch(gh, repo)
     except RuntimeError as exc:  # the comment, label and assignment still matter more than the link
         print(f"::warning::no compare link for {branch}: {str(exc)[:200]}")
         return ""
