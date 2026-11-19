@@ -32,7 +32,6 @@ def test_minimal_config_gets_all_defaults():
     assert cfg == {
         "enabled": True,
         "maintainers": ["esciara"],
-        "default_branch": "main",
         "allowed_domains": [],
         "risk_paths": {"high": [], "medium": []},
         "limits": {"human_review_lines": 400, "fix_rounds": 3, "info_requests": 2, **TRIAGE_CAP_DEFAULTS},
