@@ -117,13 +117,11 @@ def test_review_yml_candidates_cannot_close_their_tag(tmp_path):
 # --- one source for the default branch (aiwf-nmr) ---------------------------------------------------------------------
 
 def test_default_branch_prefers_the_config_over_the_api(monkeypatch):
-    from aiwf import ghapi
     monkeypatch.setenv("AIWF_CONFIG", json.dumps({"default_branch": "trunk"}))
     assert ghapi.default_branch(lambda a: pytest.fail("no API call when the config says"), "o/r") == "trunk"
 
 
 def test_default_branch_falls_back_to_the_api_without_config(monkeypatch):
-    from aiwf import ghapi
     monkeypatch.delenv("AIWF_CONFIG", raising=False)
     assert ghapi.default_branch(lambda a: json.dumps({"default_branch": "dev"}), "o/r") == "dev"
 
@@ -146,3 +144,56 @@ def test_default_branch_unreadable_metadata_is_a_runtime_error(monkeypatch):
     for answer in ("{}", ""):
         with pytest.raises(RuntimeError):
             ghapi.default_branch(lambda a, answer=answer: answer, "o/r")
+
+
+def _compare_gh(meta):
+    def gh(args):
+        url = args[1]
+        if "/git/matching-refs/heads/" in url:
+            return json.dumps([{"ref": "refs/heads/" + url.split("/git/matching-refs/heads/", 1)[1], "object": {"sha": "x"}}])
+        return meta
+    return gh
+
+
+def test_compare_link_uses_the_config_default_branch(monkeypatch):
+    from aiwf import fix_escalate
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"default_branch": "trunk"}))
+    assert fix_escalate.compare_link(_compare_gh("{}"), "o/r", 7).endswith("/o/r/compare/trunk...ai-fix/issue-7")
+
+
+def test_compare_link_without_default_branch_metadata_is_empty_with_a_warning(monkeypatch, capsys):
+    from aiwf import fix_escalate
+    monkeypatch.delenv("AIWF_CONFIG", raising=False)
+    assert fix_escalate.compare_link(_compare_gh("{}"), "o/r", 7) == ""
+    assert "no compare link" in capsys.readouterr().out
+
+
+class _Stop(Exception):
+    pass
+
+
+def _classifier_branch(monkeypatch, gh):
+    from aiwf import publish_triage
+    seen = []
+
+    def spy(gh_, repo, branch, ref):
+        seen.append(branch)
+        raise _Stop
+
+    monkeypatch.setattr(publish_triage, "check_fix", spy)
+    monkeypatch.setattr(publish_triage, "shown_candidates", lambda: {})
+    monkeypatch.setattr(publish_triage, "was_shown", lambda *a: True)
+    data = {"type": "bug", "possibly_fixed_by": {"kind": "pr", "ref": "5", "confidence": "high"}}
+    with pytest.raises(_Stop):
+        publish_triage.publish_classifier(data, "o/r", 1, "http://run", gh)
+    return seen[0]
+
+
+def test_classifier_checks_fixes_against_the_config_default_branch(monkeypatch):
+    monkeypatch.setenv("AIWF_CONFIG", json.dumps({"default_branch": "trunk"}))
+    assert _classifier_branch(monkeypatch, lambda a: "{}") == "trunk"
+
+
+def test_classifier_falls_back_to_main_when_the_repo_is_unreadable(monkeypatch):
+    monkeypatch.delenv("AIWF_CONFIG", raising=False)
+    assert _classifier_branch(monkeypatch, lambda a: "{}") == "main"
