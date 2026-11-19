@@ -440,6 +440,8 @@ def test_in_workflow_a_only_the_resolve_threads_job_writes_contents():
     for step in jobs["resolve-threads"]["steps"]:  # no agent, and the only checkout is this repo at the workflow SHA
         assert AGENT_USES not in str(step.get("uses", "")) and policy.AGENT_ACTION not in str(step.get("uses", ""))
         assert "claude" not in step.get("run", ""), "no model call in the job that holds contents: write"
+        if "aiwf-setup" in str(step.get("uses", "")):
+            assert step["with"] == {"cache": "false"}, "no restored venv: a PR run could have saved a poisoned one"
         if "actions/checkout" in str(step.get("uses", "")):
             assert step["with"]["repository"] == "${{ job.workflow_repository }}"
             assert step["with"]["ref"] == "${{ job.workflow_sha }}"
