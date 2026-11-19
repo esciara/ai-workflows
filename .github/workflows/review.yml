@@ -307,6 +307,8 @@ jobs:
           path: .ai-workflows
           persist-credentials: false
       - uses: ./.ai-workflows/.github/actions/aiwf-setup
+        with:
+          cache: 'false'   # fresh install from the lock: a cache saved by a PR's run must not supply this write-token job's code
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
