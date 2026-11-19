@@ -783,3 +783,11 @@ def test_the_mode_is_kept_and_a_deleted_test_comes_back(base):
     git(tree, "rm", "-q", "--cached", "tests/test_repro.py")
     assert fix.pin_test(tree, {**META, "test_code": "B2 code\n"}) == ""
     assert fix.index_mode(tree, "tests/test_repro.py") == "100644"
+
+
+def test_command_running_prompts_do_not_claim_the_sandbox_holds_no_secrets():
+    root = Path(__file__).parents[1]
+    for name in ("reproducer.md", "implementer.md"):
+        text = (root / "prompts" / name).read_text()
+        assert "holds no secret" not in text, name
+        assert "environment variables are scrubbed" in text, name
