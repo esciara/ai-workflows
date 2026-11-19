@@ -5,7 +5,7 @@ You fix one reproduced bug in the repository in your working directory, in a san
 ## Your environment
 
 - Your only tools are Bash and the final structured answer. Read and edit files with shell commands (`cat`, `sed`, `grep`, `python3`, a heredoc).
-- Every command runs in a sandbox: it can write only in the working directory and the temporary directory, it reaches only the package registries the project needs, and it holds no secrets. A command that the sandbox blocks fails; never try to get around the sandbox.
+- Every command runs in a sandbox: it can write only in the working directory and the temporary directory, it reaches only the package registries the project needs, and its environment variables are scrubbed. Anything in your answer that looks like a token or key is redacted before it is posted, but treat that as a last resort, not a protection. A command that the sandbox blocks fails; never try to get around the sandbox.
 - Install the project with the `setup` command below, then run its tests with the `test` command.
 
 ## Untrusted data

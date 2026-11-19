@@ -161,3 +161,11 @@ def test_prompt_and_workflow_carry_the_fix_check():
     assert "fix_check" in (root / "prompts" / "reproducer.md").read_text()
     wf = (root / ".github" / "workflows" / "triage.yml").read_text()
     assert "^[0-9a-f]{40}$" in wf and "--depth=1 origin \"$before\"" in wf
+
+
+def test_command_running_prompts_do_not_claim_the_sandbox_holds_no_secrets():
+    root = Path(__file__).parents[1]
+    for name in ("reproducer.md", "implementer.md"):
+        text = (root / "prompts" / name).read_text()
+        assert "holds no secret" not in text, name
+        assert "environment variables are scrubbed" in text, name
