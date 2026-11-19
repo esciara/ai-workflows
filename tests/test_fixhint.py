@@ -161,4 +161,3 @@ def test_prompt_and_workflow_carry_the_fix_check():
     assert "fix_check" in (root / "prompts" / "reproducer.md").read_text()
     wf = (root / ".github" / "workflows" / "triage.yml").read_text()
     assert "^[0-9a-f]{40}$" in wf and "--depth=1 origin \"$before\"" in wf
-
