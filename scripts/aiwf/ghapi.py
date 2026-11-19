@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Callable
 from urllib.parse import quote
 
@@ -13,6 +14,13 @@ GhRunner = Callable[[list[str]], str]
 
 def get_json(gh: GhRunner, path: str) -> Any:
     return json.loads(gh(["api", path]) or "null")
+
+
+def default_branch(gh: GhRunner, repo: str) -> str:
+    """The one source for the default branch (aiwf-nmr): `default_branch` of the config job's output (env AIWF_CONFIG),
+    else the repo's own default branch from the API. Raises RuntimeError when the API refuses."""
+    cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
+    return cfg.get("default_branch") or get_json(gh, f"repos/{repo}")["default_branch"]
 
 
 def get_or_none(gh: GhRunner, path: str, notice: str = "") -> Any | None:

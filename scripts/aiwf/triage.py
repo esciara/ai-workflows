@@ -271,11 +271,6 @@ def listed(fix: dict[str, Any], shown: list[int]) -> dict[str, list[Any]]:
 
 # --- commands ---------------------------------------------------------------------------------------------------------
 
-def default_branch(gh: GhRunner, repo: str) -> str:
-    cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
-    return cfg.get("default_branch") or get_json(gh, f"repos/{repo}")["default_branch"]
-
-
 def cmd_issue(args: argparse.Namespace) -> int:
     issue = get_json(config.run_gh, f"repos/{args.repo}/issues/{args.issue}")
     with open(args.out, "w", encoding="utf-8") as fh:
@@ -291,7 +286,7 @@ def cmd_candidates(args: argparse.Namespace) -> int:
     except publish.InvalidOutput as exc:
         print(f"::error title=Invalid agent output (extractor)::{exc}")
         return 1
-    branch = default_branch(gh, args.repo)
+    branch = ghapi.default_branch(gh, args.repo)
     issue = get_json(gh, f"repos/{args.repo}/issues/{args.issue}")
     dups = duplicates(gh, args.repo, args.issue, [*extract["search_phrases"], issue.get("title") or ""])
     linked = {args.issue, *(d["number"] for d in dups)}

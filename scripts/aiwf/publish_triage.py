@@ -18,7 +18,7 @@ from typing import Any
 from urllib.parse import quote
 
 from aiwf import commands, guard, publish
-from aiwf.ghapi import GhRunner, get_or_none, remove_label, upsert_marker_comment
+from aiwf.ghapi import GhRunner, default_branch, get_or_none, remove_label, upsert_marker_comment
 
 MARKER = "<!-- ai-workflows:triage -->"
 TYPE_LABELS = {"bug": "type: bug", "feature": "type: feature", "question": "type: question"}
@@ -199,7 +199,10 @@ def start_reproduce() -> None:
 def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: GhRunner) -> None:
     item = get_or_none(gh, f"repos/{repo}/issues/{issue}") or {}
     current = {lb["name"] for lb in item.get("labels", [])}
-    branch = (get_or_none(gh, f"repos/{repo}") or {}).get("default_branch", "main")
+    try:
+        branch = default_branch(gh, repo)
+    except RuntimeError:
+        branch = "main"
     shown = shown_candidates()
     dup_ref = (data.get("duplicate_of") or {}).get("number")
     dup = check_duplicate(gh, repo, issue, dup_ref) if dup_ref and was_shown(shown, "duplicate_of", dup_ref) else None
