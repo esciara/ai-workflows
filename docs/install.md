@@ -1,6 +1,6 @@
 # Install guide
 
-This guide sets up the AI workflows on a GitHub repository (the target repo) in about 30 minutes. Workflow A reviews every pull request: it posts one review and labels the PR with a verdict. Workflow B triages new issues. Start with Workflow A alone (review only); turn on Workflow B later.
+This guide sets up the AI workflows on a GitHub repository (the target repo) in about 30 minutes. Workflow A reviews every pull request: it posts one review and labels the PR with a verdict. Workflow B triages new issues, reproduces and analyses bugs, and fixes them on a branch after a maintainer says `/fix`. Start with Workflow A alone (review only); turn on Workflow B later.
 
 ## 1. Rights checklist
 
@@ -40,7 +40,7 @@ The caller pins every reusable workflow of esciara/ai-workflows to one release: 
 
 Review only (recommended to start): delete the `triage` job from the copied file. Keep `notify` only if you set a chat secret.
 
-The `silence` job runs on the daily cron when triage is on: it pings the reporter, then actions/stale labels and closes needs-info issues (not_planned). A review-only install should leave the `silence` job out too.
+The `silence` job runs on the daily cron (and a manual run) only when `workflows.triage` is true: it pings the maintainers on a silent needs-info issue, then actions/stale labels it `stale` and closes it as not planned. Leave the `silence` job out of a review-only install. Deleting only the `triage` job while `workflows.triage` stays true leaves `silence` running, so keep the two together.
 
 ## 5. Copy the config
 
@@ -50,6 +50,7 @@ Copy `templates/ai-workflows.example.yml` to `.github/ai-workflows.yml` in the t
 - `default_branch`: your default branch.
 - `risk_paths`: paths whose changes need a human (`high`) or a closer look (`medium`).
 - `workflows.review: true`, `workflows.triage: false` for review only.
+- `setup`, `test` and `allowed_domains`: needed only for Workflow B, see "Turning Workflow B on". The example file ships npm values (`npm ci`, `npm test`, `registry.npmjs.org`): replace them with your project's, or Workflow B will run the wrong commands.
 - `notify`: `none`, `slack`, `telegram` or both (`slack,telegram`).
 - `linked_issue`: leave it out (default `issue`) unless your PRs reference work by plan id; see "Linked issues" below.
 
@@ -57,7 +58,7 @@ The config is read from the default branch only, so commit both files to it (a P
 
 ## 6. Run the workflow once by hand
 
-In the Actions tab, open "AI workflows", click "Run workflow" on the default branch (a `workflow_dispatch` run). This creates the labels (`ai-review: merge`, `ai-review: changes-requested`, `ai-review: human-review`, `ai-review: pending` and the triage labels). With a chat channel set, it also sends one test message. A daily scheduled run keeps the labels in sync, and so does a manual run after an upgrade (new releases may add labels). The labels run needs `actions: write`: start it from the Actions tab, or as the repo admin with `gh workflow run`.
+In the Actions tab, open "AI workflows", click "Run workflow" on the default branch (a `workflow_dispatch` run). This creates the labels (`ai-review: merge`, `ai-review: changes-requested`, `ai-review: human-review`, `ai-review: pending` and the triage labels). With a chat channel set, it also sends one test message. A daily scheduled run keeps the labels in sync (GitHub disables scheduled workflows after 60 days without repository activity: re-enable it in the Actions tab if the labels or the silence job stop running), and so does a manual run after an upgrade (new releases may add labels). The labels run needs `actions: write`: start it from the Actions tab, or as the repo admin with `gh workflow run`.
 
 ## 7. Block merges on Request changes (optional)
 
@@ -92,6 +93,34 @@ Upgrading to the release with WP18 (review thread replies and resolves, ADR-0057
 
 ## Turning Workflow B on
 
-Put the `triage` and `silence` jobs back from `templates/caller.yml` and set `workflows.triage: true` in `.github/ai-workflows.yml`. Workflow B classifies new issues; it fixes bugs only after a maintainer comments `/fix`.
+Put the `triage` and `silence` jobs back from `templates/caller.yml`, and set `workflows.triage: true` in `.github/ai-workflows.yml`. Then fill in the config below and check the runner.
+
+What Workflow B does:
+
+- B1 classifies every new issue (`triage: …` label and one comment). Only bugs go further.
+- B2 reproduces a bug as a failing test, or asks the reporter for details (`triage: needs-info`).
+- B3 and B4 find the root cause, post the analysis, label `triage: awaiting-maintainer` and wait.
+- B5 runs only after a maintainer comments `/fix` (or `/fix <guidance>`; `/no-fix <reason>` declines): up to `limits.fix_rounds` implement and review rounds, each pushed to the branch `ai-fix/issue-<n>`.
+- B6 posts one comment with a compare link and the PR text to paste. Workflow B never opens a PR (ADR-0061): the maintainer opens it, and Workflow A then reviews it. If the loop gives up, the issue gets `fix: needs-maintainer`, an assignment to the maintainer and a compare link to the branch.
+
+Config for B (all three in `.github/ai-workflows.yml`):
+
+- `setup`: the command that installs the project in the sandbox, for example `pip install -e .[test]`.
+- `test`: the command that runs the tests. B2 reproduces with it and B5 uses it as the exit condition.
+- `allowed_domains`: the hosts the sandbox may reach while running `setup` and `test`, for example `[pypi.org, files.pythonhosted.org]` for Python or `[registry.npmjs.org]` for npm. The default `[]` means no network: the reproducer then cannot install anything.
+- The schema does not enforce `setup`, `test` or `allowed_domains` (only `maintainers` is required), but without them B2 and B5 have no install or test command and no network. Treat them as required. A diff that touches `.github/` (including this config) is never pushed by B5.
+
+Who can start what:
+
+- B2 starts by itself only on a bug from a trusted author: in `maintainers`, with write or admin permission (ADR-0037). On anyone else's bug, B1 stops with `triage: needs-human` and a note until a maintainer comments `/reproduce`.
+- `/retriage`, `/reproduce`, `/fix` and `/no-fix` are accepted only from users with write or admin permission (ADR-0005).
+
+Runner and permissions:
+
+- The command-running jobs (B2, B5) pin `runs-on: ubuntu-24.04`: the sandbox does not start on ubuntu-26.04. They install bubblewrap with `sudo` and lift an AppArmor restriction, so they need a runner with passwordless `sudo`: GitHub-hosted `ubuntu-24.04` has it. A self-hosted runner needs the same.
+- The caller's `triage` job asks for `contents: write`, `issues: write` and `pull-requests: read`. `contents: write` is for the one B5 job that pushes `ai-fix/issue-<n>` (never `.github/`); that job's token can push to unprotected branches, so keep a ruleset on the default branch. The model token reaches the reproducer and implementer, which run project commands under the sandbox (ADR-0037, accepted risk in `docs/known-issues.md`): enable B only on a repo whose code and issue text you accept running there.
+- An upgrade that keeps the old `triage` permissions (`contents: read`) fails at startup on every triage event: copy them from `templates/caller.yml`.
+
+Reporter silence (`silence` job): after B2 asks the reporter for details, `reporter_silence_days` (default 4, 14, 21) counts from that comment. The maintainers are pinged at day 4, the issue is labelled `stale` at day 14 and closed as not planned at day 21. A reply from the reporter restarts B2; `keep-open`, `ai: off` and `ai: error` exempt the issue. This is the only close Workflow B makes. Removing or leaving out `silence` means needs-info issues just stay open; the `triage` job alone never closes anything.
 
 On a public repo anyone can open an issue, and each triage run uses your Claude subscription. Two caps bound that for authors not in `maintainers`: `limits.triage_per_author_per_day` (default 3) and `limits.triage_per_day` (default 20), over a rolling 24 hours. An issue over a cap runs no agent: it gets `triage: needs-human` and a comment saying the limit is reached; comment `/retriage` on it to triage it anyway. Set either cap to 0 to never triage outside authors automatically. Your own issues, and those of anyone in `maintainers`, are never capped.

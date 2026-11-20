@@ -4,9 +4,11 @@
 enabled: true                   # repo kill switch: false stops every run
 maintainers: [<OWNER>]          # B4 questions, assignments, pings, allowed command authors
 default_branch: main
+# Workflow B only (B2 repro, B5 fix); put your project's commands here, the npm values below are an example. The schema does
+# not enforce them, but without them B2 and B5 have nothing to run. docs/install.md, "Turning Workflow B on".
 setup: npm ci                   # how an agent installs the project in its sandbox
 test: npm test                  # B2 repro and B5 exit condition
-allowed_domains: [registry.npmjs.org]   # sandbox egress for setup/test (B2, B5); default [] = no network
+allowed_domains: [registry.npmjs.org]   # sandbox egress for setup/test; [] = no network, so the reproducer cannot install (Python: pypi.org, files.pythonhosted.org)
 risk_paths:                     # unmatched paths are low risk
   high: ["src/auth/**", "migrations/**", ".github/**", "infra/**"]
   medium: []
