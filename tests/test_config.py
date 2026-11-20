@@ -166,6 +166,7 @@ def test_empty_or_non_mapping(text, msg):
 # --- fetching from GitHub (gh mocked) ----------------------------------------
 
 
+# Not shared on purpose: each test module's FakeGh answers different endpoints (repo contents and default branch); only the recording base is common (ghfake.RecordingGh).
 class FakeGh(RecordingGh):
     def __init__(self, files, default_branch="main"):
         super().__init__()

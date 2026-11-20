@@ -409,6 +409,7 @@ def test_clean_neutralises_mentions_html_markers_and_pipes():
     assert "@esciara" not in out and "<" not in out and "\n" not in out and "a\\|b" in out
 
 
+# Not shared on purpose: each test module's FakeGh answers different endpoints (review publisher: comments, reviews, GraphQL threads); only the recording base is common (ghfake.RecordingGh).
 class FakeGh(RecordingGh):
     """GitHub for the publisher: issue comments, reviews (with inline comments) and dismissals."""
 
