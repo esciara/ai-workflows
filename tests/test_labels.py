@@ -52,6 +52,7 @@ def test_diff_detects_colour_and_description_changes():
     assert [u["name"] for u in update] == ["type: bug", "ai: error"]
 
 
+# Not shared on purpose: each test module's FakeGh answers different endpoints (paginated label list); only the recording base is common (ghfake.RecordingGh).
 class FakeGh(RecordingGh):
     def __init__(self, existing):
         super().__init__()

@@ -11,6 +11,7 @@ from ghfake import RecordingGh
 BOT = ghapi.BOT
 
 
+# Not shared on purpose: each test module's FakeGh answers different endpoints (labels, comments, PR head for the guard); only the recording base is common (ghfake.RecordingGh).
 class FakeGh(RecordingGh):
     """Item labels and issue comments; records every call."""
 

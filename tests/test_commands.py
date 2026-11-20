@@ -77,6 +77,7 @@ def test_authorize(login, permission, ok):
     assert commands.authorize(login, ["esciara"], permission) is ok
 
 
+# Not shared on purpose: each test module's FakeGh answers different endpoints (collaborator permission only); only the recording base is common (ghfake.RecordingGh).
 class FakeGh(RecordingGh):
     def __init__(self, permission=None, fail=False):
         super().__init__()

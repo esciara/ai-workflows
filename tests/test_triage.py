@@ -293,6 +293,7 @@ def trusted_config(monkeypatch):
     monkeypatch.setenv(pt.CANDIDATES_ENV, json.dumps({"issues": [1, 7, 99], "commits": [SHA], "prs": [12, 13]}))
 
 
+# Not shared on purpose: each test module's FakeGh answers different endpoints (issues, pulls, collaborators, compare); only the recording base is common (ghfake.RecordingGh).
 class FakeGh(RecordingGh):
     def __init__(self, issues=None, commits=None, compare="ahead", labels=(), comments=(), pulls=None,
                  author="esciara", permission="write"):
