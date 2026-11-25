@@ -10,6 +10,8 @@ REQUIRED = [
     "/scripts/aiwf/devguard.py",
     "/.claude/settings.json",
     "/.claude/skills/",
+    "/plugin/",
+    "/.claude-plugin/",
     "/prompts/dev-reviewer.md",
     "/scripts/aiwf/policy.py",
     "/.github/actions/aiwf-sandbox/",

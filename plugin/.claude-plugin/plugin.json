@@ -1,0 +1,7 @@
+{
+  "name": "ai-workflows",
+  "version": "0.1.0",
+  "description": "Contributor level 0 (spec: Contributor ladder): review your branch and analyse an issue locally. Results go to you only; nothing is posted upstream.",
+  "author": {"name": "esciara"},
+  "homepage": "https://github.com/esciara/ai-workflows"
+}

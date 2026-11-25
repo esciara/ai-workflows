@@ -11,6 +11,8 @@
 /scripts/aiwf/devguard.py           @esciara
 /.claude/settings.json              @esciara
 /.claude/skills/                    @esciara
+/plugin/                           @esciara
+/.claude-plugin/                   @esciara
 /prompts/dev-reviewer.md            @esciara
 /tests/test_devguard.py             @esciara
 /tests/test_as_agent.py             @esciara
