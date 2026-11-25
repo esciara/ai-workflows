@@ -26,7 +26,7 @@ Install, once:
 
 Or try it without installing: `claude --plugin-dir <path to ai-workflows>/plugin`.
 
-What keeps it local: the skills pre-approve only file reads and read-only `git` commands (and `gh issue view` for `analyse`), and their instructions forbid anything that writes. This is not a hard boundary: a skill's `allowed-tools` only pre-approves tools, it does not remove the others, so in an interactive session the model still has whatever you allow (an authenticated `gh`, `git push`). For a hard boundary, start Claude Code with `--permission-mode plan` or with `--disallowedTools` for `Write`, `Edit`, `Bash(git push:*)`, `Bash(gh pr:*)` and `Bash(gh issue comment:*)`, especially for `analyse`, which reads untrusted issue text. The plugin uses your own Claude login; no secret is needed and nothing is installed in the upstream repo.
+What keeps it local: the skills pre-approve only file reads and read-only `git` commands (and `gh issue view` for `analyse`), and their instructions forbid anything that writes. The plugin also ships a hook that denies `--output`, `--ext-diff`, `--textconv` and `-c` in git commands. It is still not a hard boundary: a skill's `allowed-tools` only pre-approves tools, it does not remove the others, so in an interactive session the model still has whatever you allow (an authenticated `gh`, `git push`). For a hard boundary, start Claude Code with `--permission-mode plan` or with `--disallowedTools` for `Write`, `Edit`, `Bash(git push:*)`, `Bash(gh pr:*)` and `Bash(gh issue comment:*)`, especially for `analyse`, which reads untrusted issue text. The plugin uses your own Claude login; no secret is needed and nothing is installed in the upstream repo.
 
 ## 2. Level 1: your fork
 
