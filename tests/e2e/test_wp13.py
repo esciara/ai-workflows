@@ -61,7 +61,7 @@ def test_local_review_finds_a_seeded_bug_and_posts_nothing(tmp_path):
                          env={**os.environ, "PATH": f"{shim}:{os.environ['PATH']}"})
     print(out.stdout, out.stderr)
     assert out.returncode == 0, out.stderr
-    assert "cart.py" in out.stdout and "changes-requested" in out.stdout and "blocking" in out.stdout, "bug not found"
+    assert "cart.py" in out.stdout and "changes-requested" in out.stdout and "100" in out.stdout, "bug not found"
     assert not calls.exists(), f"the skill called gh: {calls.read_text()}"
     assert git(remote, "for-each-ref") == "", "something reached the remote"
     assert git(repo, "rev-parse", "HEAD") == head and git(repo, "status", "--porcelain") == "", "the repo changed"
