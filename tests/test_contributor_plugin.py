@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
+import sys
 import re
 from pathlib import Path
 
@@ -88,7 +90,9 @@ def test_hook_is_registered_for_bash_and_the_script_exists():
 
 @pytest.mark.parametrize("command", [
     "git diff --output=/tmp/x main...HEAD", "git diff --output /tmp/x", "git log --ext-diff -p", "git show --textconv HEAD:a",
-    "git -c core.pager=evil diff", "cd x && git diff --output=y", "git diff -o out.txt",
+    "git -c core.pager=evil diff", "cd x && git diff --output=y", 'git diff "--output=/tmp/x" main...HEAD',
+    "git log -p '--output'=/tmp/x", "git diff \\--output=/tmp/x", 'git diff --out""put=/tmp/x', "git diff --ext main...HEAD",
+    "git log -p --ext-dif", "git diff --textc HEAD", "git diff 'unterminated", "ls; git show --output=a HEAD",
 ])
 def test_hook_denies_write_and_exec_flags(command):
     assert hook().denied(command)
@@ -96,7 +100,20 @@ def test_hook_denies_write_and_exec_flags(command):
 
 @pytest.mark.parametrize("command", [
     "git diff main...HEAD", "git log --oneline main..HEAD", "git show HEAD:cart.py", "gh issue view 12 --comments",
-    "git merge-base main HEAD", "ls -o", "grep -c foo a",
+    "git merge-base main HEAD", "ls -o", "grep -c foo a", "git show -c HEAD", "git log -c -1",
+    "git diff --output-indicator-new=+ main", "git diff --exit-code main", "git log --oneline | grep -c fix",
 ])
 def test_hook_allows_plain_read_commands(command):
     assert hook().denied(command) is None
+
+
+def run_hook(command: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(PLUGIN / "hooks" / "deny_write_flags.py")], capture_output=True,
+                          text=True, input=json.dumps({"tool_input": {"command": command}}))
+
+
+def test_hook_process_exits_2_with_a_message_to_deny_and_0_to_allow():
+    denied = run_hook("git diff --output=x")
+    assert denied.returncode == 2 and "--output" in denied.stderr
+    assert run_hook("git diff main...HEAD").returncode == 0
+    assert run_hook("").returncode == 0

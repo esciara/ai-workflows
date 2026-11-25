@@ -3,21 +3,48 @@
 
 The skills pre-approve `git diff|log|show|blame` by prefix, which also matches these flags. Reads the hook JSON on
 stdin; exit 2 with a message on stderr denies the call, any other exit allows it. Only commands that run git are checked.
+The command is tokenised like a shell would (quotes and backslashes resolved), a command that cannot be parsed is denied,
+and long options are matched by prefix, since git accepts unique abbreviations (`--ext` for `--ext-diff`).
+Limit: shell expansion (variables, command substitution) is not resolved.
 """
 
 from __future__ import annotations
 
 import json
-import re
+import shlex
 import sys
 
-GIT = re.compile(r"(^|[;&|(`\s])git\s")
-FLAG = re.compile(r"(^|\s)(--output(=|\s|$)|--ext-diff\b|--textconv\b|-o\s|-c\s|--exec-path\b|--open-files-in-pager\b)")
+LONG = ("--output", "--ext-diff", "--textconv", "--exec-path", "--open-files-in-pager")
+MIN_ABBREV = 5  # "--ext", "--outp": git's shortest unique abbreviations are at least this long
+
+
+def tokens(command: str) -> list[str] | None:
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        return list(lexer)
+    except ValueError:
+        return None
 
 
 def denied(command: str) -> str | None:
-    if GIT.search(command) and (m := FLAG.search(command)):
-        return f"ai-workflows plugin: `{m.group(2).strip()}` is not allowed in git commands (read-only, local-only skills)"
+    if "git" not in command:
+        return None
+    toks = tokens(command)
+    if toks is None:
+        return "ai-workflows plugin: the command could not be parsed, denied (read-only, local-only skills)"
+    for i, tok in enumerate(toks):
+        if tok != "git" and not tok.endswith("/git"):
+            continue
+        rest = toks[i + 1:]
+        end = next((j for j, t in enumerate(rest) if t and set(t) <= set(";&|()")), len(rest))
+        args = rest[:end]
+        if args and args[0] == "-c":
+            return "ai-workflows plugin: `git -c` is not allowed (read-only, local-only skills)"
+        for arg in args:
+            name = arg.split("=", 1)[0]
+            if arg.startswith("--") and len(name) >= MIN_ABBREV and any(opt.startswith(name) for opt in LONG):
+                return f"ai-workflows plugin: `{name}` is not allowed in git commands (read-only, local-only skills)"
     return None
 
 
