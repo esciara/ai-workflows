@@ -27,23 +27,34 @@ def tokens(command: str) -> list[str] | None:
         return None
 
 
+SAFE = {"--text"}  # a real, read-only git option that is also a prefix of --textconv
+VALUE_OPTS = {"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix"}  # global options with a separate value
+
+
 def denied(command: str) -> str | None:
-    if "git" not in command:
-        return None
     toks = tokens(command)
     if toks is None:
-        return "ai-workflows plugin: the command could not be parsed, denied (read-only, local-only skills)"
+        return "ai-workflows plugin: the command could not be parsed, denied" if "git" in command else None
     for i, tok in enumerate(toks):
         if tok != "git" and not tok.endswith("/git"):
             continue
         rest = toks[i + 1:]
         end = next((j for j, t in enumerate(rest) if t and set(t) <= set(";&|()")), len(rest))
         args = rest[:end]
-        if args and args[0] == "-c":
-            return "ai-workflows plugin: `git -c` is not allowed (read-only, local-only skills)"
+        skip = False
+        for arg in args:  # global options come before the subcommand, in any order
+            if skip:
+                skip = False
+            elif arg in VALUE_OPTS:
+                skip = True
+            elif not arg.startswith("-"):
+                break  # the subcommand
+            elif arg == "-c" or arg.startswith("--config-env"):
+                return f"ai-workflows plugin: `git {arg.split('=')[0]}` is not allowed (read-only, local-only skills)"
         for arg in args:
             name = arg.split("=", 1)[0]
-            if arg.startswith("--") and len(name) >= MIN_ABBREV and any(opt.startswith(name) for opt in LONG):
+            if (arg.startswith("--") and name not in SAFE and len(name) >= MIN_ABBREV
+                    and any(opt.startswith(name) for opt in LONG)):
                 return f"ai-workflows plugin: `{name}` is not allowed in git commands (read-only, local-only skills)"
     return None
 
