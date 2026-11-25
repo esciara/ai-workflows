@@ -94,19 +94,17 @@ def _dbos_config() -> dict:
 
 
 def main() -> int:
-    from dbos import DBOS, Queue
+    from dbos import DBOS
 
-    queue = Queue(QUEUE_NAME, concurrency=2)
-
-    @DBOS.step()
+    @DBOS.step(name="hello_step")
     def hello_step(wf_id: str, i: int) -> dict:
         return hello_body(wf_id, i)
 
-    @DBOS.workflow()
+    @DBOS.workflow(name="hello")
     def hello(i: int) -> dict:  # queues take workflows; the step holds the side effects
         return hello_step(DBOS.workflow_id, i)
 
-    @DBOS.workflow()
+    @DBOS.workflow(name="hello_two")
     def hello_two() -> list[dict]:
         handles = [queue.enqueue(hello, i) for i in (1, 2)]
         return [h.get_result() for h in handles]
@@ -114,6 +112,7 @@ def main() -> int:
     DBOS(config=_dbos_config())
     reap()  # before launch: launch recovers PENDING workflows, which recreate their sandboxes
     DBOS.launch()
+    queue = DBOS.register_queue(QUEUE_NAME, concurrency=2)
     pending = DBOS.list_workflows(name="hello_two", status="PENDING")
     if pending:  # launch() is recovering a killed run: wait for it, do not start a second
         results = DBOS.retrieve_workflow(pending[0].workflow_id).get_result()

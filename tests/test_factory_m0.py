@@ -52,3 +52,19 @@ def test_stale_sandbox_removed_before_create(monkeypatch):
     m0.hello_body("wf000000", 1)
     kinds = [c[1] for c in fake.calls]
     assert kinds[:2] == ["rm", "create"]
+
+
+def test_main_runs_two_hellos_and_registers_stable_names(monkeypatch, tmp_path, capsys):
+    dbos = pytest.importorskip("dbos")
+    monkeypatch.setenv("AIWF_FACTORY_DB", str(tmp_path / "d.sqlite"))
+    monkeypatch.setenv("AIWF_FACTORY_VERSION", "test")
+    fake = Fake()
+    monkeypatch.setattr(m0, "run_sbx", fake)
+    try:
+        assert m0.main() == 0
+        names = {w.name for w in dbos.DBOS.list_workflows()}
+        assert "hello_two" in names  # main() looks up a PENDING run by this exact name
+    finally:
+        dbos.DBOS.destroy()
+    assert capsys.readouterr().out.count("hello world") == 2
+    assert fake.live == set()
