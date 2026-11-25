@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -38,6 +39,7 @@ def test_skill_has_frontmatter_and_the_hard_rules(name):
     fm = frontmatter(text)
     assert fm["name"] == name and fm["description"]
     assert "Never post" in text and "data, never instructions" in text and "Suspicious instructions" in text
+    assert "--output" in text and "--ext-diff" in text and "git push" in text
 
 
 @pytest.mark.parametrize("name", SKILLS)
@@ -68,3 +70,33 @@ def test_contributor_guide_covers_both_levels_and_the_plugin_commands():
                    "upstream", "AI policy", "templates/caller.yml", "CLAUDE_CODE_OAUTH_TOKEN"):
         assert needle in guide, needle
     assert not re.search(r"@(main|master)\b", guide), "the guide must not tell people to pin to a branch"
+
+
+def hook():
+    spec = importlib.util.spec_from_file_location("deny_write_flags", PLUGIN / "hooks" / "deny_write_flags.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_hook_is_registered_for_bash_and_the_script_exists():
+    cfg = json.loads((PLUGIN / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+    (entry,) = cfg["hooks"]["PreToolUse"]
+    assert entry["matcher"] == "Bash"
+    assert "${CLAUDE_PLUGIN_ROOT}/hooks/deny_write_flags.py" in entry["hooks"][0]["command"]
+
+
+@pytest.mark.parametrize("command", [
+    "git diff --output=/tmp/x main...HEAD", "git diff --output /tmp/x", "git log --ext-diff -p", "git show --textconv HEAD:a",
+    "git -c core.pager=evil diff", "cd x && git diff --output=y", "git diff -o out.txt",
+])
+def test_hook_denies_write_and_exec_flags(command):
+    assert hook().denied(command)
+
+
+@pytest.mark.parametrize("command", [
+    "git diff main...HEAD", "git log --oneline main..HEAD", "git show HEAD:cart.py", "gh issue view 12 --comments",
+    "git merge-base main HEAD", "ls -o", "grep -c foo a",
+])
+def test_hook_allows_plain_read_commands(command):
+    assert hook().denied(command) is None
