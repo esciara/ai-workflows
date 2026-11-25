@@ -5,10 +5,11 @@
    /ai-workflows:review main --plugin-dir plugin` finds the bug in `cart.py`. A shim `gh` first on PATH records every
    call and a bare remote receives nothing: after the run there are no gh calls, the remote has no `feat`, and the
    working tree is untouched.
-2. Level 1, in a fork (AIWF_E2E=1, AIWF_E2E_SLOT=any): the playground stands in for the fork (it has the caller and
-   the secret installed as docs/contributor.md describes, review only). A seeded-bug PR opened inside it is
-   reviewed by the commit under test: one summary comment on the PR, one verdict label, Request changes. The
-   review lands on that PR only; the fork has no upstream in this setup, so nothing exists to post to.
+2. Level 1, in a fork (AIWF_E2E=1, AIWF_E2E_SLOT=any): a repo with Workflow A installed (the playground, through its
+   e2e caller, standing in for a fork) reviews a seeded-bug PR opened inside it with the commit under test: one summary
+   comment, one verdict label, Request changes. Limit: a fork install is the install of docs/install.md (test_wp14), so
+   this repeats the first half of test_wp3 and has no real upstream to prove "nothing posted" against. The real fork
+   opinionated-digital-center/ai-workflows-playground has no secret (only the maintainer can set one), so it is unused.
 """
 
 from __future__ import annotations
@@ -60,7 +61,7 @@ def test_local_review_finds_a_seeded_bug_and_posts_nothing(tmp_path):
                          env={**os.environ, "PATH": f"{shim}:{os.environ['PATH']}"})
     print(out.stdout, out.stderr)
     assert out.returncode == 0, out.stderr
-    assert "cart.py" in out.stdout and ("100" in out.stdout or "percent" in out.stdout), "the seeded bug was not found"
+    assert "cart.py" in out.stdout and "changes-requested" in out.stdout and "blocking" in out.stdout, "bug not found"
     assert not calls.exists(), f"the skill called gh: {calls.read_text()}"
     assert git(remote, "for-each-ref") == "", "something reached the remote"
     assert git(repo, "rev-parse", "HEAD") == head and git(repo, "status", "--porcelain") == "", "the repo changed"

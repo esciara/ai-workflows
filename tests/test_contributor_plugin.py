@@ -52,7 +52,7 @@ def test_skill_tools_are_read_only(name):
             assert m and m.group(1) in READ_COMMANDS, f"{tool} is not a known read-only command"
 
 
-READ_COMMANDS = {f"git {s}" for s in ("diff", "log", "show", "status", "merge-base", "rev-parse", "branch", "blame")} | {
+READ_COMMANDS = {f"git {s}" for s in ("diff", "log", "show", "status", "merge-base", "rev-parse", "blame")} | {
     "gh issue view"}
 
 
