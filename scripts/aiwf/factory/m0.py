@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -56,7 +57,10 @@ def reap() -> list[str]:
     for line in run_sbx(SBX_LS_ARGS).splitlines():
         name = line.split()[0] if line.split() else ""
         if name.startswith(PREFIX):
-            run_sbx(sbx_rm_args(name), check=False)
+            try:
+                run_sbx(sbx_rm_args(name), check=False)
+            except (subprocess.SubprocessError, OSError):
+                continue  # one hung rm must not abort startup
             removed.append(name)
     return removed
 
@@ -96,6 +100,9 @@ def _dbos_config() -> dict:
 def main() -> int:
     from dbos import DBOS
 
+    holder: dict = {}
+    queue_ready = threading.Event()  # launch() recovers PENDING runs on a thread before the queue exists
+
     @DBOS.step(name="hello_step")
     def hello_step(wf_id: str, i: int) -> dict:
         return hello_body(wf_id, i)
@@ -106,13 +113,15 @@ def main() -> int:
 
     @DBOS.workflow(name="hello_two")
     def hello_two() -> list[dict]:
-        handles = [queue.enqueue(hello, i) for i in (1, 2)]
+        queue_ready.wait()
+        handles = [holder["queue"].enqueue(hello, i) for i in (1, 2)]
         return [h.get_result() for h in handles]
 
     DBOS(config=_dbos_config())
     reap()  # before launch: launch recovers PENDING workflows, which recreate their sandboxes
     DBOS.launch()
-    queue = DBOS.register_queue(QUEUE_NAME, concurrency=2)
+    holder["queue"] = DBOS.register_queue(QUEUE_NAME, concurrency=2)
+    queue_ready.set()
     pending = DBOS.list_workflows(name="hello_two", status="PENDING")
     if pending:  # launch() is recovering a killed run: wait for it, do not start a second
         results = DBOS.retrieve_workflow(pending[0].workflow_id).get_result()
