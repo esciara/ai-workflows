@@ -68,3 +68,30 @@ def test_main_runs_two_hellos_and_registers_stable_names(monkeypatch, tmp_path, 
         dbos.DBOS.destroy()
     assert capsys.readouterr().out.count("hello world") == 2
     assert fake.live == set()
+
+
+class FakeDBOS:
+    def __init__(self, runs):
+        self.runs, self.kwargs = runs, None
+
+    def list_workflows(self, **kw):
+        self.kwargs = kw
+        v = kw["app_version"]
+        return [r for r in self.runs if r.app_version == v and r.status in kw["status"]]
+
+
+class Run:
+    def __init__(self, wid, status, app_version):
+        self.workflow_id, self.status, self.app_version = wid, status, app_version
+
+
+def test_resumed_run_found_when_pending_or_reenqueued():
+    for status in ("PENDING", "ENQUEUED"):
+        d = FakeDBOS([Run("w1", status, "v2")])
+        assert m0.resumed_run(d, "v2") == "w1"
+        assert d.kwargs["name"] == "hello_two"
+
+
+def test_resumed_run_ignores_other_version_and_finished():
+    d = FakeDBOS([Run("old", "PENDING", "v1"), Run("done", "SUCCESS", "v2")])
+    assert m0.resumed_run(d, "v2") is None

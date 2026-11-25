@@ -97,6 +97,12 @@ def _dbos_config() -> dict:
     }
 
 
+def resumed_run(dbos, version: str):
+    """A run of this app version that launch() is resuming (PENDING, or ENQUEUED once re-enqueued)."""
+    found = dbos.list_workflows(name="hello_two", status=["PENDING", "ENQUEUED"], app_version=version)
+    return found[0].workflow_id if found else None
+
+
 def main() -> int:
     from dbos import DBOS
 
@@ -117,14 +123,15 @@ def main() -> int:
         handles = [holder["queue"].enqueue(hello, i) for i in (1, 2)]
         return [h.get_result() for h in handles]
 
-    DBOS(config=_dbos_config())
+    config = _dbos_config()
+    DBOS(config=config)
     reap()  # before launch: launch recovers PENDING workflows, which recreate their sandboxes
     DBOS.launch()
     holder["queue"] = DBOS.register_queue(QUEUE_NAME, concurrency=2)
     queue_ready.set()
-    pending = DBOS.list_workflows(name="hello_two", status="PENDING")
-    if pending:  # launch() is recovering a killed run: wait for it, do not start a second
-        results = DBOS.retrieve_workflow(pending[0].workflow_id).get_result()
+    resumed = resumed_run(DBOS, config["application_version"])
+    if resumed:  # launch() is recovering a killed run: wait for it, do not start a second
+        results = DBOS.retrieve_workflow(resumed).get_result()
     else:
         results = hello_two()
     for r in results:
