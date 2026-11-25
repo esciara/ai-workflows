@@ -1,0 +1,11 @@
+{
+  "name": "ai-workflows",
+  "owner": {"name": "esciara"},
+  "plugins": [
+    {
+      "name": "ai-workflows",
+      "source": "./plugin",
+      "description": "Contributor level 0: review your branch and analyse issues locally; results stay on your machine."
+    }
+  ]
+}
