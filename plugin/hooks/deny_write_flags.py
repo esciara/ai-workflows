@@ -2,7 +2,7 @@
 """PreToolUse hook: deny git flags that write files or run external programs (--output, --ext-diff, --textconv, -c).
 
 The skills pre-approve `git diff|log|show|blame` by prefix, which also matches these flags. Reads the hook JSON on
-stdin; exit 2 with a message on stderr denies the call, any other exit allows it. Only commands that run git are checked.
+stdin; exit 2 with a message on stderr denies the call, any other exit allows it. Only `git diff|log|show|blame` are checked (the pre-approved prefixes); other git commands are left to the user's own permissions.
 The command is tokenised like a shell would (quotes and backslashes resolved), a command that cannot be parsed is denied,
 and long options are matched by prefix, since git accepts unique abbreviations (`--ext` for `--ext-diff`).
 Limit: shell expansion (variables, command substitution) is not resolved.
@@ -28,7 +28,8 @@ def tokens(command: str) -> list[str] | None:
 
 
 SAFE = {"--text"}  # a real, read-only git option that is also a prefix of --textconv
-VALUE_OPTS = {"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix"}  # global options with a separate value
+VALUE_OPTS = {"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--attr-source"}
+READ_SUBCOMMANDS = {"diff", "log", "show", "blame"}  # the pre-approved prefixes; other git work is left alone  # global options with a separate value
 
 
 def denied(command: str) -> str | None:
@@ -41,15 +42,23 @@ def denied(command: str) -> str | None:
         rest = toks[i + 1:]
         end = next((j for j, t in enumerate(rest) if t and set(t) <= set(";&|()")), len(rest))
         args = rest[:end]
-        skip = False
+        skip, sub, global_flags = False, None, []
         for arg in args:  # global options come before the subcommand, in any order
             if skip:
                 skip = False
-            elif arg in VALUE_OPTS:
+            elif arg in VALUE_OPTS or arg in ("-c", "--config-env"):
                 skip = True
+                if arg in ("-c", "--config-env"):
+                    global_flags.append(arg)
             elif not arg.startswith("-"):
-                break  # the subcommand
-            elif arg == "-c" or arg.startswith("--config-env"):
+                sub = arg
+                break
+            else:
+                global_flags.append(arg)
+        if sub not in READ_SUBCOMMANDS:
+            continue
+        for arg in global_flags:
+            if arg == "-c" or arg.startswith("--config-env"):
                 return f"ai-workflows plugin: `git {arg.split('=')[0]}` is not allowed (read-only, local-only skills)"
         for arg in args:
             name = arg.split("=", 1)[0]

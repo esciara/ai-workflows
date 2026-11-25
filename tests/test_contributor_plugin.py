@@ -92,7 +92,7 @@ def test_hook_is_registered_for_bash_and_the_script_exists():
     "git diff --output=/tmp/x main...HEAD", "git diff --output /tmp/x", "git log --ext-diff -p", "git show --textconv HEAD:a",
     "git -c core.pager=evil diff", "cd x && git diff --output=y", 'git diff "--output=/tmp/x" main...HEAD',
     "git log -p '--output'=/tmp/x", "git diff \\--output=/tmp/x", 'git diff --out""put=/tmp/x', "git diff --ext main...HEAD",
-    "git log -p --ext-dif", "git -C . -c diff.external=sh diff", "git --no-pager -c core.pager=x log",
+    "git log -p --ext-dif", "git -C . -c diff.external=sh diff", "git --attr-source HEAD -c diff.external=sh diff", "git --no-pager -c core.pager=x log",
     "git --config-env=diff.external=E diff", 'g""it diff --output=/tmp/x', "git diff --textc HEAD", "git diff 'unterminated", "ls; git show --output=a HEAD",
 ])
 def test_hook_denies_write_and_exec_flags(command):
@@ -101,7 +101,8 @@ def test_hook_denies_write_and_exec_flags(command):
 
 @pytest.mark.parametrize("command", [
     "git diff main...HEAD", "git log --oneline main..HEAD", "git show HEAD:cart.py", "gh issue view 12 --comments",
-    "git merge-base main HEAD", "ls -o", "grep -c foo a", "git show -c HEAD", "git diff --text main...HEAD", "git -C sub diff main", "git log -c -1",
+    "git merge-base main HEAD", "ls -o", "grep -c foo a", "git show -c HEAD", "git diff --text main...HEAD", "git -c commit.gpgsign=false commit -m x", "git archive --output=x.tar HEAD",
+    "git -c core.editor=true rebase --continue", "git -C sub diff main", "git log -c -1",
     "git diff --output-indicator-new=+ main", "git diff --exit-code main", "git log --oneline | grep -c fix",
 ])
 def test_hook_allows_plain_read_commands(command):
