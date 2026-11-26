@@ -345,6 +345,8 @@ jobs:
           path: .ai-workflows
           persist-credentials: false
       - uses: ./.ai-workflows/.github/actions/aiwf-setup
+        with:
+          cache: 'false'   # fresh install from the lock: no restored venv
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: fix-input
@@ -514,6 +516,8 @@ jobs:
           path: .ai-workflows
           persist-credentials: false
       - uses: ./.ai-workflows/.github/actions/aiwf-setup
+        with:
+          cache: 'false'   # fresh install from the lock: no restored venv
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: fix-round-*
@@ -545,6 +549,8 @@ jobs:
           path: .ai-workflows
           persist-credentials: false
       - uses: ./.ai-workflows/.github/actions/aiwf-setup
+        with:
+          cache: 'false'   # fresh install from the lock: no restored venv
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: fix-round-*

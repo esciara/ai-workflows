@@ -419,6 +419,16 @@ def test_verdict_job_is_read_only_and_reruns_on_reviews():
         assert "${{" not in step.get("run", ""), "event fields go through env, never into run:"
 
 
+def test_fix_jobs_after_the_agents_install_fresh_without_a_cache():
+    # aiwf-0p6: the push job holds `contents: write`; escalate and handover run the same setup after the agent jobs, so none restores a shared venv cache.
+    jobs = _doc(".github/workflows/fix.yml")["jobs"]
+    for name in ("round-1-push", "round-2-push", "round-3-push", "escalate", "handover"):
+        setups = [s for s in jobs[name]["steps"] if "aiwf-setup" in str(s.get("uses", ""))]
+        assert setups, name
+        for step in setups:
+            assert step.get("with") == {"cache": "false"}, f"fix.yml:{name} must install fresh from the lock"
+
+
 def test_only_the_verdict_job_writes_statuses():
     for path in REAL:
         for name, job in (policy.load_workflow(path.read_text()) or {}).get("jobs", {}).items():
