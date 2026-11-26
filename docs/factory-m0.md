@@ -32,3 +32,14 @@ Output: two JSON lines, each with `sandbox`, `start`, `end` (taken inside the st
 - The token is inside the VM (accepted risk).
 - The sbx secret proxy route does not work for subscription tokens: the built-in `anthropic` secret sends it as an API key (401), and a custom secret for api.anthropic.com breaks even a directly passed token.
 - The sandbox default size is huge (half of host RAM), so always pass `--cpus` and `-m`.
+
+## Verified (maintainer, as macOS user `factory`)
+
+- `sbx ls` shows no `aiwf-*` after a run.
+- `grep -a -c sk-ant-oat ~/factory/dbos.sqlite` returns 0.
+- `kill -9` mid-run then rerun resumes, with no duplicate and no leftover sandbox (after the `sbx rm --force` fix).
+- A run over `ssh factory@localhost` works with factory's GUI session both open and logged out, but only after `security unlock-keychain ~/Library/Keychains/login.keychain-db`.
+
+## Open for M1 / ADR
+
+- The login keychain is locked in ssh sessions ("User interaction is not allowed"), so m0 prints "No Claude token" until it is unlocked. Unattended or launchd runs need a solution for this.
