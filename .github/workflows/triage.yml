@@ -1,5 +1,5 @@
 # Reusable: Workflow B (issue triage and fixes). WP5: B1 classify on `issues.opened` and on a maintainer's `/retriage`;
-# a new issue's result also goes to chat (WP11b1).
+# a new issue's result, the B4 analysis and a B5 escalation also go to chat (WP11b1, WP11b2).
 # WP6: B2 reproduce (ADR-0037), after B1 for a trusted author's bug, on a maintainer's `/reproduce`, or on the reporter's
 # reply while the issue has `triage: needs-info`. The reproducer runs project commands: sandboxed Bash only, env scrubbed.
 # WP8: B3 analyse after a reproducing B2 (no tools, code in its prompt), B4 analysis comment, `/fix` and `/no-fix`.
@@ -490,6 +490,9 @@ jobs:
     timeout-minutes: 5
     permissions:
       issues: write
+    outputs:
+      alert_text: ${{ steps.publish.outputs.alert_text }}
+      alert_url: ${{ steps.publish.outputs.alert_url }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -501,7 +504,8 @@ jobs:
           path: .ai-workflows
           persist-credentials: false
       - uses: ./.ai-workflows/.github/actions/aiwf-setup
-      - env:
+      - id: publish
+        env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}
@@ -511,6 +515,23 @@ jobs:
           AIWF_ANALYSIS_FILES: files.json
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: aiwf publish --kind analyst --repo "$REPO" --issue "$ISSUE" --run-url "$RUN_URL"
+
+  # "B4 analysis posted" chat alert (spec: Chat notifications, WP11b2): the root cause in one line (agent text, no
+  # clickable link) and the reply to give, to the config's `notify` channels. notify.yml holds the chat secrets; this
+  # job has no token scope. A failed alert is no `ai: error` (aiwf-3ci).
+  notify-analysis:
+    needs: analyse-publish
+    if: needs.analyse-publish.outputs.alert_text != '' && fromJSON(inputs.config).notify != 'none'
+    uses: ./.github/workflows/notify.yml
+    permissions: {}
+    with:
+      channels: ${{ fromJSON(inputs.config).notify }}
+      text: ${{ needs.analyse-publish.outputs.alert_text }}
+      url: ${{ needs.analyse-publish.outputs.alert_url }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
   # B4 commands (spec B4): `/fix [guidance]` or `/no-fix <reason>` from a maintainer (config.yml checked the author,
   # ADR-0005). Acts only while the issue has `triage: awaiting-maintainer`, read live; records the decision in the
@@ -556,6 +577,22 @@ jobs:
       config: ${{ inputs.config }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # "`fix: needs-maintainer`" chat alert (spec: Chat notifications, WP11b2): fix.yml sets it only when the loop
+  # escalated (not when a changed status stopped it, not on an approved fix); links to the issue.
+  notify-fix:
+    needs: fix
+    if: needs.fix.outputs.alert_text != '' && fromJSON(inputs.config).notify != 'none'
+    uses: ./.github/workflows/notify.yml
+    permissions: {}
+    with:
+      channels: ${{ fromJSON(inputs.config).notify }}
+      text: ${{ needs.fix.outputs.alert_text }}
+      url: ${{ needs.fix.outputs.alert_url }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
   # A failed job (ADR-0045): `ai: error` and one sticky error comment with the run link; never retried. Skipped when a
   # job was cancelled (`ai: off`) and when nothing failed. An agent that hits its time limit fails its job (ADR-0050).

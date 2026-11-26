@@ -57,6 +57,21 @@ def one_line(text: str) -> str:
     return text if len(text) <= MAX_TEXT else text[: MAX_TEXT - 1] + "…"
 
 
+def plain(text: str, limit: int = 200) -> str:
+    """Untrusted text for a chat line: one line, capped, and no clickable link (a URL or `www.` gets a zero-width space)."""
+    text = " ".join(str(text).split())[:limit]
+    text = re.sub(r"(?i)\b([a-z][a-z0-9+.-]*)://", "\\1:\u200b//", text)
+    return re.sub(r"(?i)\bwww\.", "www\u200b.", text)
+
+
+def write_alert(text: str, url: str) -> None:
+    """Hand an alert to the workflow's notify job as step outputs `alert_text` and `alert_url` (no-op outside Actions)."""
+    out = os.environ.get("GITHUB_OUTPUT")
+    if out:
+        with open(out, "a", encoding="utf-8") as fh:
+            fh.write(f"alert_text={one_line(text)}\nalert_url={url}\n")
+
+
 def slack_escape(text: str) -> str:
     """Slack mrkdwn control characters; also defuses `<!channel>`-style mentions in untrusted text."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

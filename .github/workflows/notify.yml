@@ -1,6 +1,6 @@
 # Reusable: chat notification (WP11a, ADR-0024). Sends one message per channel (Slack incoming webhook, Telegram Bot
 # API) with a link back to GitHub. With no `text`/`url`, it sends the test event: a test message linking to this run,
-# which a caller runs on workflow_dispatch to check its setup. WP11b wires the 5 spec events to it.
+# which a caller runs on workflow_dispatch to check its setup. WP11b wires the spec events to it (triage.yml calls this workflow for B4 and B5; B1 sends inline).
 # The job holds no GitHub token scope; the secrets reach only the send step, through env vars (GitHub masks them in
 # logs), and aiwf notify never prints them, the request URLs or the chat ID.
 name: ai-workflows notify

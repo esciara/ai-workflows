@@ -12,6 +12,13 @@ on:
         description: Normalised config JSON (output of config.yml)
         type: string
         required: true
+    outputs:
+      alert_text:
+        description: The "fix needs a maintainer" chat alert's text, empty unless the loop escalated (triage.yml sends it)
+        value: ${{ jobs.escalate.outputs.alert_text }}
+      alert_url:
+        description: The alert's link
+        value: ${{ jobs.escalate.outputs.alert_url }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
@@ -496,6 +503,9 @@ jobs:
     permissions:
       contents: read  # whether the fix branch exists, the default branch
       issues: write
+    outputs:
+      alert_text: ${{ steps.escalate.outputs.alert_text }}
+      alert_url: ${{ steps.escalate.outputs.alert_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -508,7 +518,8 @@ jobs:
         with:
           pattern: fix-round-*
           path: records
-      - env:
+      - id: escalate
+        env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           ISSUE: ${{ github.event.issue.number }}

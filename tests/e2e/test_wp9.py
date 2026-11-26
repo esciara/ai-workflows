@@ -35,28 +35,16 @@ WP10's test; this file asserts no non-draft PR either way.
 
 from __future__ import annotations
 
-import base64
 import re
 from typing import Any
 
 import pytest
-import yaml
 
 import playground as pg
 from triage_core import bot_comments, e2e_config, labels
-from triage_fix import (COUPON_BUG, COUPON_FILES, ESCALATE_JOB, FIX_MARKER, GUIDANCE, GUIDANCE_TEXT, NEEDS_MAINTAINER, TAX_BUG,
-                        TAX_FILES, analysis, branch_sha, fix, fix_branch, fix_prs, open_as_reporter, opened,
+from triage_fix import (COUPON_BUG, COUPON_FILES, ESCALATE_JOB, FIX_MARKER, FAIL_LABEL, GUIDANCE, GUIDANCE_TEXT, NEEDS_MAINTAINER, TAX_BUG,
+                        TAX_FILES, analysis, branch_sha, fail_config, fix, fix_branch, fix_prs, open_as_reporter, opened,
                         reproduce_and_analyse, rounds, status, tag)  # noqa: F401 (fixtures)
-
-FAIL_LABEL = "e2e-fix-fail"
-FAIL_CONFIG = ".github/ai-workflows-e2e-fix-fail.yml"
-def fail_config() -> dict[str, Any]:
-    raw = pg.api(f"repos/{pg.REPO}/contents/{FAIL_CONFIG}")
-    cfg = yaml.safe_load(base64.b64decode(raw["content"]))
-    if "exit 1" not in str(cfg.get("test", "")):
-        pytest.fail(f"{FAIL_CONFIG} has no always-failing test command; not a pass", pytrace=False)
-    return cfg
-
 
 def test_fix_with_guidance_runs_the_fix_loop_to_an_approved_branch(e2e_target, tag, opened):
     issue = open_as_reporter("fix", COUPON_BUG, tag, opened)
