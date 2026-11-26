@@ -151,3 +151,12 @@ def test_main_all_pass_and_any_fail(capsys, tmp_path):
     t = st.SelfTest(run=make_run(script), unfinished=iter([0, 1, 0]).__next__, **kw)
     assert st.main(t) == 1
     assert "FAIL no-token-in-db" in capsys.readouterr().out
+
+
+def test_report_prints_the_exception_type_never_its_text(capsys):
+    def crash():
+        raise ValueError("sk-ant-oat-secret")
+
+    assert st.report("x", crash) is False
+    out = capsys.readouterr().out
+    assert "ValueError" in out and "sk-ant-oat-secret" not in out

@@ -194,6 +194,7 @@ def test_classifier_checks_fixes_against_the_config_default_branch(monkeypatch):
     assert _classifier_branch(monkeypatch, lambda a: "{}") == "trunk"
 
 
-def test_classifier_falls_back_to_main_when_the_repo_is_unreadable(monkeypatch):
+def test_classifier_falls_back_to_main_when_the_repo_is_unreadable(monkeypatch, capsys):
     monkeypatch.delenv("AIWF_CONFIG", raising=False)
     assert _classifier_branch(monkeypatch, lambda a: "{}") == "main"
+    assert "::notice title=default branch::" in capsys.readouterr().out
