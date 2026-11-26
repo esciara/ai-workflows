@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.error
 
 import pytest
@@ -125,6 +126,8 @@ def test_plain_is_one_line_capped_and_defuses_links():
     got = n.plain("see\nhttps://evil.example/x and www.evil.example", 200)
     assert "\n" not in got and "https://" not in got and "www." not in got
     assert got.replace("​", "") == "see https://evil.example/x and www.evil.example"
+    bare = n.plain("evil.com/x in src/minicart/cart.py, mail a@b.io v1.2")
+    assert not re.search(r"\.[a-z0-9]|@\w", bare) and bare.replace("\u200b", "").startswith("evil.com/x in src")
     assert len(n.plain("x" * 500)) == 200
 
 
