@@ -521,7 +521,7 @@ jobs:
   # job has no token scope. A failed alert is no `ai: error` (aiwf-3ci).
   notify-analysis:
     needs: analyse-publish
-    if: needs.analyse-publish.outputs.alert_text != '' && fromJSON(inputs.config).notify != 'none'
+    if: ${{ !cancelled() && needs.analyse-publish.outputs.alert_text != '' && fromJSON(inputs.config).notify != 'none' }}
     uses: ./.github/workflows/notify.yml
     permissions: {}
     with:

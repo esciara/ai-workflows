@@ -61,7 +61,9 @@ def plain(text: str, limit: int = 200) -> str:
     """Untrusted text for a chat line: one line, capped, and no clickable link (a URL or `www.` gets a zero-width space)."""
     text = " ".join(str(text).split())[:limit]
     text = re.sub(r"(?i)\b([a-z][a-z0-9+.-]*)://", "\\1:\u200b//", text)
-    return re.sub(r"(?i)\bwww\.", "www\u200b.", text)
+    text = re.sub(r"(?i)\bwww\.", "www\u200b.", text)
+    text = re.sub(r"\.(?=[a-z0-9])", ".\u200b", text, flags=re.I)  # bare domains, `cart.py` and versions do not autolink
+    return re.sub(r"@(?=\w)", "@\u200b", text)  # nor do emails or mentions
 
 
 def write_alert(text: str, url: str) -> None:

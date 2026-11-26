@@ -336,6 +336,7 @@ def alert_of(monkeypatch, tmp_path, **extra):
 
 def test_analysis_alert_names_the_bug_root_cause_and_reply_and_links_the_issue(env, monkeypatch, tmp_path):
     got = alert_of(monkeypatch, tmp_path)
+    got["alert_text"] = got["alert_text"].replace("\u200b", "")  # link-defusing spaces, invisible in chat
     assert got == {"alert_text": f"[{REPO}] Bug #1 analysed: total() keeps <b>@x</b> discount.; reply /fix or /no-fix on GitHub",
                    "alert_url": f"https://github.com/{REPO}/issues/1"}
 
@@ -343,7 +344,8 @@ def test_analysis_alert_names_the_bug_root_cause_and_reply_and_links_the_issue(e
 def test_analysis_alert_defuses_links_in_the_agent_text(env, monkeypatch, tmp_path):
     cause = {"file": "src/minicart/cart.py", "line": 1, "explanation": "see https://evil.example/x\nnow"}
     text = alert_of(monkeypatch, tmp_path, root_cause=cause)["alert_text"]
-    assert "https://" not in text and "\n" not in text and "evil.example/x now" in text
+    assert "https://" not in text and "\n" not in text and "evil.example/x now" in text.replace("\u200b", "")
+    assert "\u200b" in text.split("analysed: ")[1].split(";")[0].split("evil")[1]  # the domain no longer autolinks
 
 
 def test_triage_sends_the_analysis_and_fix_alerts_through_notify_yml():

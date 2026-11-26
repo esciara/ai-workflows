@@ -134,7 +134,6 @@ def alert_messages(run_id: int, job_prefix: str, number: int, e2e_target: str) -
 def test_analysis_and_needs_maintainer_alerts_name_the_issue_and_link_it_on_both_channels(e2e_target, tag, fix_opened):
     cap = fail_config()["limits"]["fix_rounds"]
     issue = open_as_reporter("notify-fix", TAX_BUG, tag, fix_opened)
-    reproduce_and_analyse(issue, TAX_FILES)
     runs: list[dict] = []
     reproduce_and_analyse(issue, TAX_FILES, runs)
     n = issue["number"]
