@@ -1,13 +1,13 @@
 # Factory M0
 
-M0 is the smallest slice of the local AI software factory: a DBOS workflow `hello_two()` in `scripts/aiwf/factory/m0.py` that runs two `claude -p "say hello world"` calls in parallel, each in its own `sbx` sandbox (`aiwf-<workflow_id first 8>-<i>`), through a DBOS queue `sbx` with concurrency 2. State is in SQLite (`~/factory/dbos.sqlite`, override with `AIWF_FACTORY_DB`); the application version is the git SHA (override with `AIWF_FACTORY_VERSION`). Startup first removes every stale `aiwf-*` sandbox. The subscription token is read once at startup from the macOS Keychain of the running user (service `aiwf-claude-oauth`, override with env `CLAUDE_CODE_OAUTH_TOKEN` for tests) and handed to `sbx exec` through the subprocess environment (bare `-e CLAUDE_CODE_OAUTH_TOKEN`), never in argv, DBOS records or logs. Sandboxes are created with `--cpus 2 -m 4g` (override with `AIWF_SBX_CPUS`, `AIWF_SBX_MEMORY`).
+M0 is the smallest slice of the local AI software factory: a DBOS workflow `hello_two()` in `scripts/aiwf/factory/m0.py` that runs two `claude -p "say hello world"` calls in parallel, each in its own `sbx` sandbox (`aiwf-<workflow_id first 8>-<i>`), through a DBOS queue `sbx` with concurrency 2. State is in SQLite (`~/factory/dbos.sqlite`, override with `AIWF_FACTORY_DB`); the application version is the git SHA (override with `AIWF_FACTORY_VERSION`). Startup first removes every stale `aiwf-*` sandbox. The subscription token is read once at startup from the SOPS secrets file of the running user (M1.1, `docs/factory-m1.md`; override with env `CLAUDE_CODE_OAUTH_TOKEN` for tests) and handed to `sbx exec` through the subprocess environment (bare `-e CLAUDE_CODE_OAUTH_TOKEN`), never in argv, DBOS records or logs. Sandboxes are created with `--cpus 2 -m 4g` (override with `AIWF_SBX_CPUS`, `AIWF_SBX_MEMORY`).
 
 The sbx create and exec forms were confirmed by a real run; bare `-e KEY` on `exec` and `ls --quiet` are still unverified. They live in one marked block in `m0.py`, with the `--env-file` fallback described there.
 
 ## Set-up (once, as user `factory`)
 
 - Set the sbx network policy once beforehand with `sbx policy` (the first run otherwise asks an interactive question).
-- Store the token in the Keychain: `security add-generic-password -a factory -s aiwf-claude-oauth -w` (it prompts; paste the token).
+- Store the token in the SOPS file as described in `docs/factory-m1.md` (the Keychain read of M0 is gone).
 - Have no sbx secret for anthropic: remove any existing one with `sbx secret rm anthropic`, and custom ones by their placeholder.
 
 ## Run (as user `factory`)
@@ -21,7 +21,7 @@ Output: two JSON lines, each with `sandbox`, `start`, `end` (taken inside the st
 
 ## Self-test (once, as user `factory`)
 
-- Run `scripts/dev/factory-selftest` from the repo checkout (for example `cd ~/factory/src && scripts/dev/factory-selftest`). It runs the Keychain probe first and stops with the exact fix command if the Keychain is locked or the item is missing (it never asks for, reads or stores a password or the token), then the normal run, the token-not-in-`dbos.sqlite` check and the `kill -9` resume check.
+- Run `scripts/dev/factory-selftest` from the repo checkout (for example `cd ~/factory/src && scripts/dev/factory-selftest`). It runs `doctor` first and stops with its FAIL lines if the key file mode, the decryption or sbx is wrong (it never asks for, reads or stores a password or the token), then the normal run, the token-not-in-`dbos.sqlite` check and the `kill -9` resume check.
 - Output is one PASS or FAIL line per check and a `SUMMARY` line; the exit code is non-zero on any FAIL. The run takes a few minutes and starts real sandboxes.
 - Run it after any change to the sandbox or token code, after a reboot, and after an `sbx` or DBOS upgrade.
 
@@ -48,4 +48,4 @@ Output: two JSON lines, each with `sandbox`, `start`, `end` (taken inside the st
 
 ## Open for M1 / ADR
 
-- The login keychain is locked in ssh sessions ("User interaction is not allowed"), so m0 prints "No Claude token" until it is unlocked. Unattended or launchd runs need a solution for this.
+- The login keychain is locked in ssh sessions ("User interaction is not allowed"), so M0 needed a manual unlock. Solved in M1.1 by the SOPS + age file (no Keychain).

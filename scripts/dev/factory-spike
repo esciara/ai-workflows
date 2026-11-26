@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Usage: scripts/dev/factory-spike   (as macOS user `factory`, in the checkout, normally started by the spike LaunchDaemon)
+# M1.1 spike checks, one PASS/FAIL line each, exit non-zero on any FAIL. Never prints or takes a secret.
+set -euo pipefail
+cd "$(cd "$(dirname "$0")/../.." && pwd)"
+exec uv run --extra factory python -m aiwf.factory.spike

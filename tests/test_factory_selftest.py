@@ -23,6 +23,7 @@ def make_run(script):
 
 
 M0 = st.M0_CMD
+DOCTOR = st.DOCTOR_CMD
 
 
 def test_aiwf_sandboxes_parses_quiet_and_table():
@@ -36,19 +37,17 @@ def test_count_results():
     assert st.count_results("x\n" + TWO) == 2
 
 
-def test_keychain_verdicts():
-    assert st.keychain_verdict(0, "", "factory")[0]
-    ok, msg = st.keychain_verdict(36, "User interaction is not allowed.", "factory")
-    assert not ok and "security unlock-keychain ~/Library/Keychains/login.keychain-db" in msg
-    ok, msg = st.keychain_verdict(44, "The specified item could not be found", "factory")
-    assert not ok and "add-generic-password -a factory -s aiwf-claude-oauth -w" in msg
-    assert not st.keychain_verdict(1, "weird", "factory")[0]
+def test_doctor_verdicts():
+    assert st.doctor_verdict(0, "ok   tools: fine")[0]
+    ok, msg = st.doctor_verdict(1, "ok   tools: x\nFAIL key-file: key file has mode 0644\n")
+    assert not ok and "mode 0644" in msg and "tools" not in msg
+    assert not st.doctor_verdict(2, "")[0]
 
 
-def test_keychain_probe_has_no_w_flag():
-    run = make_run([(["security"], (0, "SECRET-OUTPUT", ""))])
-    assert st.SelfTest(run=run).check_keychain()[0]
-    assert "-w" not in run.calls[0]
+def test_doctor_check_runs_doctor():
+    run = make_run([(["uv"], (0, "ok   x", ""))])
+    assert st.SelfTest(run=run).check_doctor()[0]
+    assert run.calls[0][-1] == "doctor"
 
 
 def test_normal_run_pass_and_leftover_fail():
@@ -134,15 +133,15 @@ def test_kill_resume_fails():
     assert not st.SelfTest(run=run, unfinished=iter([0, 1, 0]).__next__, **kw).check_kill_resume()[0]
 
 
-def test_main_stops_at_keychain(capsys):
-    run = make_run([(["security"], (36, "", "User interaction is not allowed."))])
+def test_main_stops_at_doctor(capsys):
+    run = make_run([(DOCTOR, (1, "FAIL key-file: key file has mode 0644", ""))])
     assert st.main(st.SelfTest(run=run)) == 1
     out = capsys.readouterr().out
-    assert out.startswith("FAIL keychain") and "unlock-keychain" in out and len(run.calls) == 1
+    assert out.startswith("FAIL doctor") and "0644" in out and len(run.calls) == 1
 
 
 def test_main_all_pass_and_any_fail(capsys, tmp_path):
-    script = [(["security"], (0, "", "")), (M0, (0, TWO, "")), (["sbx", "ls"], (0, "", "")), (["grep"], (1, "0\n", ""))]
+    script = [(DOCTOR, (0, "", "")), (M0, (0, TWO, "")), (["sbx", "ls"], (0, "", "")), (["grep"], (1, "0\n", ""))]
     kw = dict(spawn=Proc, sleep=lambda s: None, home=tmp_path, kill=lambda p: None)
     t = st.SelfTest(run=make_run(script), unfinished=iter([0, 1, 0]).__next__, **kw)
     assert st.main(t) == 0
