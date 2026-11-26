@@ -223,7 +223,7 @@ The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrato
 
 | Role | Reads untrusted text | Can write | Secrets | Used in |
 | --- | --- | --- | --- | --- |
-| Orchestrator | No (passes structured outputs only) | Labels, comments, branches via the workflow's GITHUB\_TOKEN; opens no PRs, permissions scoped per job. On the Mac factory (ADR-0064): the host-side orchestrator (macOS user `factory`, outside the sandbox) writes as its own GitHub App, scoped to the playground, with per-step narrowed tokens | CLAUDE\_CODE\_OAUTH\_TOKEN for the model; GITHUB\_TOKEN or any write token never handed to agent steps, in any sandbox ([SEC-05](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | A, B |
+| Orchestrator | No (passes structured outputs only) | Labels, comments, branches via the workflow's GITHUB\_TOKEN; opens no PRs, permissions scoped per job. On the Mac factory (ADR-0064): the host-side orchestrator (macOS user `factory`, outside the sandbox) writes as its own GitHub App, scoped to the playground, with per-step narrowed tokens | CLAUDE\_CODE\_OAUTH\_TOKEN for the model (on the Mac factory a separate token made for the factory only, ADR-0065); GITHUB\_TOKEN or any write token never handed to agent steps, in any sandbox ([SEC-05](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | A, B |
 | Classifier | Yes | Nothing; returns JSON | None | B1 |
 | Reproducer | Yes | Its own sandbox only; Bash runs sandboxed | Model token only, scrubbed from every Bash environment (ADR-0037); egress allowlist ([SEC-06](https://claude.ai/artifact/Xmwee4XtZwsKPWUStFADhW#mzxc5xwx2hg.6626)) | B2 |
 | Analyst | Repro output, code | Nothing; returns the report | None | B3 |
