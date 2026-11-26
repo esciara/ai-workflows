@@ -4,7 +4,6 @@
 - Date: 2026-11-19
 - Deciders: maintainer
 - Alias: `D63`
-- Amended by: ADR-0064
 
 ## Context
 

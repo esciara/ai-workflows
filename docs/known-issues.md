@@ -45,7 +45,7 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Date: 2026-11-26
 - What: the factory runner's App has no `contents: write` (ADR-0064 decision 5), so it cannot call `resolveReviewThread` (ADR-0062); threads it opens on `factory/*` PRs on the playground stay open after a fix.
 - Why it matters: fixed findings stay open until a person resolves them; only affects playground test PRs.
-- Current mitigation: none needed in M1. Add `contents: write` to the App only with a new ADR, if the factory leaves the playground.
+- Current mitigation: none needed in M1. Widening the App's permissions (for example `contents: write`) is a change to ADR-0064 decision 2 and needs the maintainer's go; consider it only if the factory leaves the playground.
 - Priority: P3.
 - ADR: [ADR-0064](adr/0064-mac-factory-runner-own-github-app-and-secrets-at-rest.md)
 
