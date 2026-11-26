@@ -94,6 +94,7 @@ def test_hook_is_registered_for_bash_and_the_script_exists():
     "git log -p '--output'=/tmp/x", "git diff \\--output=/tmp/x", 'git diff --out""put=/tmp/x', "git diff --ext main...HEAD",
     "git log -p --ext-dif", "git -C . -c diff.external=sh diff", "git --attr-source HEAD -c diff.external=sh diff", "git --no-pager -c core.pager=x log",
     "git --config-env=diff.external=E diff", 'g""it diff --output=/tmp/x', "git diff --textc HEAD", "git diff 'unterminated", "ls; git show --output=a HEAD",
+    "git diff $'--output=/x' main", "git diff $(printf -- --output)=x main", "git log `echo --output`=x", 'git diff "$FLAG" main',
 ])
 def test_hook_denies_write_and_exec_flags(command):
     assert hook().denied(command)
@@ -119,3 +120,9 @@ def test_hook_process_exits_2_with_a_message_to_deny_and_0_to_allow():
     assert denied.returncode == 2 and "--output" in denied.stderr
     assert run_hook("git diff main...HEAD").returncode == 0
     assert run_hook("").returncode == 0
+
+
+def test_hook_fails_closed_on_malformed_stdin():
+    for bad in ("not json", "[]", ""):
+        res = subprocess.run([sys.executable, str(PLUGIN / "hooks" / "deny_write_flags.py")], capture_output=True, text=True, input=bad)
+        assert res.returncode == 2 and res.stderr

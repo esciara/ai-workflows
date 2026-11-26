@@ -5,7 +5,9 @@ The skills pre-approve `git diff|log|show|blame` by prefix, which also matches t
 stdin; exit 2 with a message on stderr denies the call, any other exit allows it. Only `git diff|log|show|blame` are checked (the pre-approved prefixes); other git commands are left to the user's own permissions.
 The command is tokenised like a shell would (quotes and backslashes resolved), a command that cannot be parsed is denied,
 and long options are matched by prefix, since git accepts unique abbreviations (`--ext` for `--ext-diff`).
-Limit: shell expansion (variables, command substitution) is not resolved.
+Any token containing `$` or a backtick in these segments is denied, since expansion cannot be resolved statically.
+Limit: redirection (`>`) and other shell features outside git diff|log|show|blame are not handled. The hook fails
+closed: malformed input or an internal error denies the call (exit 2).
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ import shlex
 import sys
 
 LONG = ("--output", "--ext-diff", "--textconv", "--exec-path", "--open-files-in-pager")
-MIN_ABBREV = 5  # "--ext", "--outp": git's shortest unique abbreviations are at least this long
+MIN_ABBREV = 5  # shortest prefix we treat as an abbreviation of a LONG option (e.g. "--ext", "--outp")
 
 
 def tokens(command: str) -> list[str] | None:
@@ -28,8 +30,8 @@ def tokens(command: str) -> list[str] | None:
 
 
 SAFE = {"--text"}  # a real, read-only git option that is also a prefix of --textconv
-VALUE_OPTS = {"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--attr-source"}
-READ_SUBCOMMANDS = {"diff", "log", "show", "blame"}  # the pre-approved prefixes; other git work is left alone  # global options with a separate value
+VALUE_OPTS = {"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--attr-source"}  # global options with a separate value
+READ_SUBCOMMANDS = {"diff", "log", "show", "blame"}  # the pre-approved prefixes; other git work is left alone
 
 
 def denied(command: str) -> str | None:
@@ -61,6 +63,9 @@ def denied(command: str) -> str | None:
             if arg == "-c" or arg.startswith("--config-env"):
                 return f"ai-workflows plugin: `git {arg.split('=')[0]}` is not allowed (read-only, local-only skills)"
         for arg in args:
+            if "$" in arg or "`" in arg:
+                return "ai-workflows plugin: shell expansion (`$`, backtick) is not allowed in git commands (read-only, local-only skills)"
+        for arg in args:
             name = arg.split("=", 1)[0]
             if (arg.startswith("--") and name not in SAFE and len(name) >= MIN_ABBREV
                     and any(opt.startswith(name) for opt in LONG)):
@@ -71,9 +76,10 @@ def denied(command: str) -> str | None:
 def main() -> int:
     try:
         command = json.load(sys.stdin).get("tool_input", {}).get("command", "")
-    except (ValueError, AttributeError):
-        return 0
-    reason = denied(command if isinstance(command, str) else "")
+        reason = denied(command if isinstance(command, str) else "")
+    except Exception:  # fail closed: malformed stdin or any bug denies the call
+        print("ai-workflows plugin: hook could not check the command, denied", file=sys.stderr)
+        return 2
     if reason:
         print(reason, file=sys.stderr)
         return 2
