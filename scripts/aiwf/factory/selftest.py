@@ -6,6 +6,9 @@ the Keychain probe runs without `-w` and its output is discarded.
 
 import json
 import os
+import re
+import signal
+import sqlite3
 import subprocess
 import sys
 import time
@@ -18,6 +21,7 @@ KEYCHAIN_FILE = "~/Library/Keychains/login.keychain-db"
 KILL_AFTER = 5.0
 M0_CMD = ["uv", "run", "python", "-m", "aiwf.factory.m0"]
 TOKEN_PREFIX = "sk-ant-oat"
+HELLO_RE = re.compile(r"hello,?\s+world", re.IGNORECASE)  # the prompt is "say hello world": punctuation varies
 
 Result = tuple[bool, str]
 # run(args, timeout) -> (returncode, stdout, stderr); injected in tests
@@ -47,7 +51,7 @@ def count_hello_results(out: str) -> int:
             obj = json.loads(line)
         except ValueError:
             continue
-        if isinstance(obj, dict) and "sandbox" in obj and "hello, world!" in json.dumps(obj.get("output")).lower():
+        if isinstance(obj, dict) and "sandbox" in obj and HELLO_RE.search(json.dumps(obj.get("output"))):
             n += 1
     return n
 
@@ -81,14 +85,29 @@ def keychain_verdict(rc: int, stderr: str, user: str) -> Result:
     return False, f"Keychain probe failed (rc={rc}): {unlock}, or check the item exists"
 
 
+def unfinished_hello_two(db: str) -> int:
+    """Count hello_two workflows in the DBOS SQLite that are not finished (read-only)."""
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        return con.execute(
+            "SELECT count(*) FROM workflow_status WHERE name = 'hello_two' AND status IN ('PENDING', 'ENQUEUED')"
+        ).fetchone()[0]
+    finally:
+        con.close()
+
+
 class SelfTest:
     def __init__(self, run: Runner = default_run, spawn=None, sleep=time.sleep, home: Path | None = None,
-                 user: str = "factory"):
+                 user: str = "factory", unfinished=None, kill=None):
         self.run, self.sleep, self.user = run, sleep, user
+        # new session so that SIGKILL reaches the whole group: `uv run` would otherwise die and orphan python
         self.spawn = spawn or (lambda: subprocess.Popen(
-            M0_CMD, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            M0_CMD, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True))
+        self.kill = kill or (lambda proc: os.killpg(proc.pid, signal.SIGKILL))
         db = os.environ.get("AIWF_FACTORY_DB") or str((home or Path.home()) / "factory" / "dbos.sqlite")
         self.db = db
+        self.unfinished = unfinished or (lambda: unfinished_hello_two(db))
 
     def leftover(self) -> list[str]:
         rc, out, _ = self.run(["sbx", "ls"], 120)
@@ -126,14 +145,19 @@ class SelfTest:
         self.sleep(KILL_AFTER)
         if proc.poll() is not None:
             return False, f"m0 ended on its own (rc={proc.returncode}) before the kill; nothing was tested"
-        proc.kill()  # SIGKILL
+        self.kill(proc)
         proc.wait()
+        pending = self.unfinished()
+        if pending != 1:
+            return False, f"after the kill expected 1 unfinished hello_two in the DB, found {pending}; nothing to resume"
         rc, out, _ = self.run(M0_CMD, 900)
         if rc != 0:
             return False, f"rerun exited rc={rc}"
         total = count_results(out)
         if total != 2:
             return False, f"rerun printed {total} results, expected exactly 2"
+        if self.unfinished() != 0:
+            return False, "a hello_two is still unfinished after the rerun"
         left = self.leftover()
         if left:
             return False, f"sandboxes left after resume: {', '.join(left)}"
@@ -156,8 +180,8 @@ def main(st: SelfTest | None = None) -> int:
         return 1
     results = [
         report("normal-run", st.check_normal_run),
-        report("no-token-in-db", st.check_no_token_in_db),
         report("kill-resume", st.check_kill_resume),
+        report("no-token-in-db", st.check_no_token_in_db),  # last: covers everything the runs wrote
     ]
     passed = sum(results) + 1  # the keychain check passed to get here
     print(f"SUMMARY: {'PASS' if all(results) else 'FAIL'} ({passed}/{len(results) + 1} checks passed)")
