@@ -88,7 +88,7 @@ def test_hook_is_registered_for_bash_and_the_script_exists():
     assert "${CLAUDE_PLUGIN_ROOT}/hooks/deny_write_flags.py" in entry["hooks"][0]["command"]
 
 
-DENIED = [
+CANDIDATES = [
     "git diff --output=/tmp/x main...HEAD", "git diff --output /tmp/x", "git log --ext-diff -p", "git show --textconv HEAD:a",
     "git -c core.pager=evil diff", "cd x && git diff --output=y", 'git diff "--output=/tmp/x" main...HEAD',
     "git log -p '--output'=/tmp/x", "git diff \\--output=/tmp/x", 'git diff --out""put=/tmp/x', "git diff --ext main...HEAD",
@@ -103,15 +103,29 @@ DENIED = [
 ]
 
 
+GUARDED = re.compile(r"\s*git\s+(diff|log|show|blame)(\s|$)")
+DENIED = [c for c in CANDIDATES if GUARDED.match(c)]
+NOT_CAUGHT = [c for c in CANDIDATES if not GUARDED.match(c)]
+
+
+def test_the_guarded_cases_are_not_empty():
+    assert len(DENIED) > 25 and NOT_CAUGHT
+
+
 @pytest.mark.parametrize("command", DENIED)
-def test_hook_denies_everything_but_the_strict_form(command):
+def test_hook_denies_guarded_commands_that_are_not_the_strict_form(command):
     assert run_hook(command).returncode == 2
+
+
+@pytest.mark.parametrize("command", NOT_CAUGHT + ["g$()it diff --output=OUT", "$'g\\151t' diff --output=OUT", "GIT diff --output=OUT", "g*t diff --output=OUT"])
+def test_documented_limit_obfuscated_or_prefixed_commands_are_not_caught(command):
+    assert run_hook(command).returncode == 0  # left to Claude Code's own permission prompt
 
 
 @pytest.mark.parametrize("command", [
     "git diff main...HEAD", "git log --oneline main..HEAD", "git show HEAD:cart.py", "gh issue view 12 --comments",
     "git merge-base main HEAD", "ls -o", "grep -c foo a", "git diff --exit-code main", "git log -c -1", "git show -c HEAD",
-    "git blame -L 1,5 src/a.py", "git diff HEAD~1 -- src/a.py", 'echo "hello"', "git commit -m x",
+    "git blame -L 1,5 src/a.py", "git log --format=%H -n 3", "git rev-parse --show-toplevel", "git status --short", "git merge-base main HEAD", "gh issue view 7", "git diff HEAD~1 -- src/a.py", 'echo "hello"', "git commit -m x",
 ])
 def test_hook_allows_plain_reads_and_ignores_unrelated_commands(command):
     assert run_hook(command).returncode == 0
