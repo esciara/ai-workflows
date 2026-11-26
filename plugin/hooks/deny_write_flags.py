@@ -1,75 +1,42 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: deny git flags that write files or run external programs (--output, --ext-diff, --textconv, -c).
+"""PreToolUse hook: best-effort guard for the skills' pre-approved `git diff|log|show|blame` prefixes.
 
-The skills pre-approve `git diff|log|show|blame` by prefix, which also matches these flags. Reads the hook JSON on
-stdin; exit 2 with a message on stderr denies the call, any other exit allows it. Only `git diff|log|show|blame` are checked (the pre-approved prefixes); other git commands are left to the user's own permissions.
-The command is tokenised like a shell would (quotes and backslashes resolved), a command that cannot be parsed is denied,
-and long options are matched by prefix, since git accepts unique abbreviations (`--ext` for `--ext-diff`).
-Any token containing `$` or a backtick in these segments is denied, since expansion cannot be resolved statically.
-Limit: redirection (`>`) and other shell features outside git diff|log|show|blame are not handled. The hook fails
-closed: malformed input or an internal error denies the call (exit 2).
+Reads the hook JSON on stdin; exit 2 with a message on stderr denies the call, exit 0 leaves the normal permission flow.
+A command that does not mention both `git` and one of diff, log, show, blame (quotes, backslashes and newlines ignored) is not this hook's business (exit 0).
+Any other command that mentions them must match, as a whole and on the raw string (no shell parsing), the strict form
+`git <diff|log|show|blame>` followed by single-space-separated words made only of [A-Za-z0-9_./:@^~=,+-]. That rules out
+quotes, backslashes, `$`, backticks, braces, redirections, process substitution, `;|&()`, newlines, tabs and globs, so no
+shell feature can hide a flag. Even in that character set, `--output*`, `--ext-diff`, `--textconv`, `--exec-path`,
+`--open-files-in-pager`, `-O*` and abbreviations of them (`--out`, `--ext`, `--text`) are denied.
+It is defence in depth, not a sandbox. It fails closed: malformed input or an internal error denies the call.
 """
 
 from __future__ import annotations
 
 import json
-import shlex
+import re
 import sys
 
+ALLOWED = re.compile(r"git (?:diff|log|show|blame)(?: [A-Za-z0-9_./:@^~=,+-]+)*")
+OBFUSCATION = re.compile(r"[\\\\\"'\n]")
+MENTIONS = re.compile(r"git")
+SUBCOMMANDS = re.compile(r"diff|log|show|blame")
 LONG = ("--output", "--ext-diff", "--textconv", "--exec-path", "--open-files-in-pager")
-MIN_ABBREV = 5  # shortest prefix we treat as an abbreviation of a LONG option (e.g. "--ext", "--outp")
-
-
-def tokens(command: str) -> list[str] | None:
-    try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
-        lexer.whitespace_split = True
-        return list(lexer)
-    except ValueError:
-        return None
-
-
-SAFE = {"--text"}  # a real, read-only git option that is also a prefix of --textconv
-VALUE_OPTS = {"-C", "--git-dir", "--work-tree", "--namespace", "--super-prefix", "--attr-source"}  # global options with a separate value
-READ_SUBCOMMANDS = {"diff", "log", "show", "blame"}  # the pre-approved prefixes; other git work is left alone
+MIN_ABBREV = 3  # "--o" is the shortest prefix of a LONG option that we deny
 
 
 def denied(command: str) -> str | None:
-    toks = tokens(command)
-    if toks is None:
-        return "ai-workflows plugin: the command could not be parsed, denied" if "git" in command else None
-    for i, tok in enumerate(toks):
-        if tok != "git" and not tok.endswith("/git"):
-            continue
-        rest = toks[i + 1:]
-        end = next((j for j, t in enumerate(rest) if t and set(t) <= set(";&|()")), len(rest))
-        args = rest[:end]
-        skip, sub, global_flags = False, None, []
-        for arg in args:  # global options come before the subcommand, in any order
-            if skip:
-                skip = False
-            elif arg in VALUE_OPTS or arg in ("-c", "--config-env"):
-                skip = True
-                if arg in ("-c", "--config-env"):
-                    global_flags.append(arg)
-            elif not arg.startswith("-"):
-                sub = arg
-                break
-            else:
-                global_flags.append(arg)
-        if sub not in READ_SUBCOMMANDS:
-            continue
-        for arg in global_flags:
-            if arg == "-c" or arg.startswith("--config-env"):
-                return f"ai-workflows plugin: `git {arg.split('=')[0]}` is not allowed (read-only, local-only skills)"
-        for arg in args:
-            if "$" in arg or "`" in arg:
-                return "ai-workflows plugin: shell expansion (`$`, backtick) is not allowed in git commands (read-only, local-only skills)"
-        for arg in args:
-            name = arg.split("=", 1)[0]
-            if (arg.startswith("--") and name not in SAFE and len(name) >= MIN_ABBREV
-                    and any(opt.startswith(name) for opt in LONG)):
-                return f"ai-workflows plugin: `{name}` is not allowed in git commands (read-only, local-only skills)"
+    plain = OBFUSCATION.sub("", command)  # so that `g""it`, `gi\\<newline>t` or `di\\<newline>ff` still count as mentions
+    if not (MENTIONS.search(plain) and SUBCOMMANDS.search(plain)):
+        return None
+    if not ALLOWED.fullmatch(command):
+        return ("ai-workflows plugin: only plain `git diff|log|show|blame <words>` is allowed here (letters, digits and "
+                "_./:@^~=,+- only; no quotes, expansion, pipes, redirection or chaining)")
+    for arg in command.split(" ")[2:]:
+        name = arg.split("=", 1)[0]
+        if arg.startswith("-O") or (name.startswith("--") and len(name) >= MIN_ABBREV
+                                    and any(opt.startswith(name) or name.startswith(opt) for opt in LONG)):
+            return f"ai-workflows plugin: `{name}` is not allowed in git commands (read-only, local-only skills)"
     return None
 
 
