@@ -40,6 +40,15 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Priority: P3.
 - ADR: [ADR-0005](adr/0005-command-authors.md)
 
+### Factory-run Workflow A reviews do not resolve their threads
+
+- Date: 2026-11-26
+- What: the factory runner's App has no `contents: write` (ADR-0064 decision 5), so it cannot call `resolveReviewThread` (ADR-0062); threads it opens on `factory/*` PRs on the playground stay open after a fix.
+- Why it matters: fixed findings stay open until a person resolves them; only affects playground test PRs.
+- Current mitigation: none needed in M1. Add `contents: write` to the App only with a new ADR, if the factory leaves the playground.
+- Priority: P3.
+- ADR: [ADR-0064](adr/0064-mac-factory-runner-own-github-app-and-secrets-at-rest.md)
+
 ## Accepted risks
 
 ### Unreviewed code on `e2e-target-<n>` runs with playground secrets
@@ -70,3 +79,13 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Current mitigation: the policy test pins that only `resolve-threads` writes contents in review.yml, with no agent step and no PR checkout; the job runs from the pinned release SHA.
 - Priority: P3, until GitHub allows the mutation with a narrower scope.
 - ADR: [ADR-0062](adr/0062-thread-resolve-in-its-own-write-job.md)
+
+### Factory runner: model token inside the sbx VM, secrets decryptable with the age key file
+
+- Date: 2026-11-26
+- What: the factory runner on the Mac passes `CLAUDE_CODE_OAUTH_TOKEN` into each sbx VM with `sbx exec -e` (the sbx secret proxy fails with subscription tokens). Tool-less review agents, no GitHub credential in the VM and Anthropic-only egress limit what code in the VM can do. At rest, the token and the factory App key sit in a SOPS-encrypted file whose age key is a 0600 file of the `factory` user, readable by `factory` and by admins.
+- Why it matters: a sandbox escape, a mistake in the egress policy or code running as `factory` could read the token (subscription misuse until revoked) and the App key (write on the playground only).
+- Current mitigation: accepted risk (maintainer, 2026-11-26). Token never in argv, DBOS records or logs; the App is installed on the playground only with no contents write; FileVault; Time Machine excludes the key file.
+- Upgrade trigger (ADR-0064 decision 7): new ADR before any other repo, agents with tools or a workspace mount on the Mac, a second admin or user, or any sign of misuse; it weighs unseal after boot, the age key in the Secure Enclave or a hardware key, a credential proxy, a token vendor.
+- Priority: P2, before the factory leaves the playground.
+- ADR: [ADR-0064](adr/0064-mac-factory-runner-own-github-app-and-secrets-at-rest.md)
