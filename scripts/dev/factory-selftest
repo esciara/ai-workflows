@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Usage: scripts/dev/factory-selftest   (once, as macOS user `factory`, in the repo checkout, e.g. ~/factory/src)
+# Runs the M0 acceptance checks; one PASS/FAIL line each, exit non-zero on any FAIL. Never asks for or reads a secret.
+set -euo pipefail
+cd "$(cd "$(dirname "$0")/../.." && pwd)"
+exec uv run python -m aiwf.factory.selftest

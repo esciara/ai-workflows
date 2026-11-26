@@ -19,6 +19,12 @@ The sbx create and exec forms were confirmed by a real run; bare `-e KEY` on `ex
 
 Output: two JSON lines, each with `sandbox`, `start`, `end` (taken inside the step) and `output`.
 
+## Self-test (once, as user `factory`)
+
+- Run `scripts/dev/factory-selftest` from the repo checkout (for example `cd ~/factory/src && scripts/dev/factory-selftest`). It runs the Keychain probe first and stops with the exact fix command if the Keychain is locked or the item is missing (it never asks for, reads or stores a password or the token), then the normal run, the token-not-in-`dbos.sqlite` check and the `kill -9` resume check.
+- Output is one PASS or FAIL line per check and a `SUMMARY` line; the exit code is non-zero on any FAIL. The run takes a few minutes and starts real sandboxes.
+- Run it after any change to the sandbox or token code, after a reboot, and after an `sbx` or DBOS upgrade.
+
 ## Done checks
 
 - The two outputs overlap in time (start/end timestamps).
