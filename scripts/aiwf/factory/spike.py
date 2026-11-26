@@ -21,7 +21,11 @@ def sh(args: list[str], env: dict | None = None, stdin: str | None = None, timeo
 
 
 def main() -> int:
-    token = secrets.read_secret(secrets.CLAUDE_OAUTH)
+    try:
+        token = secrets.read_secret(secrets.CLAUDE_OAUTH)
+    except secrets.SecretsError as e:
+        print(f"FAIL secrets: {e}\nSUMMARY: FAIL; M1 stops and comes back as an ask")
+        return 1
     env = {**os.environ, m0.TOKEN_ENV: token}
     results: list[bool] = []
 
@@ -32,12 +36,14 @@ def main() -> int:
     rc, out = sh(["sbx", "ls", "--quiet"])
     report("sbx-no-gui", rc == 0, "sbx ls works" if rc == 0 else f"sbx ls rc={rc}: no GUI session or sbx login missing?")
     if rc != 0:
+        print("SUMMARY: FAIL; M1 stops and comes back as an ask")
         return 1
     sh(m0.sbx_rm_args(NAME))
     try:
         rc, _ = sh(m0.sbx_create_args(NAME))
         report("sbx-create", rc == 0, f"rc={rc}")
         if rc != 0:
+            print("SUMMARY: FAIL; M1 stops and comes back as an ask")
             return 1
         # prompt on stdin, token only through the environment (bare -e KEY); no prompt argument
         args = ["sbx", "exec", "-i", "-e", m0.TOKEN_ENV, NAME, "claude", "-p", "--output-format", "json"]

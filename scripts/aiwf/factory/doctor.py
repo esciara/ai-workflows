@@ -11,7 +11,7 @@ from pathlib import Path
 
 from aiwf.factory import secrets
 
-TOOLS = ("sops", "age", "sbx", "uv", "git")
+TOOLS = ("sops", "sbx", "uv", "git")
 Result = tuple[bool, str]
 
 
