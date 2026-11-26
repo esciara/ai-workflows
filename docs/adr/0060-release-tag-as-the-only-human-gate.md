@@ -4,7 +4,7 @@
 - Date: 2026-11-15
 - Deciders: maintainer
 - Alias: `D60`
-- Amended by: ADR-0064 (point 1 list gains `scripts/aiwf/factory/` and `templates/factory/`)
+- Amended by: ADR-0064 (point 1 list gains `scripts/aiwf/factory/` and `templates/factory/`), [ADR-0065](0065-agent-sessions-as-their-own-macos-user-with-a-token-broker.md) (point 1 list gains the broker)
 - Amends: [ADR-0051](0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (gates up front, CODEOWNERS exceptions, `verdict` as a required check), [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (points 1 and 2: `verdict` and the ruleset as the merge gate)
 - Supersedes: [ADR-0055](archive/0055-verdict-check-states-before-a-review-exists.md) (`verdict` states no longer gate; withdrawn by the maintainer 2026-11-15)
 
