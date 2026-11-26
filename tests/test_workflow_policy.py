@@ -397,10 +397,10 @@ def test_the_token_check_stays_inline_in_the_workflow():
 def test_the_token_check_copies_are_identical():
     # aiwf-yeb: the check cannot be a shared action (see above), so the inline copies must not drift apart.
     # if, env and run all count: a changed env or condition would weaken the check as much as a changed script.
-    checks = {w: {k: str(st.get(k)) for k in ("id", "if", "env", "run")} for w, _, st in _agent_steps() if st.get("name") == "Token check"}
+    checks = [(w, str(st)) for w, _, st in _agent_steps() if st.get("name") == "Token check"]
     assert len(checks) >= 4, checks  # the reproducer (B2) and the implementer of each B5 round
-    assert len({str(c) for c in checks.values()}) == 1, checks
-    assert all("patch.diff" in c["run"] for c in checks.values())
+    assert len({c for _, c in checks}) == 1, checks  # the whole step, not selected keys
+    assert all("patch.diff" in c for _, c in checks)
 
 
 # --- verdict check (ADR-0053, states ADR-0055): check-run plus a `verdict` commit status of the same name -----------
