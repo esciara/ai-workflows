@@ -6,6 +6,7 @@ subprocess environment only: never in argv, never as a step argument, never logg
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -18,13 +19,19 @@ QUEUE_NAME = "sbx"
 PREFIX = "aiwf-"
 TIMEOUT = 600
 TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN"
+TEST_FLAG = "AIWF_FACTORY_TEST"  # the env token override is honoured only when this is "1" (ADR-0064 d5)
+MAX_TURNS = "3"
+DEFAULT_MAX_FAILURES = 3
 _token: str | None = None  # module-level on purpose: DBOS stores step args in SQLite, so steps read it from here
 
 
 def load_token() -> None:
-    """Read the token once at startup: env override for tests, else the SOPS file (ADR-0064). Never echo the value."""
+    """Read the token once at startup from the SOPS file (ADR-0064). The env override works only with AIWF_FACTORY_TEST=1.
+
+    Never echo the value.
+    """
     global _token
-    tok = os.environ.get(TOKEN_ENV, "").strip()
+    tok = os.environ.get(TOKEN_ENV, "").strip() if os.environ.get(TEST_FLAG) == "1" else ""
     if not tok:
         try:
             tok = secrets.read_secret(secrets.CLAUDE_OAUTH)
@@ -52,7 +59,12 @@ def sbx_create_args(name: str) -> list[str]:
 
 
 def sbx_exec_args(name: str) -> list[str]:
-    return ["sbx", "exec", "-e", TOKEN_ENV, name, "claude", "-p", "say hello world", "--output-format", "json"]
+    # ADR-0064 d3: no tools but StructuredOutput, user settings only, no MCP, bounded turns
+    max_turns = os.environ.get("AIWF_MAX_TURNS", MAX_TURNS)
+    return [
+        "sbx", "exec", "-e", TOKEN_ENV, name, "claude", "-p", "say hello world", "--output-format", "json",
+        "--tools", "StructuredOutput", "--setting-sources", "user", "--strict-mcp-config", "--max-turns", max_turns,
+    ]  # fmt: skip
 
 
 def sbx_rm_args(name: str) -> list[str]:
@@ -77,22 +89,70 @@ def run_sbx(args: list[str], check: bool = True, with_token: bool = False) -> st
 
 
 def sandbox_name(workflow_id: str, i: int) -> str:
-    return f"{PREFIX}{workflow_id[:8]}-{i}"
+    """aiwf-p<owner pid>-<workflow id>-<i>: the pid tags the process that owns the sandbox (parallel runs, no lock)."""
+    return f"{PREFIX}p{os.getpid()}-{workflow_id[:8]}-{i}"
+
+
+def owner_pid(name: str) -> int | None:
+    m = re.match(rf"{PREFIX}p(\d+)-", name)
+    return int(m.group(1)) if m else None
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def factory_home() -> Path:
+    return Path(os.environ.get("AIWF_FACTORY_HOME") or Path.home() / "factory")
+
+
+def stop_file() -> Path:
+    return factory_home() / "STOP"
+
+
+def failures_file() -> Path:
+    return factory_home() / "failures"
+
+
+def read_failures() -> int:
+    try:
+        return int(failures_file().read_text().strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def write_failures(n: int) -> None:
+    f = failures_file()
+    if n <= 0:
+        f.unlink(missing_ok=True)
+    else:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(f"{n}\n")
 
 
 def now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def reap() -> list[str]:
-    """M0: remove every stale aiwf-* sandbox (no PENDING-workflow check yet).
+def reap(is_alive=pid_alive) -> list[str]:
+    """Remove orphan aiwf-* sandboxes only: those whose owner process is dead (or untagged). Never another live run's.
 
-    Runs before launch(), so a killed run's orphans go; the resumed run uses new names and cleans them itself.
+    There is no runner lock (parallel runs stay possible). Runs before launch(), so a killed run's orphans go;
+    the resumed run uses new names and cleans them itself. Shared with the M1.4 periodic reaper.
     """
     removed = []
     for line in run_sbx(SBX_LS_ARGS).splitlines():
         name = line.split()[0] if line.split() else ""
         if name.startswith(PREFIX):
+            pid = owner_pid(name)
+            if pid is not None and is_alive(pid):
+                continue  # a live run owns it
             try:
                 run_sbx(sbx_rm_args(name), check=False)
             except (subprocess.SubprocessError, OSError):
@@ -140,6 +200,24 @@ def resumed_run(dbos, version: str):
 
 
 def main() -> int:
+    """Kill switches (ADR-0064 d6): exit 0 when STOP exists or after N consecutive failures, so KeepAlive stops restarting."""
+    if stop_file().exists():
+        print(f"{stop_file()} exists: not starting", file=sys.stderr)
+        return 0
+    limit = int(os.environ.get("AIWF_FACTORY_MAX_FAILURES") or DEFAULT_MAX_FAILURES)
+    if read_failures() >= limit:
+        print(f"{limit} consecutive failures: not starting; delete {failures_file()} to re-arm", file=sys.stderr)
+        return 0
+    try:
+        rc = _run()
+    except (Exception, SystemExit):
+        write_failures(read_failures() + 1)
+        raise
+    write_failures(0 if rc == 0 else read_failures() + 1)
+    return rc
+
+
+def _run() -> int:
     from dbos import DBOS
 
     holder: dict = {}
