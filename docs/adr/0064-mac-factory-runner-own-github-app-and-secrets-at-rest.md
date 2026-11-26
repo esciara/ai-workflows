@@ -36,7 +36,7 @@ Where the real workflow runs:
 - Self-hosted Actions runner on the Mac: keeps `GITHUB_TOKEN` and the workflows; but it executes repo workflow code on the host (not in sbx), GitHub advises against it on repos taking outside PRs, and it skips the DBOS queue M0 built.
 - Local factory runner, as user `factory`, DBOS queue, agents in sbx, its own GitHub App (chosen): reuses M0 and the `aiwf` modules; but a new identity, a secret at rest and an amended hard rule.
 
-Local writer identity (decision 2):
+Local writer identity (decision 1):
 
 - A. One new App `esciara-ai-workflows-factory`, tokens narrowed per step (chosen): same shape as per-job `permissions:`, one author login so the marker and review matching in `ghapi.py` keep working, installed on the playground only; but one key gives full App write on the playground if stolen from the host.
 - B. Two Apps, reader and writer: a reader-key-only process cannot write; but no gain in M1, since the host process holds both keys, and twice the keys to keep.
@@ -44,7 +44,7 @@ Local writer identity (decision 2):
 - Reuse the dev agent App: it has contents and workflows write on this repo, so a compromised factory could push here (ADR-0031 lanes).
 - The maintainer's `gh` token: writes as an admin with tag-ruleset bypass; ADR-0063 rejected it for the same reason.
 
-Secrets at rest (decision 5):
+Secrets at rest (decision 2):
 
 - F. SOPS + age: one encrypted YAML file, one age key file (chosen): open source (MPL-2.0, BSD-3), no server or daemon, nothing to unlock, safe in backups and copies, key can later move to a hardware key or the Secure Enclave; but against code running as `factory` or an admin it protects exactly as much as plain files, since they can read the key file.
 - A. Plain 0600 files: simplest; but plaintext in backups and copies.
@@ -63,13 +63,13 @@ Review agents reading PR text on the Mac (decision 3):
 - A. Accept, tool-less agents, same limits as on GitHub (chosen): uses M0 as is; no tools means injected text cannot run a command or send the token elsewhere; but the token is inside the VM.
 - B. Wait for a credential proxy that keeps the token out of the VM: an escape would not reveal it; but sbx's proxy fails with subscription tokens, our own is about a week of work with an open ToS question, and M1 stops until then.
 
-PRs the factory reviews (no numbered decision):
+PRs the factory reviews (decision 4):
 
 - A. Head branch starts with `factory/` (chosen): known when the PR opens, so no race; one-line skip in the playground caller; easy to e2e; but moving a PR between reviewers needs a new branch.
 - B. A label: switchable; but the label lands after `opened`, so Actions has often started and both review.
 - C. A second playground repo: full separation; but a repo to create, seed and sync, with fixtures and slots copied.
 
-Thread resolution (no numbered decision):
+Thread resolution (decision 5):
 
 - A. Skip in M1, threads stay open (chosen): the App cannot push code; less to build; but fixed findings on `factory/*` PRs stay open until someone resolves them.
 - B. Grant contents write on the playground: same behaviour as on GitHub; but a stolen key can push code there.
