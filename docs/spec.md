@@ -248,7 +248,7 @@ The number of rounds is `limits.fix_rounds` (1 to 3, default 3). The orchestrato
 
 **Commands** — accepted only from users with write or admin permission: `/review` (A), `/retriage`, `/reproduce`, `/fix [guidance]`, `/no-fix <reason>` (B).
 
-**Runtime.** Workflows run on GitHub Actions and, per ADR-0064, also on the maintainer's Mac factory for the playground. On GitHub Actions every AI step runs Claude Code through [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action), authenticated with the maintainer's Claude subscription, not an API key: run `claude setup-token` once on your machine and store the token as the repo secret `CLAUDE_CODE_OAUTH_TOKEN`. Each role above is a separate Claude Code run with its own allowed-tools list. Runs draw on the subscription's usage limits, shared with your own use, so the per-agent time and turn limits in Guardrails matter.
+**Runtime.** Workflows run on GitHub Actions; per ADR-0064, Workflow A's shape also runs on the maintainer's Mac factory, on playground PRs only. On GitHub Actions every AI step runs Claude Code through [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action), authenticated with the maintainer's Claude subscription, not an API key: run `claude setup-token` once on your machine and store the token as the repo secret `CLAUDE_CODE_OAUTH_TOKEN`. Each role above is a separate Claude Code run with its own allowed-tools list. Runs draw on the subscription's usage limits, shared with your own use, so the per-agent time and turn limits in Guardrails matter.
 
 **Chat notifications.** GitHub stays where decisions are made (commands are typed there); chat only alerts the maintainer, with a link back. Slack, Telegram or both; a repo sets one or both and each alert goes to every channel set:
 
@@ -352,10 +352,10 @@ Rights needed to install in maintainer mode: write access to add the workflow fi
 
 ## Open questions
 
-| **TL;DR** — All four earlier questions are decided: Claude Code in GitHub Actions on your subscription, a formal review that never approves, Slack or Telegram alerts, and repro scripts accepted where there is no test harness. |
+| **TL;DR** — All four earlier questions are decided: Claude Code in GitHub Actions (and, per ADR-0064, on the Mac factory for the playground) on your subscription, a formal review that never approves, Slack or Telegram alerts, and repro scripts accepted where there is no test harness. |
 | --- |
 
-- [x] Runtime: GitHub Actions running a coding-agent action, or a GitHub App dispatching to a hosted agent runner? Decided: GitHub Actions with Claude Code, on your Claude subscription, and, per ADR-0064, also the maintainer's Mac factory for the playground (see Runtime).
+- [x] Runtime: GitHub Actions running a coding-agent action, or a GitHub App dispatching to a hosted agent runner? Decided: GitHub Actions with Claude Code, on your Claude subscription, and, per ADR-0064, Workflow A's shape also on the maintainer's Mac factory for the playground (see Runtime).
 - [x] Should Workflow A also submit a formal GitHub review (Approve / Request changes), or only label and comment? Decided: a formal review that never approves, with inline vs general placement as in Workflow A.
 - [x] Where do the maintainer's B4 requests reach you: the GitHub mention only, or also Slack or email? Decided: Slack or Telegram (see Chat notifications).
 - [x] Repos with no test harness: is a reproduction script with captured output enough to pass B2? Decided: yes (see B2 step 2).
