@@ -387,6 +387,7 @@ jobs:
           found=0
           if [ -n "$EXEC_FILE" ] && [ -f "$EXEC_FILE" ] && grep -qF -- "$TOKEN" "$EXEC_FILE"; then found=1; fi
           if printf '%s' "$ANSWER" | grep -qF -- "$TOKEN"; then found=1; fi
+          if [ -f patch.diff ] && grep -qF -- "$TOKEN" patch.diff; then found=1; fi
           if [ "$found" = 1 ]; then echo "::error title=Token check::the model token appears in the agent's output"; exit 1; fi
           echo "token check passed"
 

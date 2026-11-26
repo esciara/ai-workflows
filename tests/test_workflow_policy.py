@@ -394,6 +394,13 @@ def test_the_token_check_stays_inline_in_the_workflow():
             assert "uses" not in step and "grep -qF" in step["run"], where
 
 
+def test_the_token_check_copies_are_identical():
+    # aiwf-yeb: the check cannot be a shared action (see above), so the inline copies must not drift apart.
+    runs = {where: step["run"] for where, _, step in _agent_steps() if step.get("name") == "Token check"}
+    assert len(runs) >= 2 and len(set(runs.values())) == 1, runs
+    assert all("patch.diff" in r for r in runs.values())
+
+
 # --- verdict check (ADR-0053, states ADR-0055): check-run plus a `verdict` commit status of the same name -----------
 
 
