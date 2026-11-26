@@ -3,12 +3,10 @@
 Never prints a secret: the decrypt check discards the value. M1.2 adds the App token mint, M1.4 the sbx egress policy.
 """
 
-import os
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable
-from pathlib import Path
 
 from aiwf.factory import m0, secrets
 
@@ -53,7 +51,7 @@ def check_stop_file() -> Result:
 
 def check_failures() -> Result:
     n = m0.read_failures()
-    limit = int(os.environ.get("AIWF_FACTORY_MAX_FAILURES") or m0.DEFAULT_MAX_FAILURES)
+    limit = m0.max_failures()
     if n >= limit:
         return False, f"{n} consecutive failures: the runner will not start; delete {m0.failures_file()} to re-arm"
     return True, f"{n} consecutive failures (limit {limit})"

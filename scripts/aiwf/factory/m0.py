@@ -133,6 +133,11 @@ def failures_file() -> Path:
     return factory_home() / "failures"
 
 
+def max_failures() -> int:
+    v = os.environ.get("AIWF_FACTORY_MAX_FAILURES", "")
+    return int(v) if v.isdigit() and int(v) > 0 else DEFAULT_MAX_FAILURES
+
+
 def read_failures() -> int:
     try:
         return int(failures_file().read_text().strip() or 0)
@@ -197,7 +202,7 @@ def _dbos_config() -> dict:
     version = os.environ.get("AIWF_FACTORY_VERSION") or subprocess.run(
         ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
     ).stdout.strip()
-    db = os.environ.get("AIWF_FACTORY_DB") or str(Path.home() / "factory" / "dbos.sqlite")
+    db = os.environ.get("AIWF_FACTORY_DB") or str(factory_home() / "dbos.sqlite")
     Path(db).parent.mkdir(parents=True, exist_ok=True)
     return {
         "name": "aiwf-factory",
@@ -217,7 +222,7 @@ def main() -> int:
     if stop_file().exists():
         print(f"{stop_file()} exists: not starting", file=sys.stderr)
         return 0
-    limit = int(os.environ.get("AIWF_FACTORY_MAX_FAILURES") or DEFAULT_MAX_FAILURES)
+    limit = max_failures()
     if read_failures() >= limit:
         print(f"{limit} consecutive failures: not starting; delete {failures_file()} to re-arm", file=sys.stderr)
         return 0

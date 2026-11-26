@@ -278,3 +278,9 @@ def test_max_failures_env(monkeypatch):
     m0.write_failures(1)
     monkeypatch.setattr(m0, "_run", lambda: pytest.fail("must not run"))
     assert m0.main() == 0
+
+
+def test_bad_max_failures_falls_back(monkeypatch):
+    for v in ("three", "0", "-1", ""):
+        monkeypatch.setenv("AIWF_FACTORY_MAX_FAILURES", v)
+        assert m0.max_failures() == 3
