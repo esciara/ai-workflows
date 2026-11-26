@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from aiwf.factory import m0
@@ -26,17 +28,17 @@ class Fake:
 
 def test_names_unique_and_prefixed():
     a, b = m0.sandbox_name("abcdef123456", 1), m0.sandbox_name("abcdef123456", 2)
-    assert a != b and a.startswith("aiwf-abcdef12-")
+    assert a != b and a.startswith(f"aiwf-p{os.getpid()}-abcdef12-")
 
 
 def test_created_and_removed_even_when_one_raises(monkeypatch):
-    fake = Fake(fail_exec={"aiwf-wf000000-2"})
+    fake = Fake(fail_exec={m0.sandbox_name("wf000000", 2)})
     monkeypatch.setattr(m0, "run_sbx", fake)
     assert m0.hello_body("wf000000", 1)["output"] == {"result": "hello world"}
     with pytest.raises(RuntimeError):
         m0.hello_body("wf000000", 2)
     creates = [c[c.index("--name") + 1] for c in fake.calls if c[:2] == ["sbx", "create"]]
-    assert sorted(creates) == ["aiwf-wf000000-1", "aiwf-wf000000-2"]
+    assert sorted(creates) == [m0.sandbox_name("wf000000", 1), m0.sandbox_name("wf000000", 2)]
     assert fake.live == set()
 
 
@@ -60,8 +62,10 @@ TOKEN = "sk-ant-oat-SECRET-123"
 
 
 @pytest.fixture(autouse=True)
-def token(monkeypatch):
+def token(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", TOKEN)
+    monkeypatch.setenv("AIWF_FACTORY_TEST", "1")
+    monkeypatch.setenv("AIWF_FACTORY_HOME", str(tmp_path / "factory"))
     m0.load_token()
     yield
     monkeypatch.setattr(m0, "_token", None)
@@ -174,8 +178,88 @@ def test_orphans_of_killed_run_are_reaped_and_resume_leaves_none(monkeypatch):
 
 
 def test_cleanup_runs_when_exec_fails(monkeypatch):
-    fake = Fake(fail_exec={"aiwf-wf000000-1"})
+    fake = Fake(fail_exec={m0.sandbox_name("wf000000", 1)})
     monkeypatch.setattr(m0, "run_sbx", fake)
     with pytest.raises(RuntimeError):
         m0.hello_body("wf000000", 1)
     assert fake.live == set() and fake.calls[-1][:2] == ["sbx", "rm"]
+
+
+def test_reaper_keeps_live_owners_and_removes_dead_and_untagged(monkeypatch):
+    fake = Fake(ls="aiwf-p111-wf-1\naiwf-p222-wf-1\naiwf-old-1\nother\n")
+    monkeypatch.setattr(m0, "run_sbx", fake)
+    assert m0.reap(is_alive=lambda pid: pid == 111) == ["aiwf-p222-wf-1", "aiwf-old-1"]
+    assert [c[2] for c in fake.calls if c[:2] == ["sbx", "rm"]] == ["aiwf-p222-wf-1", "aiwf-old-1"]
+
+
+def test_own_sandbox_survives_reap_while_its_process_is_alive(monkeypatch):
+    name = m0.sandbox_name("wf000000", 1)
+    fake = Fake(ls=f"{name}\n")
+    monkeypatch.setattr(m0, "run_sbx", fake)
+    assert m0.reap() == []
+
+
+def test_pid_alive():
+    assert m0.pid_alive(os.getpid())
+    assert not m0.pid_alive(2**22 + 12345)
+
+
+def test_env_token_ignored_without_test_flag(monkeypatch):
+    monkeypatch.delenv("AIWF_FACTORY_TEST")
+    seen = []
+
+    def read(name):
+        seen.append(name)
+        return "from-file"
+
+    monkeypatch.setattr(m0.secrets, "read_secret", read)
+    m0.load_token()
+    assert seen == ["claude_oauth"] and m0.get_token() == "from-file"
+
+
+def test_exec_has_adr_0064_d3_flags():
+    a = m0.sbx_exec_args("n")
+    assert a[a.index("--tools") + 1] == "StructuredOutput"
+    assert a[a.index("--setting-sources") + 1] == "user"
+    assert "--strict-mcp-config" in a
+    assert a[a.index("--max-turns") + 1] == "3"
+    assert all(TOKEN not in x for x in a)
+
+
+def test_max_turns_env_override(monkeypatch):
+    monkeypatch.setenv("AIWF_MAX_TURNS", "5")
+    a = m0.sbx_exec_args("n")
+    assert a[a.index("--max-turns") + 1] == "5"
+
+
+def test_stop_file_exits_zero_without_running(monkeypatch, tmp_path):
+    (tmp_path / "factory").mkdir()
+    (tmp_path / "factory" / "STOP").write_text("")
+    monkeypatch.setattr(m0, "_run", lambda: pytest.fail("must not run"))
+    assert m0.main() == 0
+
+
+def test_failures_counted_then_runner_stops(monkeypatch):
+    def boom():
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(m0, "_run", boom)
+    for n in (1, 2, 3):
+        with pytest.raises(RuntimeError):
+            m0.main()
+        assert m0.read_failures() == n
+    monkeypatch.setattr(m0, "_run", lambda: pytest.fail("must not run after 3 failures"))
+    assert m0.main() == 0
+
+
+def test_success_resets_failures(monkeypatch):
+    m0.write_failures(2)
+    monkeypatch.setattr(m0, "_run", lambda: 0)
+    assert m0.main() == 0 and m0.read_failures() == 0 and not m0.failures_file().exists()
+
+
+def test_max_failures_env(monkeypatch):
+    monkeypatch.setenv("AIWF_FACTORY_MAX_FAILURES", "1")
+    m0.write_failures(1)
+    monkeypatch.setattr(m0, "_run", lambda: pytest.fail("must not run"))
+    assert m0.main() == 0
