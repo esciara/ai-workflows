@@ -5,7 +5,7 @@ M1.1 makes the factory start at boot with nobody logged in. The agent-buildable 
 ## What the code does
 
 - Secrets live in `~factory/.config/aiwf/secrets.enc.yaml` (entries `claude_oauth` and `factory_app_pem`), encrypted by SOPS to the age key `~factory/.config/aiwf/age.key`.
-- The runner and `doctor` refuse to start unless the key file is a regular file owned by the running user with mode 0600 and its directory is owned by that user with mode 0700 (a 0644 key file means no start; under launchd a refusal exits non-zero, so it retries every 60 s and fills `hello_two.err.log` until fixed or `launchctl bootout`).
+- The runner and `doctor` refuse to start unless the key file is a regular file owned by the running user with mode 0600 and its directory is owned by that user with mode 0700 (a 0644 key file means no start; under launchd a refusal exits non-zero and counts as a failed start: it retries every 60 s and fills `hello_two.err.log` until 3 consecutive failures, then the runner stops itself (see Kill switches below)).
 - Each value is decrypted with `sops decrypt --extract` and read from stdout into memory; it never appears in argv, logs or DBOS records. The env override `CLAUDE_CODE_OAUTH_TOKEN` is honoured only with `AIWF_FACTORY_TEST=1` (tests); production always does the key-file mode check.
 - `uv run python -m aiwf.factory doctor` prints one `ok` or `FAIL` line per check (tools on PATH, key file, decrypt, `sbx ls`, no STOP file) and exits 1 on any FAIL.
 - The LaunchDaemon runs `python -m aiwf.factory run` (M0's `hello_two`) as `factory`, `Umask 077`, minimal PATH, logs in `~factory/factory/runs/`. It restarts only after a failure, because M1.1's run exits after one `hello_two`.
@@ -31,3 +31,4 @@ Rules: never put a token or key in a command line, a file in the repo or the cha
 
 - The runner exits 0 at start when `~factory/factory/STOP` exists, and after 3 consecutive failed starts (counter file `~factory/factory/failures`, limit `AIWF_FACTORY_MAX_FAILURES`), so `KeepAlive` stops restarting it. Delete the file to re-arm; a successful run resets the counter.
 - There is no runner lock: parallel runs are allowed. Sandboxes are named `aiwf-p<owner pid>-<workflow id>-<n>`, and the startup reaper removes only `aiwf-*` sandboxes whose owner process is dead (or that carry no owner tag), never a live run's.
+- Concurrent failing runs can lose a failure-counter increment (no lock); the cap is approximate. `doctor` reports a STOP file or a reached cap as FAIL.

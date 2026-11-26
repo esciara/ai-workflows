@@ -196,7 +196,22 @@ def test_own_sandbox_survives_reap_while_its_process_is_alive(monkeypatch):
     name = m0.sandbox_name("wf000000", 1)
     fake = Fake(ls=f"{name}\n")
     monkeypatch.setattr(m0, "run_sbx", fake)
-    assert m0.reap() == []
+    assert m0.reap(is_alive=m0.pid_alive) == []
+
+
+def test_runner_alive_rejects_reused_pid(monkeypatch):
+    out = {"v": "/usr/bin/python3 -m aiwf.factory"}
+    monkeypatch.setattr(m0.subprocess, "run", lambda *a, **k: type("R", (), {"stdout": out["v"]})())
+    assert m0.runner_alive(os.getpid())
+    out["v"] = "/usr/sbin/syslogd"
+    assert not m0.runner_alive(os.getpid())
+    assert not m0.runner_alive(2**22 + 12345)
+
+
+def test_bad_max_turns_falls_back(monkeypatch):
+    monkeypatch.setenv("AIWF_MAX_TURNS", "abc")
+    a = m0.sbx_exec_args("n")
+    assert a[a.index("--max-turns") + 1] == "3"
 
 
 def test_pid_alive():
