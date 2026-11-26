@@ -4,6 +4,7 @@
 - Date: 2026-11-01
 - Deciders: maintainer
 - Alias: `D37`
+- Amended by: ADR-0064
 
 ## Context
 
