@@ -229,7 +229,10 @@ def main() -> int:
     try:
         rc = _run()
     except (Exception, SystemExit):
-        write_failures(read_failures() + 1)
+        try:
+            write_failures(read_failures() + 1)
+        except OSError:
+            pass  # unwritable state dir must not hide the original error
         raise
     write_failures(0 if rc == 0 else read_failures() + 1)
     return rc
