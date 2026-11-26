@@ -17,7 +17,7 @@ import re
 from typing import Any
 from urllib.parse import quote
 
-from aiwf import commands, guard, publish
+from aiwf import commands, guard, notify, publish
 from aiwf.ghapi import GhRunner, default_branch, get_or_none, remove_label, upsert_marker_comment
 
 MARKER = "<!-- ai-workflows:triage -->"
@@ -167,13 +167,6 @@ def alert(repo: str, issue: int, kind: str, duplicate_of: int | None, needs_huma
     return ", ".join(parts), f"{server}/{repo}/issues/{issue}"
 
 
-def write_alert(text: str, url: str) -> None:
-    out = os.environ.get("GITHUB_OUTPUT")
-    if out:
-        with open(out, "a", encoding="utf-8") as fh:
-            fh.write(f"alert_text={text}\nalert_url={url}\n")
-
-
 def goes_to_b2(data: dict[str, Any], duplicate: bool) -> bool:
     """A bug B1 hands to B2: not a duplicate, not low confidence (those stop with a person)."""
     return data["type"] == "bug" and not duplicate and data["confidence"] != "low"
@@ -229,7 +222,7 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
     print(f"triaged {repo}#{issue}: {', '.join(want)}")
     dup_number = dup["number"] if dup and DUPLICATE in want else None
     server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
-    write_alert(*alert(repo, issue, data["type"], dup_number, NEEDS_HUMAN in want, server))
+    notify.write_alert(*alert(repo, issue, data["type"], dup_number, NEEDS_HUMAN in want, server))
     guard.clear_error(gh, repo, issue, run_url)  # an earlier run's sticky error comment no longer applies
     if trusted:
         start_reproduce()

@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from aiwf import cli, config, guard, publish
+from aiwf import cli, config, guard, notify, publish
 from aiwf.ghapi import GhRunner, find_marker_comment, remove_label
 from aiwf.mdtext import inline, run_link
 from aiwf.review import risk_tier
@@ -104,6 +104,14 @@ def analysis_body(data: dict[str, Any], repo: str, sha: str, files: set[str], cf
     return "\n".join(lines) + "\n\n"
 
 
+def alert(data: dict[str, Any], repo: str, issue: int) -> tuple[str, str]:
+    """The "B4 analysis posted" chat alert (spec: Chat notifications): the root cause in one line (agent text, so
+    `notify.plain`: no clickable link, capped) and where to answer; links to the issue."""
+    cause = notify.plain(data["root_cause"]["explanation"])
+    return (f"[{repo}] Bug #{issue} analysed: {cause}; reply /fix or /no-fix on GitHub",
+            f"{server()}/{repo}/issues/{issue}")
+
+
 def publish_analyst(data: dict[str, Any], repo: str, issue: int, run_url: str, gh: GhRunner) -> None:
     cfg = json.loads(os.environ.get("AIWF_CONFIG") or "{}")
     sha = os.environ.get(SHA_ENV, "")
@@ -118,6 +126,7 @@ def publish_analyst(data: dict[str, Any], repo: str, issue: int, run_url: str, g
         patch_comment(gh, repo, found["id"], body)
     publish.add_labels(gh, repo, issue, AWAITING)
     print(f"analysis posted on {repo}#{issue}")
+    notify.write_alert(*alert(data, repo, issue))
 
 
 def patch_comment(gh: GhRunner, repo: str, cid: int, body: str) -> None:

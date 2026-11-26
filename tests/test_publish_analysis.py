@@ -323,3 +323,39 @@ def test_commands_and_failures_are_wired():
     assert WF["decide"]["permissions"] == WF["analyse-publish"]["permissions"] == {"issues": "write"}
     assert {"analyse-context", "analyse", "analyse-publish", "decide"} <= set(WF["failed"]["needs"])
     assert WF["repro-publish"]["outputs"]["reproduced"] == "${{ steps.publish.outputs.reproduced }}"
+
+
+# --- "B4 analysis posted" chat alert (WP11b2) -----------------------------------------------------------------------------
+
+def alert_of(monkeypatch, tmp_path, **extra):
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    post(Gh(), **extra)
+    return dict(line.split("=", 1) for line in out.read_text().splitlines())
+
+
+def test_analysis_alert_names_the_bug_root_cause_and_reply_and_links_the_issue(env, monkeypatch, tmp_path):
+    got = alert_of(monkeypatch, tmp_path)
+    assert got == {"alert_text": f"[{REPO}] Bug #1 analysed: total() keeps <b>@x</b> discount.; reply /fix or /no-fix on GitHub",
+                   "alert_url": f"https://github.com/{REPO}/issues/1"}
+
+
+def test_analysis_alert_defuses_links_in_the_agent_text(env, monkeypatch, tmp_path):
+    cause = {"file": "src/minicart/cart.py", "line": 1, "explanation": "see https://evil.example/x\nnow"}
+    text = alert_of(monkeypatch, tmp_path, root_cause=cause)["alert_text"]
+    assert "https://" not in text and "\n" not in text and "evil.example/x now" in text
+
+
+def test_triage_sends_the_analysis_and_fix_alerts_through_notify_yml():
+    triage = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/triage.yml").read_text())["jobs"]
+    for name, source, step in (("notify-analysis", "analyse-publish", "publish"), ("notify-fix", "fix", None)):
+        job = triage[name]
+        assert job["uses"] == "./.github/workflows/notify.yml" and job["needs"] == source and job["permissions"] == {}
+        assert "outputs.alert_text != ''" in job["if"] and "fromJSON(inputs.config).notify != 'none'" in job["if"]
+        assert job["with"]["text"] == f"${{{{ needs.{source}.outputs.alert_text }}}}"
+        assert job["with"]["url"] == f"${{{{ needs.{source}.outputs.alert_url }}}}"
+        assert name not in triage["failed"]["needs"]  # a failed alert is no `ai: error` (aiwf-3ci)
+    assert triage["analyse-publish"]["outputs"]["alert_text"] == "${{ steps.publish.outputs.alert_text }}"
+    fix = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/fix.yml").read_text())
+    assert fix[True]["workflow_call"]["outputs"]["alert_text"]["value"] == "${{ jobs.escalate.outputs.alert_text }}"
+    assert fix["jobs"]["escalate"]["outputs"]["alert_text"] == "${{ steps.escalate.outputs.alert_text }}"

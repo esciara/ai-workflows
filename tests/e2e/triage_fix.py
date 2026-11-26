@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import os
 import re
 from typing import Any, Iterator
 
 import pytest
+import yaml
 
 import playground as pg
 from triage_core import (ERROR, NEEDS_HUMAN, NEEDS_INFO, REPRODUCE_JOB, REPRODUCED, bot_comments, e2e_config, item_run,
@@ -72,10 +74,13 @@ def status(body: str) -> str:
     return m.group(1)
 
 
-def reproduce_and_analyse(issue: dict[str, Any], files: str) -> str:
-    """Wait for B1, post `/reproduce`, and check the B2 + B3 + B4 outcome; return the analysis comment."""
+def reproduce_and_analyse(issue: dict[str, Any], files: str, runs: list[dict[str, Any]] | None = None) -> str:
+    """Wait for B1, post `/reproduce`, and check the B2 + B3 + B4 outcome; return the analysis comment. The
+    `/reproduce` run is appended to `runs` when given."""
     item_run("issues", issue["title"], issue["created_at"])
     _, run = command(issue, "/reproduce", timeout=ANALYSE_TIMEOUT)
+    if runs is not None:
+        runs.append(run)
     assert run["jobs"].get(REPRODUCE_JOB) == "success" and run["jobs"].get(ANALYSE_JOB) == "success", run["jobs"]
     assert run["conclusion"] == "success", run["jobs"]
     got = labels(issue["number"])
@@ -167,3 +172,13 @@ def fix(issue: dict[str, Any], body: str) -> tuple[dict[str, Any], dict[str, Any
     assert re.match(rf"fix approved by @{re.escape(c['user'])}\b", line, re.I), line
     assert f"issuecomment-{c['id']}" in line, "the status does not link the maintainer's /fix comment"
     return c, run
+
+
+FAIL_LABEL = "e2e-fix-fail"
+FAIL_CONFIG = ".github/ai-workflows-e2e-fix-fail.yml"
+def fail_config() -> dict[str, Any]:
+    raw = pg.api(f"repos/{pg.REPO}/contents/{FAIL_CONFIG}")
+    cfg = yaml.safe_load(base64.b64decode(raw["content"]))
+    if "exit 1" not in str(cfg.get("test", "")):
+        pytest.fail(f"{FAIL_CONFIG} has no always-failing test command; not a pass", pytrace=False)
+    return cfg

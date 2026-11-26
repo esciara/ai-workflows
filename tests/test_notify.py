@@ -117,3 +117,21 @@ def test_cli_prints_result_lines_and_fails_on_any_error(monkeypatch, capsys):
 def test_cli_with_no_channel_sends_nothing(capsys):
     assert n.cmd_notify(type("A", (), {"channels": "none"})()) == 0
     assert "nothing sent" in capsys.readouterr().out
+
+
+# --- alert helpers (WP11b2) ---------------------------------------------------------------------------------------------
+
+def test_plain_is_one_line_capped_and_defuses_links():
+    got = n.plain("see\nhttps://evil.example/x and www.evil.example", 200)
+    assert "\n" not in got and "https://" not in got and "www." not in got
+    assert got.replace("​", "") == "see https://evil.example/x and www.evil.example"
+    assert len(n.plain("x" * 500)) == 200
+
+
+def test_write_alert_writes_both_outputs_on_single_lines(monkeypatch, tmp_path):
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    n.write_alert("a\nb", "https://github.com/o/r/issues/1")
+    assert out.read_text() == "alert_text=a b\nalert_url=https://github.com/o/r/issues/1\n"
+    monkeypatch.delenv("GITHUB_OUTPUT")
+    n.write_alert("x", "https://x.example")  # outside Actions: nothing to do

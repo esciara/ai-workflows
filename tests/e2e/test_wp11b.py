@@ -1,7 +1,8 @@
 """WP11b acceptance test (notification events, ADR-0024), slice 2 part (plan row WP11b1). Done when: a new issue
 triaged by B1 sends one "issue triaged" message with a working link to the issue, on both channels (Slack and
-Telegram). Later slices add their events (B4 analysis, reporter silent, `fix: needs-maintainer`, verdict, `ai: error`)
-to this file.
+Telegram). WP11b2 adds the B4 analysis and `fix: needs-maintainer` alerts (one issue: `/reproduce` gives the analysis
+and its alert, a forced-failure `/fix` gives the escalation and its alert; the playground's fix-fail config also sets
+`notify: slack,telegram`). Later slices add reporter silent, the verdict and `ai: error` to this file.
 
 Runs against the playground (AIWF_E2E=1, AIWF_E2E_SLOT=1|2|3|any): the tester App (the outside reporter) opens a bug
 report labelled with the held slot's `e2e-target-<n>` at creation, so the slot's caller runs triage.yml at the ref
@@ -23,6 +24,10 @@ from typing import Iterator
 import pytest
 
 import playground as pg
+from triage_core import labels
+from triage_fix import (ESCALATE_JOB, FAIL_LABEL, NEEDS_MAINTAINER, TAX_BUG, TAX_FILES, fail_config, fix,
+                        open_as_reporter, reproduce_and_analyse)
+from triage_fix import opened as fix_opened, tag  # noqa: F401 (fixtures)
 
 TITLE_PREFIX = "[e2e] WP11b"
 CHANNELS = {"slack", "telegram"}
@@ -101,3 +106,51 @@ def test_new_issue_triaged_sends_one_message_with_a_working_link_on_both_channel
     status = pg.http_status(expected)
     print(f"GET {expected} -> {status}")
     assert status == 200
+
+
+def alert_messages(run_id: int, job_prefix: str, number: int, e2e_target: str) -> dict[str, dict]:
+    """The one message per channel the run's `job_prefix` jobs sent, checked as accepted by the providers, sent by the
+    code under test and holding no secret URL; returns them by channel."""
+    data = pg.api(f"repos/{pg.REPO}/actions/runs/{run_id}/jobs?per_page=100")
+    ran = [j for j in data["jobs"] if j["name"].startswith(job_prefix) and j["conclusion"] not in (None, "skipped")]
+    log = "\n".join(pg.job_log(j["id"]) for j in ran)
+    assert "hooks.slack.com" not in log and "api.telegram.org/bot" not in log, "a secret URL appears in a job log"
+    got = pg.notify_results(log)
+    assert {r["aiwf_sha"] for r in got} == {e2e_target}, got
+    by_channel = {c: [r for r in got if r["channel"] == c] for c in CHANNELS}
+    assert {c: len(v) for c, v in by_channel.items()} == {"slack": 1, "telegram": 1}, got
+    slack, telegram = by_channel["slack"][0], by_channel["telegram"][0]
+    assert slack["status"] == 200 and slack["body"] == "ok", slack
+    assert telegram["ok"] is True and isinstance(telegram["message_id"], int) and telegram["message_id"] > 0, telegram
+    url = f"https://github.com/{pg.REPO}/issues/{number}"
+    for r in (slack, telegram):
+        print(f"{r['channel']}: {r['text']}")
+        assert re.search(rf"#{number}\b", r["text"]), r
+    assert slack["links"] == [url] and telegram["links"] == [url], (slack, telegram)
+    assert pg.http_status(url) == 200
+    return {"slack": slack, "telegram": telegram}
+
+
+def test_analysis_and_needs_maintainer_alerts_name_the_issue_and_link_it_on_both_channels(e2e_target, tag, fix_opened):
+    cap = fail_config()["limits"]["fix_rounds"]
+    issue = open_as_reporter("notify-fix", TAX_BUG, tag, fix_opened)
+    reproduce_and_analyse(issue, TAX_FILES)
+    runs: list[dict] = []
+    reproduce_and_analyse(issue, TAX_FILES, runs)
+    n = issue["number"]
+
+    # The /reproduce run that posted the analysis sent the analysis alert: bug, issue number, reply to give.
+    assert runs[0]["jobs"].get("triage / notify-analysis / send") == "success", runs[0]["jobs"]
+    for r in alert_messages(runs[0]["id"], "triage / notify-analysis", n, e2e_target).values():
+        assert re.search(r"\bBug #%d analysed: \S" % n, r["text"]), r
+        assert "/fix" in r["text"] and "/no-fix" in r["text"], r
+        assert "https://" not in r["text"], r
+
+    # A forced-failure `/fix` escalates; that run sent the needs-maintainer alert.
+    pg.ensure_label(FAIL_LABEL, "d93f0b", "e2e only: the e2e caller loads a config whose test command always fails")
+    pg.api(f"repos/{pg.REPO}/issues/{n}/labels", f"labels[]={FAIL_LABEL}", method="POST")
+    _, run = fix(issue, "/fix")
+    assert run["jobs"].get(ESCALATE_JOB) == "success" and NEEDS_MAINTAINER in labels(n), run["jobs"]
+    assert run["jobs"].get("triage / notify-fix / send") == "success", run["jobs"]
+    for r in alert_messages(run["id"], "triage / notify-fix", n, e2e_target).values():
+        assert re.search(rf"#{n}: fix failed after {cap} round\(s\), needs a maintainer", r["text"]), r

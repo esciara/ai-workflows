@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from aiwf import config, guard, publish, publish_analysis
+from aiwf import config, guard, notify, publish, publish_analysis
 from aiwf.fix import branch_head, branch_name
 from aiwf.ghapi import GhRunner, default_branch, upsert_marker_comment
 from aiwf.mdtext import run_link
@@ -103,6 +103,9 @@ def escalate(gh: GhRunner, repo: str, issue: int, cfg: dict[str, Any], rounds: l
             gh(["api", "-X", "POST", f"repos/{repo}/issues/{issue}/assignees", *people])
         except RuntimeError as exc:  # the comment already mentions them; a failure here only shows in the log
             print(f"::warning::could not assign the issue #{issue}: {str(exc)[:200]}")
+    server = os.environ.get("GITHUB_SERVER_URL") or "https://github.com"
+    notify.write_alert(f"[{repo}] #{issue}: fix failed after {len(rounds)} round(s), needs a maintainer",
+                       f"{server}/{repo}/issues/{issue}")  # spec: `fix: needs-maintainer` alert, links to the issue
     return f"escalated #{issue}: compare link {link or 'none'}"
 
 

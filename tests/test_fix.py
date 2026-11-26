@@ -460,6 +460,18 @@ def test_escalation_comments_with_the_compare_link_labels_and_assigns_the_issue_
     assert assign[-4:] == ["-f", "assignees[]=esciara", "-f", "assignees[]=other"]
 
 
+def test_escalation_writes_the_needs_maintainer_alert_and_a_stopped_loop_does_not(monkeypatch, tmp_path):
+    out = tmp_path / "out"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    esc.escalate(Gh(head="h" * 40), REPO, 1, CFG, [rec(1), rec(2)], RUN)
+    assert out.read_text() == (f"alert_text=[{REPO}] #1: fix failed after 2 round(s), needs a maintainer\n"
+                               f"alert_url=https://github.com/{REPO}/issues/1\n")
+    out.unlink()
+    esc.escalate(Gh(head="h" * 40), REPO, 1, CFG, [rec(1, outcome="stopped", superseded=True)], RUN)
+    assert not out.exists()
+
+
 def test_the_compare_link_follows_the_server_url_and_an_assignment_failure_only_warns(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_SERVER_URL", "https://ghe.example")
     gh = Gh(head="h" * 40, fail=["/issues/1/assignees"])
