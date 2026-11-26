@@ -61,7 +61,8 @@ def sbx_exec_args(name: str) -> list[str]:
 
 
 def sbx_rm_args(name: str) -> list[str]:
-    return ["sbx", "rm", name]
+    # --force: without it rm asks to confirm, and with stdin=/dev/null it silently kept the sandbox
+    return ["sbx", "rm", name, "--force"]
 
 
 SBX_LS_ARGS = ["sbx", "ls", "--quiet"]  # expected: one sandbox name per line
@@ -89,7 +90,10 @@ def now() -> str:
 
 
 def reap() -> list[str]:
-    """M0: remove every stale aiwf-* sandbox (no PENDING-workflow check yet)."""
+    """M0: remove every stale aiwf-* sandbox (no PENDING-workflow check yet).
+
+    Runs before launch(), so a killed run's orphans go; the resumed run uses new names and cleans them itself.
+    """
     removed = []
     for line in run_sbx(SBX_LS_ARGS).splitlines():
         name = line.split()[0] if line.split() else ""

@@ -141,3 +141,30 @@ def test_resumed_run_found_when_pending_or_reenqueued():
 def test_resumed_run_ignores_other_version_and_finished():
     d = FakeDBOS([Run("old", "PENDING", "v1"), Run("done", "SUCCESS", "v2")])
     assert m0.resumed_run(d, "v2") is None
+
+
+def test_every_rm_is_non_interactive(monkeypatch):
+    fake = Fake(ls="aiwf-1-1\n")
+    monkeypatch.setattr(m0, "run_sbx", fake)
+    m0.reap()
+    m0.hello_body("wf000000", 1)
+    rms = [c for c in fake.calls if c[:2] == ["sbx", "rm"]]
+    assert len(rms) == 3 and all(c[-1] == "--force" for c in rms)
+
+
+def test_orphans_of_killed_run_are_reaped_and_resume_leaves_none(monkeypatch):
+    fake = Fake(ls="aiwf-133db72d-1\naiwf-133db72d-2\n")
+    fake.live = {"aiwf-133db72d-1", "aiwf-133db72d-2"}
+    monkeypatch.setattr(m0, "run_sbx", fake)
+    m0.reap()
+    m0.hello_body("newid000", 1)
+    m0.hello_body("newid000", 2)
+    assert fake.live == set()
+
+
+def test_cleanup_runs_when_exec_fails(monkeypatch):
+    fake = Fake(fail_exec={"aiwf-wf000000-1"})
+    monkeypatch.setattr(m0, "run_sbx", fake)
+    with pytest.raises(RuntimeError):
+        m0.hello_body("wf000000", 1)
+    assert fake.live == set() and fake.calls[-1][:2] == ["sbx", "rm"]
