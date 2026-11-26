@@ -374,7 +374,8 @@ jobs:
           max-turns: 40
           model: ${{ fromJSON(inputs.config).model || '' }}
           sandbox-settings: ${{ github.workspace }}/settings.json
-      # ADR-0037 verification: the token value must not appear in the answer or the transcript. Prints nothing about it.
+      # ADR-0037 verification: the token value must not appear in the answer or the transcript (or patch.diff, which only
+      # fix.yml produces; the copies are kept identical by a policy test). Prints nothing about it.
       - name: Token check
         id: token-check
         if: ${{ !cancelled() && steps.claude.outcome != 'skipped' }}
