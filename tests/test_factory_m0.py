@@ -77,12 +77,23 @@ def test_create_has_resource_limits_and_token_never_in_argv(monkeypatch):
     assert [c[1] for c, t in zip(fake.calls, fake.token_flags) if t] == ["exec"]
 
 
+def test_token_from_secrets_file_when_no_env(monkeypatch):
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN")
+    monkeypatch.setattr(m0.secrets, "read_secret", lambda name: TOKEN if name == "claude_oauth" else "")
+    m0.load_token()
+    assert m0.get_token() == TOKEN
+
+
 def test_missing_token_fails_clearly(monkeypatch):
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN")
-    monkeypatch.setattr(m0.subprocess, "run", lambda *a, **k: type("R", (), {"returncode": 44, "stdout": ""})())
+
+    def refuse(name):
+        raise m0.secrets.SecretsError("refusing to start: key file has mode 0644")
+
+    monkeypatch.setattr(m0.secrets, "read_secret", refuse)
     with pytest.raises(SystemExit) as e:
         m0.load_token()
-    assert TOKEN not in str(e.value) and "security add-generic-password" in str(e.value)
+    assert TOKEN not in str(e.value) and "mode 0644" in str(e.value)
 
 
 def test_run_sbx_env_and_stdin(monkeypatch):

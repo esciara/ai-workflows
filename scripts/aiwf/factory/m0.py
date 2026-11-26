@@ -1,6 +1,6 @@
 """Factory milestone M0: two parallel Claude hello-worlds in sbx sandboxes, durable via DBOS.
 
-The subscription OAuth token is read once from the Keychain (or env, for tests) and passed to `sbx exec` through the
+The subscription OAuth token is read once from the SOPS secrets file (or env, for tests) and passed to `sbx exec` through the
 subprocess environment only: never in argv, never as a step argument, never logged. Never print the environment.
 """
 
@@ -12,29 +12,24 @@ import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
+from aiwf.factory import secrets
+
 QUEUE_NAME = "sbx"
 PREFIX = "aiwf-"
 TIMEOUT = 600
-KEYCHAIN_SERVICE = "aiwf-claude-oauth"
 TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN"
 _token: str | None = None  # module-level on purpose: DBOS stores step args in SQLite, so steps read it from here
 
 
 def load_token() -> None:
-    """Read the token once at startup. Override from env for tests. Messages never include the value."""
+    """Read the token once at startup: env override for tests, else the SOPS file (ADR-0064). Never echo the value."""
     global _token
     tok = os.environ.get(TOKEN_ENV, "").strip()
     if not tok:
-        user = os.environ.get("USER", "")
-        r = subprocess.run(
-            ["security", "find-generic-password", "-a", user, "-s", KEYCHAIN_SERVICE, "-w"],
-            capture_output=True, text=True, check=False,
-        )
-        tok = r.stdout.strip() if r.returncode == 0 else ""
-    if not tok:
-        raise SystemExit(
-            f"No Claude token: run `security add-generic-password -a \"$USER\" -s {KEYCHAIN_SERVICE} -w` first"
-        )
+        try:
+            tok = secrets.read_secret(secrets.CLAUDE_OAUTH)
+        except secrets.SecretsError as e:
+            raise SystemExit(f"No Claude token: {e}") from None
     _token = tok
 
 

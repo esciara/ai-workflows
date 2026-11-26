@@ -1,7 +1,7 @@
 """M0 acceptance self-test, run once by the maintainer as macOS user `factory`.
 
 Prints one PASS/FAIL line per check and a summary. It never reads, prints, accepts or stores the token or a password:
-the Keychain probe runs without `-w` and its output is discarded.
+the first check runs `doctor`, which discards decrypted values, and only its ok/FAIL lines are shown.
 """
 
 import json
@@ -16,10 +16,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 PREFIX = "aiwf-"
-KEYCHAIN_SERVICE = "aiwf-claude-oauth"
-KEYCHAIN_FILE = "~/Library/Keychains/login.keychain-db"
 KILL_AFTER = 5.0
 M0_CMD = ["uv", "run", "python", "-m", "aiwf.factory.m0"]
+DOCTOR_CMD = ["uv", "run", "python", "-m", "aiwf.factory", "doctor"]
 TOKEN_PREFIX = "sk-ant-oat"
 HELLO_RE = re.compile(r"hello,?\s+world", re.IGNORECASE)  # the prompt is "say hello world": punctuation varies
 
@@ -69,20 +68,12 @@ def count_results(out: str) -> int:
     return n
 
 
-def keychain_verdict(rc: int, stderr: str, user: str) -> Result:
-    """Decide from the exit code and stderr of `security find-generic-password` (no -w). Never receives the secret."""
+def doctor_verdict(rc: int, out: str) -> Result:
+    """Decide from `doctor`'s exit code; show its FAIL lines (they never contain a secret)."""
     if rc == 0:
-        return True, "Keychain token readable"
-    err = stderr.lower()
-    unlock = f"run `security unlock-keychain {KEYCHAIN_FILE}` and type the password at its prompt, then rerun"
-    if "user interaction is not allowed" in err or rc == 36:
-        return False, f"Keychain is locked: {unlock}"
-    if "could not be found" in err or rc == 44:
-        return False, (
-            f"Keychain item missing: run `security add-generic-password -a {user} -s {KEYCHAIN_SERVICE} -w` "
-            "and paste the token at its prompt, then rerun"
-        )
-    return False, f"Keychain probe failed (rc={rc}): {unlock}, or check the item exists"
+        return True, "doctor ok (key file, decrypt, sbx)"
+    fails = [line for line in out.splitlines() if line.startswith("FAIL")]
+    return False, "; ".join(fails) or f"doctor failed rc={rc}"
 
 
 def unfinished_hello_two(db: str) -> int:
@@ -115,9 +106,9 @@ class SelfTest:
             raise RuntimeError(f"sbx ls failed rc={rc}")
         return aiwf_sandboxes(out)
 
-    def check_keychain(self) -> Result:
-        rc, _out, err = self.run(["security", "find-generic-password", "-a", self.user, "-s", KEYCHAIN_SERVICE], 60)
-        return keychain_verdict(rc, err, self.user)
+    def check_doctor(self) -> Result:
+        rc, out, _err = self.run(DOCTOR_CMD, 120)
+        return doctor_verdict(rc, out)
 
     def check_normal_run(self) -> Result:
         rc, out, _ = self.run(M0_CMD, 900)
@@ -179,15 +170,15 @@ def report(name: str, check: Callable[[], Result]) -> bool:
 
 def main(st: SelfTest | None = None) -> int:
     st = st or SelfTest(user=os.environ.get("USER", "factory"))
-    if not report("keychain", st.check_keychain):
-        print("SUMMARY: FAIL (stopped at keychain)")
+    if not report("doctor", st.check_doctor):
+        print("SUMMARY: FAIL (stopped at doctor)")
         return 1
     results = [
         report("normal-run", st.check_normal_run),
         report("kill-resume", st.check_kill_resume),
         report("no-token-in-db", st.check_no_token_in_db),  # last: covers everything the runs wrote
     ]
-    passed = sum(results) + 1  # the keychain check passed to get here
+    passed = sum(results) + 1  # the doctor check passed to get here
     print(f"SUMMARY: {'PASS' if all(results) else 'FAIL'} ({passed}/{len(results) + 1} checks passed)")
     return 0 if all(results) else 1
 

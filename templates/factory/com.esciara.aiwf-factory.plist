@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Install by hand as an admin, see docs/factory-m1.md. No secret goes here: the runner reads ~factory/.config/aiwf. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.esciara.aiwf-factory</string>
+  <key>UserName</key>
+  <string>factory</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/factory/factory/src</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/uv</string>
+    <string>run</string>
+    <string>--extra</string>
+    <string>factory</string>
+    <string>python</string>
+    <string>-m</string>
+    <string>aiwf.factory</string>
+    <string>run</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/factory</string>
+    <key>USER</key>
+    <string>factory</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <!-- M1.1 runs hello_two once and exits 0: restart only after a failure. Becomes plain true when the poller (M1.3) is long-running. -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/factory/factory/runs/hello_two.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/factory/factory/runs/hello_two.err.log</string>
+</dict>
+</plist>

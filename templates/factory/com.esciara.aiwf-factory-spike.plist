@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- One-shot M1.1 spike (docs/factory-m1.md): runs scripts/dev/factory-spike once from launchd, no GUI. Remove it afterwards. No secret goes here: the runner reads ~factory/.config/aiwf. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.esciara.aiwf-factory-spike</string>
+  <key>UserName</key>
+  <string>factory</string>
+  <key>WorkingDirectory</key>
+  <string>/Users/factory/factory/src</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/factory/factory/src/scripts/dev/factory-spike</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/factory</string>
+    <key>USER</key>
+    <string>factory</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>Umask</key>
+  <integer>63</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>/Users/factory/factory/runs/spike.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/factory/factory/runs/spike.err.log</string>
+</dict>
+</plist>
