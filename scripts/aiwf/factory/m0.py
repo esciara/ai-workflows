@@ -61,6 +61,8 @@ def sbx_create_args(name: str) -> list[str]:
 def sbx_exec_args(name: str) -> list[str]:
     # ADR-0064 d3: no tools but StructuredOutput, user settings only, no MCP, bounded turns
     max_turns = os.environ.get("AIWF_MAX_TURNS", MAX_TURNS)
+    if not (max_turns.isdigit() and int(max_turns) > 0):
+        max_turns = MAX_TURNS
     return [
         "sbx", "exec", "-e", TOKEN_ENV, name, "claude", "-p", "say hello world", "--output-format", "json",
         "--tools", "StructuredOutput", "--setting-sources", "user", "--strict-mcp-config", "--max-turns", max_turns,
@@ -108,6 +110,17 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
+def runner_alive(pid: int) -> bool:
+    """Alive AND still an aiwf process: guards against pid reuse after a reboot (a reused pid of another program does not count)."""
+    if not pid_alive(pid):
+        return False
+    try:
+        cmd = subprocess.run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True, timeout=10).stdout
+    except (subprocess.SubprocessError, OSError):
+        return True  # cannot tell: keep the sandbox, the next reap retries
+    return "aiwf" in cmd
+
+
 def factory_home() -> Path:
     return Path(os.environ.get("AIWF_FACTORY_HOME") or Path.home() / "factory")
 
@@ -140,7 +153,7 @@ def now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def reap(is_alive=pid_alive) -> list[str]:
+def reap(is_alive=runner_alive) -> list[str]:
     """Remove orphan aiwf-* sandboxes only: those whose owner process is dead (or untagged). Never another live run's.
 
     There is no runner lock (parallel runs stay possible). Runs before launch(), so a killed run's orphans go;
