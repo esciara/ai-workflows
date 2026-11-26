@@ -132,15 +132,19 @@ class SelfTest:
         return True, "2 Hello, world! results, no aiwf-* sandbox left"
 
     def check_no_token_in_db(self) -> Result:
-        rc, out, _ = self.run(["grep", "-a", "-c", TOKEN_PREFIX, self.db], 120)
-        if rc not in (0, 1):
-            return False, f"grep failed rc={rc} on {self.db}"
-        count = out.strip()
-        if count != "0":
-            return False, f"token prefix found {count or '?'} time(s) in {self.db}"
+        for path in (self.db, self.db + "-wal"):  # the WAL may hold rows not yet checkpointed
+            if path != self.db and not os.path.exists(path):
+                continue
+            rc, out, _ = self.run(["grep", "-a", "-c", TOKEN_PREFIX, path], 120)
+            if rc not in (0, 1):
+                return False, f"grep failed rc={rc} on {path}"
+            count = out.strip()
+            if count != "0":
+                return False, f"token prefix found {count or '?'} time(s) in {path}"
         return True, "no token in dbos.sqlite"
 
     def check_kill_resume(self) -> Result:
+        baseline = self.unfinished()  # runs left over from other versions stay PENDING forever: count them out
         proc = self.spawn()
         self.sleep(KILL_AFTER)
         if proc.poll() is not None:
@@ -148,15 +152,15 @@ class SelfTest:
         self.kill(proc)
         proc.wait()
         pending = self.unfinished()
-        if pending != 1:
-            return False, f"after the kill expected 1 unfinished hello_two in the DB, found {pending}; nothing to resume"
+        if pending != baseline + 1:
+            return False, f"after the kill expected {baseline + 1} unfinished hello_two in the DB, found {pending}; nothing to resume"
         rc, out, _ = self.run(M0_CMD, 900)
         if rc != 0:
             return False, f"rerun exited rc={rc}"
         total = count_results(out)
         if total != 2:
             return False, f"rerun printed {total} results, expected exactly 2"
-        if self.unfinished() != 0:
+        if self.unfinished() != baseline:
             return False, "a hello_two is still unfinished after the rerun"
         left = self.leftover()
         if left:
