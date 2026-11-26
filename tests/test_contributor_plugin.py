@@ -99,11 +99,14 @@ CANDIDATES = [
     "git diff {--output=OUT,HEAD}", "git diff --out\\\nput=OUT", "git di\\\nff --output=OUT", "gi\\\nt diff --output=OUT",
     "git diff --output=OUT", "git diff <(touch OUT)", "git diff >(cat)", "git log -S ')' --output=OUT",
     "GIT_EXTERNAL_DIFF=x git diff", "$'git' diff", "git diff main | cat", "git diff main; id", "git diff\tmain", "git diff main\n", "git  diff",
+    'git diff"" --output=OUT', "git diff'' --output=OUT", "git diff$() --output=OUT", "git diff`` --output=OUT",
+    "git diff\\\n --output=OUT", "git log\\\n -p --output=OUT", "git show${IFS}--output=OUT", 'git blame"" --output=OUT',
+    'git diff"" HEAD; touch OUT', "git diff\\\n; touch OUT",
     "git diff -Oorder", "git diff --text main", "git diff *", "git diff a > out", "git diff --output-indicator-new=+",
 ]
 
 
-GUARDED = re.compile(r"\s*git\s+(diff|log|show|blame)(\s|$)")
+GUARDED = re.compile(r"^\s*git\s+(?:diff|log|show|blame)\b")  # independent of the hook: \b also catches `git diff""`
 DENIED = [c for c in CANDIDATES if GUARDED.match(c)]
 NOT_CAUGHT = [c for c in CANDIDATES if not GUARDED.match(c)]
 

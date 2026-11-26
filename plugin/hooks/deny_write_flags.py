@@ -8,7 +8,7 @@ Claude Code's own permission prompt. A guarded command must match, as a whole an
 `git <subcommand>` followed by single-space-separated words made only of [A-Za-z0-9_./:@^~=,+%-]: no quotes, backslashes,
 `$`, backticks, braces, redirection, `;|&()`, newlines, tabs or globs. Even then `--output*`, `--ext-diff`, `--textconv`,
 `--exec-path`, `--open-files-in-pager`, `-O*` and abbreviations of them are denied.
-It is defence in depth, not a sandbox. If its input is malformed or it hits an error it denies the call (best effort).
+A non-string command is not gated (exit 0). `-O*` is denied only as a token that starts with `-O`, not inside grouped short flags. It is defence in depth, not a sandbox. If its input is malformed or it hits an error it denies the call (best effort).
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import re
 import sys
 
 ALLOWED = re.compile(r"git (?:diff|log|show|blame)(?: [A-Za-z0-9_./:@^~=,+%-]+)*")
-GATE = re.compile(r"\s*git\s+(?:diff|log|show|blame)(?:\s|$)")
+GATE = re.compile(r"\s*git\s+(?:diff|log|show|blame)(?![A-Za-z0-9_-])")
 LONG = ("--output", "--ext-diff", "--textconv", "--exec-path", "--open-files-in-pager")
 MIN_ABBREV = 3  # "--o" is the shortest prefix of a LONG option that we deny
 
