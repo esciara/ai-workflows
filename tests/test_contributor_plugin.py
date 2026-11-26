@@ -88,26 +88,33 @@ def test_hook_is_registered_for_bash_and_the_script_exists():
     assert "${CLAUDE_PLUGIN_ROOT}/hooks/deny_write_flags.py" in entry["hooks"][0]["command"]
 
 
-@pytest.mark.parametrize("command", [
+DENIED = [
     "git diff --output=/tmp/x main...HEAD", "git diff --output /tmp/x", "git log --ext-diff -p", "git show --textconv HEAD:a",
     "git -c core.pager=evil diff", "cd x && git diff --output=y", 'git diff "--output=/tmp/x" main...HEAD',
     "git log -p '--output'=/tmp/x", "git diff \\--output=/tmp/x", 'git diff --out""put=/tmp/x', "git diff --ext main...HEAD",
     "git log -p --ext-dif", "git -C . -c diff.external=sh diff", "git --attr-source HEAD -c diff.external=sh diff", "git --no-pager -c core.pager=x log",
     "git --config-env=diff.external=E diff", 'g""it diff --output=/tmp/x', "git diff --textc HEAD", "git diff 'unterminated", "ls; git show --output=a HEAD",
     "git diff $'--output=/x' main", "git diff $(printf -- --output)=x main", "git log `echo --output`=x", 'git diff "$FLAG" main',
-])
-def test_hook_denies_write_and_exec_flags(command):
-    assert hook().denied(command)
+    "git log --grep ';' --output=OUT", "git --namespace '&&' diff --output=OUT", "git diff -G '|' --output=OUT",
+    "git diff {--output=OUT,HEAD}", "git diff --out\\\nput=OUT", "git di\\\nff --output=OUT", "gi\\\nt diff --output=OUT",
+    "git diff --output=OUT", "git diff <(touch OUT)", "git diff >(cat)", "git log -S ')' --output=OUT",
+    "GIT_EXTERNAL_DIFF=x git diff", "$'git' diff", "git diff main | cat", "git diff main; id", "git diff\tmain", "git diff main\n", "git  diff",
+    "git diff -Oorder", "git diff --text main", "git diff *", "git diff a > out", "git diff --output-indicator-new=+",
+]
+
+
+@pytest.mark.parametrize("command", DENIED)
+def test_hook_denies_everything_but_the_strict_form(command):
+    assert run_hook(command).returncode == 2
 
 
 @pytest.mark.parametrize("command", [
     "git diff main...HEAD", "git log --oneline main..HEAD", "git show HEAD:cart.py", "gh issue view 12 --comments",
-    "git merge-base main HEAD", "ls -o", "grep -c foo a", "git show -c HEAD", "git diff --text main...HEAD", "git -c commit.gpgsign=false commit -m x", "git archive --output=x.tar HEAD",
-    "git -c core.editor=true rebase --continue", "git -C sub diff main", "git log -c -1",
-    "git diff --output-indicator-new=+ main", "git diff --exit-code main", "git log --oneline | grep -c fix",
+    "git merge-base main HEAD", "ls -o", "grep -c foo a", "git diff --exit-code main", "git log -c -1", "git show -c HEAD",
+    "git blame -L 1,5 src/a.py", "git diff HEAD~1 -- src/a.py", 'echo "hello"', "git commit -m x",
 ])
-def test_hook_allows_plain_read_commands(command):
-    assert hook().denied(command) is None
+def test_hook_allows_plain_reads_and_ignores_unrelated_commands(command):
+    assert run_hook(command).returncode == 0
 
 
 def run_hook(command: str) -> subprocess.CompletedProcess:
