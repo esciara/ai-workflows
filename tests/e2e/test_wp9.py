@@ -44,7 +44,7 @@ import playground as pg
 from triage_core import bot_comments, e2e_config, labels
 from triage_fix import (COUPON_BUG, COUPON_FILES, ESCALATE_JOB, FIX_MARKER, FAIL_LABEL, GUIDANCE, GUIDANCE_TEXT, NEEDS_MAINTAINER, TAX_BUG,
                         TAX_FILES, analysis, branch_sha, fail_config, fix, fix_branch, fix_prs, open_as_reporter, opened,
-                        reproduce_and_analyse, rounds, status, tag)  # noqa: F401 (fixtures)
+                        reproduce_and_analyse, rounds, status)  # noqa: F401 (fixtures)
 
 def test_fix_with_guidance_runs_the_fix_loop_to_an_approved_branch(e2e_target, tag, opened):
     issue = open_as_reporter("fix", COUPON_BUG, tag, opened)

@@ -18,6 +18,7 @@ import re
 import time
 
 import playground as pg
+from playground import labels
 from review_seeded import (BUG_LINE, CART, FIX_LINE, MONEY, bot_review_comments, head_sha, paged, put_file, read_file,
                            review_run, seeded_pr, summary)
 
@@ -28,10 +29,6 @@ CHANGES = "ai-review: changes-requested"
 
 def bot_reviews(number: int) -> list[dict]:
     return [r for r in paged(f"repos/{pg.REPO}/pulls/{number}/reviews") if r["user"]["login"] == pg.BOT]
-
-
-def labels(number: int) -> set[str]:
-    return {lb["name"] for lb in pg.api(f"repos/{pg.REPO}/issues/{number}/labels?per_page=100")}
 
 
 def test_seeded_bug_gets_inline_comment_and_request_changes_and_a_low_risk_nit_stays_in_the_summary(e2e_target):

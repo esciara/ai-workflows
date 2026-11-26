@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 
 import playground as pg
+from playground import labels  # noqa: F401  (re-exported for the tests)
 
 E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 NEEDS_INFO_MARKER = "<!-- ai-workflows:needs-info -->"
@@ -45,10 +46,6 @@ def comment_run(issue: dict[str, Any], body: str, *, as_tester: bool) -> dict[st
     """Post a comment (maintainer or reporter) and return that comment's completed run."""
     c = pg.comment(issue["number"], body, as_tester=as_tester)
     return item_run("issue_comment", issue["title"], c["created_at"])
-
-
-def labels(number: int) -> set[str]:
-    return {lb["name"] for lb in pg.api(f"repos/{pg.REPO}/issues/{number}/labels?per_page=100")}
 
 
 def bot_comments(number: int, marker: str) -> list[dict]:

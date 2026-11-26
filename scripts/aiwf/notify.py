@@ -19,6 +19,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable, Mapping
 
+from aiwf import mdtext
+
 CHANNELS = ("slack", "telegram")
 RESULT_PREFIX = "AIWF_NOTIFY_RESULT "
 TELEGRAM_API = "https://api.telegram.org"
@@ -60,8 +62,7 @@ def one_line(text: str) -> str:
 def plain(text: str, limit: int = 200) -> str:
     """Untrusted text for a chat line: one line, capped, and no clickable link (a URL or `www.` gets a zero-width space)."""
     text = " ".join(str(text).split())[:limit]
-    text = re.sub(r"(?i)\b([a-z][a-z0-9+.-]*)://", "\\1:\u200b//", text)
-    text = re.sub(r"(?i)\bwww\.", "www\u200b.", text)
+    text = mdtext.defuse_links(text, "\u200b")
     text = re.sub(r"\.(?=[a-z0-9])", ".\u200b", text, flags=re.I)  # bare domains, `cart.py` and versions do not autolink
     return re.sub(r"@(?=\w)", "@\u200b", text)  # nor do emails or mentions
 

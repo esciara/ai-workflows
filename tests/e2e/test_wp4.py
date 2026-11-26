@@ -19,6 +19,7 @@ import re
 import time
 
 import playground as pg
+from playground import labels
 
 E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 MARKER = "<!-- ai-review:summary v1 -->"
@@ -38,10 +39,6 @@ def bulk_price(unit: Decimal, qty: int, percent_off: Decimal) -> Decimal:
     return unit * qty * (1 - percent_off)
 '''
 SEED_V2 = SEED_V1.replace("(e2e fork PR seed)", "(e2e fork PR seed, second push)")
-
-
-def labels(number: int) -> set[str]:
-    return {lb["name"] for lb in pg.api(f"repos/{pg.REPO}/issues/{number}/labels?per_page=100")}
 
 
 def summaries(number: int) -> list[dict]:

@@ -196,6 +196,7 @@ def publish_classifier(data: dict[str, Any], repo: str, issue: int, run_url: str
         branch = default_branch(gh, repo)
     except RuntimeError:
         branch = "main"
+        print("::notice title=default branch::cannot read the repo's default branch; links use main")
     shown = shown_candidates()
     dup_ref = (data.get("duplicate_of") or {}).get("number")
     dup = check_duplicate(gh, repo, issue, dup_ref) if dup_ref and was_shown(shown, "duplicate_of", dup_ref) else None

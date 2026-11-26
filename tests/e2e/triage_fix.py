@@ -114,11 +114,6 @@ ROUND = re.compile(r"/ round-(\d+) / (\w+)$")
 
 
 @pytest.fixture
-def tag(testrun_uid: str) -> str:
-    return testrun_uid[:8]
-
-
-@pytest.fixture
 def opened() -> Iterator[list[int]]:
     """Issues this test opened. At teardown: their `ai-fix/issue-<n>` PRs closed and branches deleted (as the agent
     App, test cleanup only), then the issues closed as not planned (never deleted)."""

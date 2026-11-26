@@ -22,7 +22,7 @@ import os
 import re
 from typing import Any
 
-from aiwf import fixhint, guard, publish, publish_analysis
+from aiwf import fixhint, guard, mdtext, publish, publish_analysis
 from aiwf.ghapi import BOT, GhRunner, get_or_none, remove_label, upsert_marker_comment
 from aiwf.mdtext import inline
 from aiwf.publish_triage import NEEDS_HUMAN
@@ -46,8 +46,7 @@ def fence(text: str, lang: str = "", scrub: bool = True) -> str:
     """A fenced block longer than any backtick run in `text`, so the text cannot close it; secret-shaped strings redacted unless `scrub` is off
     (the stored test code is read back by B5 and must stay byte-identical)."""
     text = publish.scrub_secrets(text) if scrub else text
-    longest = max((len(m) for m in re.findall(r"`+", text)), default=0)
-    ticks = "`" * max(3, longest + 1)
+    ticks = mdtext.ticks(text)
     return f"{ticks}{lang}\n{text.rstrip()}\n{ticks}"
 
 

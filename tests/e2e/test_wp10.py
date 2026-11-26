@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from triage_core import bot_comments, e2e_config, labels
 from triage_fix import (COUPON_BUG, COUPON_FILES, ESCALATE_JOB, FIX_MARKER, GUIDANCE, NEEDS_MAINTAINER, fix, fix_branch,
-                        fix_prs, open_as_reporter, opened, reproduce_and_analyse, rounds, tag)  # noqa: F401 (fixtures)
+                        fix_prs, open_as_reporter, opened, reproduce_and_analyse, rounds)  # noqa: F401 (fixtures)
 import playground as pg
 
 HANDOVER_MARKER = "<!-- ai-workflows:fix-pr -->"

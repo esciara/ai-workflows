@@ -8,8 +8,9 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
+
+from aiwf import mdtext
 
 INLINE, COLLAPSED, GENERAL = "inline", "collapsed", "general"
 MAX_PLACES = 5  # same pattern in up to 5 places: inline on the first; more is "spread wide"
@@ -63,5 +64,4 @@ def suggestion(f: dict[str, Any], facts: dict[str, Any]) -> tuple[int, int, str]
 
 def fence(code: str) -> str:
     """A backtick fence longer than any backtick run in `code`, so the code cannot close its block."""
-    longest = max((len(m) for m in re.findall(r"`+", code)), default=0)
-    return "`" * max(3, longest + 1)
+    return mdtext.ticks(code)
