@@ -1,8 +1,14 @@
 # Factory M0
 
-M0 is the smallest slice of the local AI software factory: a DBOS workflow `hello_two()` in `scripts/aiwf/factory/m0.py` that runs two `claude -p "say hello world"` calls in parallel, each in its own `sbx` sandbox (`aiwf-<workflow_id first 8>-<i>`), through a DBOS queue `sbx` with concurrency 2. State is in SQLite (`~/factory/dbos.sqlite`, override with `AIWF_FACTORY_DB`); the application version is the git SHA (override with `AIWF_FACTORY_VERSION`). Startup first removes every stale `aiwf-*` sandbox. Credentials are never read here: the sbx proxy injects them.
+M0 is the smallest slice of the local AI software factory: a DBOS workflow `hello_two()` in `scripts/aiwf/factory/m0.py` that runs two `claude -p "say hello world"` calls in parallel, each in its own `sbx` sandbox (`aiwf-<workflow_id first 8>-<i>`), through a DBOS queue `sbx` with concurrency 2. State is in SQLite (`~/factory/dbos.sqlite`, override with `AIWF_FACTORY_DB`); the application version is the git SHA (override with `AIWF_FACTORY_VERSION`). Startup first removes every stale `aiwf-*` sandbox. The subscription token is read once at startup from the macOS Keychain of the running user (service `aiwf-claude-oauth`, override with env `CLAUDE_CODE_OAUTH_TOKEN` for tests) and handed to `sbx exec` through the subprocess environment (bare `-e CLAUDE_CODE_OAUTH_TOKEN`), never in argv, DBOS records or logs. Sandboxes are created with `--cpus 2 -m 4g` (override with `AIWF_SBX_CPUS`, `AIWF_SBX_MEMORY`).
 
-The sbx flags (`create --name N claude .`, `exec N -- claude ...`, `ls --quiet`) are assumed, not confirmed; they live in one marked block in `m0.py` and must be checked against the maintainer's S1 output.
+The sbx create and exec forms were confirmed by a real run; bare `-e KEY` on `exec` and `ls --quiet` are still unverified. They live in one marked block in `m0.py`, with the `--env-file` fallback described there.
+
+## Set-up (once, as user `factory`)
+
+- Set the sbx network policy once beforehand with `sbx policy` (the first run otherwise asks an interactive question).
+- Store the token in the Keychain: `security add-generic-password -a factory -s aiwf-claude-oauth -w` (it prompts; paste the token).
+- Have no sbx secret for anthropic: remove any existing one with `sbx secret rm anthropic`, and custom ones by their placeholder.
 
 ## Run (as user `factory`)
 
@@ -20,3 +26,9 @@ Output: two JSON lines, each with `sandbox`, `start`, `end` (taken inside the st
 - `sbx ls` shows no `aiwf-*` afterwards.
 - Works over ssh.
 - The token string is not in the logs or in `dbos.sqlite`.
+
+## Known limits
+
+- The token is inside the VM (accepted risk).
+- The sbx secret proxy route does not work for subscription tokens: the built-in `anthropic` secret sends it as an API key (401), and a custom secret for api.anthropic.com breaks even a directly passed token.
+- The sandbox default size is huge (half of host RAM), so always pass `--cpus` and `-m`.
