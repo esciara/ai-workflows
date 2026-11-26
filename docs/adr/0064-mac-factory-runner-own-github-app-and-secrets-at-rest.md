@@ -94,7 +94,7 @@ Why: the factory reuses M0's sandbox and queue and the existing Workflow A code;
 
 ## Consequences
 
-- Amendment to the hard rule "only the orchestrator writes with `GITHUB_TOKEN`": on the factory runner the host orchestrator writes with factory App installation tokens (decision 2). The spec (roles table and agent table TL;DR "only the orchestrator writes to GitHub", Runtime paragraph "Every AI step runs ... inside GitHub Actions") and `CLAUDE.md` hard rules still state the old wording; they are not edited in this PR and need the maintainer's decision on wording.
+- Amendment to the hard rule "only the orchestrator writes with `GITHUB_TOKEN`": on the factory runner the host orchestrator writes with factory App installation tokens (decision 2). The spec (agent table TL;DR, Orchestrator row, Runtime paragraph) and `CLAUDE.md` hard rules were updated with the wording of this amendment in later PRs.
 - Accepted risk: the model token is inside every sbx VM during a run, and the token and App key are decryptable by anyone who can read the 0600 age key file (`factory` and admins). Against an agent that escapes its VM this protects no more than plain files; a key not on disk is the upgrade path (decision 7).
 - A new App to create and its key to store (maintainer setup below); the dev agent App and the maintainer's `gh` token are never visible to `factory`.
 - `scripts/aiwf/ghapi.py` takes the bot login from config (`AIWF_BOT_LOGIN`, default `github-actions[bot]`), since marker comments and dismissable reviews are found by author (ADR-0021); `publish_review.BOT_LOGIN` follows.
