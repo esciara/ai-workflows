@@ -4,7 +4,7 @@
 - Date: 2026-10-31
 - Deciders: maintainer
 - Alias: `D31`
-- Amended by: [ADR-0051](0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (auto-merge on green, CODEOWNERS for exception paths)
+- Amended by: [ADR-0051](0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (auto-merge on green, CODEOWNERS for exception paths), [ADR-0065](0065-agent-sessions-as-their-own-macos-user-with-a-token-broker.md) (agent sessions as their own macOS user, App keys in a token broker, no admin token in agent reach)
 
 ## Context
 
