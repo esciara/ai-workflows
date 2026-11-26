@@ -16,7 +16,7 @@ class Fake:
         elif args[:2] == ["sbx", "rm"]:
             self.live.discard(args[2])
         elif args[:2] == ["sbx", "exec"]:
-            if args[2] in self.fail_exec:
+            if args[4] in self.fail_exec:
                 raise RuntimeError("boom")
             return '{"result": "hello world"}'
         elif args[:2] == ["sbx", "ls"]:
