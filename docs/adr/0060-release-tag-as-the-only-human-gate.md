@@ -4,6 +4,7 @@
 - Date: 2026-11-15
 - Deciders: maintainer
 - Alias: `D60`
+- Amended by: ADR-0064 (point 1 list gains `scripts/aiwf/factory/` and `templates/factory/`)
 - Amends: [ADR-0051](0051-maintainer-gates-up-front-and-auto-merge-on-green.md) (gates up front, CODEOWNERS exceptions, `verdict` as a required check), [ADR-0053](0053-merge-gate-needs-the-maintainer-only-when-there-is-a-reason.md) (points 1 and 2: `verdict` and the ruleset as the merge gate)
 - Supersedes: [ADR-0055](archive/0055-verdict-check-states-before-a-review-exists.md) (`verdict` states no longer gate; withdrawn by the maintainer 2026-11-15)
 
@@ -28,7 +29,7 @@ Decided by the maintainer on 2026-11-15.
 
 1. **The tag is the gate.** PRs on this repo merge on green (GitHub auto-merge, rebase, enabled by the App) without the maintainer approving them. The maintainer creates a `v*` tag only after reviewing a release-candidate report for one commit of `main`:
    - the e2e results for that commit (point 2), with run IDs;
-   - the diff since the last tag of the release-review paths: the maintainer's base list `tests/e2e/`, `docs/spec.md`, `.github/workflows/`, plus the security-boundary files this ADR's Consequences flag as otherwise unreviewed: `scripts/aiwf/policy.py`, `tests/test_workflow_policy.py`, `scripts/dev/` (guard-bash, `as-*`), `scripts/aiwf/devguard.py`, `.claude/settings.json`, `templates/`, and the ADR-0037 sandbox and scrub code once it lands. This list is the single source; CLAUDE.md points here;
+   - the diff since the last tag of the release-review paths: the maintainer's base list `tests/e2e/`, `docs/spec.md`, `.github/workflows/`, plus the security-boundary files this ADR's Consequences flag as otherwise unreviewed: `scripts/aiwf/policy.py`, `tests/test_workflow_policy.py`, `scripts/dev/` (guard-bash, `as-*`), `scripts/aiwf/devguard.py`, `.claude/settings.json`, `templates/`, `scripts/aiwf/factory/` and `templates/factory/` (ADR-0064), and the ADR-0037 sandbox and scrub code once it lands. This list is the single source; CLAUDE.md points here;
    - the advisory Workflow A findings on the PRs merged since the last tag, and what happened to each (fixed in a commit, won't fix with the reason, or still open).
    Not a full code diff. Only the maintainer creates, moves or deletes `v*` tags (tag ruleset, Transition step 1).
 2. **E2e on `main`.** Per slice, the e2e suite runs against `main` HEAD after the slice's PRs merge; that commit is the candidate that gets tagged. A red e2e is fixed forward on `main` (new PRs, merged on green) and the suite runs again on the new HEAD before any tag. E2e runs on WP branches while building stay useful but are advisory.
