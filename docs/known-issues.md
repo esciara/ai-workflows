@@ -89,3 +89,12 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Upgrade trigger (ADR-0064 decision 7): new ADR before any other repo, agents with tools or a workspace mount on the Mac, a second admin or user, or any sign of misuse; it weighs unseal after boot, the age key in the Secure Enclave or a hardware key, a credential proxy, a token vendor.
 - Priority: P2, before the factory leaves the playground.
 - ADR: [ADR-0064](adr/0064-mac-factory-runner-own-github-app-and-secrets-at-rest.md)
+
+### guard-bash blocks any command whose text merely mentions a push to the main branch (aiwf-2gp)
+
+- Date: 2026-11-26
+- What: `scripts/dev/guard-bash` (`aiwf.devguard.decide`) ends with a text pattern that blocks a command containing a `git` push to `main` anywhere in its text, so an `echo` or a `bd create --description` that quotes such a command is blocked too. Real `git worktree add … origin/main` and branch names like `wp1-push-fix` are no longer blocked (fixed earlier). The merge, token and delete patterns in `ALWAYS` match text the same way.
+- Why it matters: a false positive costs a retry (put the text in a file, or reword it); it never lets a push through.
+- Current mitigation: accepted risk (maintainer, 2026-11-26). The catch-all text pattern stays because it also covers shapes the argv parser can miss (unbalanced quotes fall back to a naive split) and the guard is a CODEOWNERS-protected security control; the ruleset on `main` is the real boundary (ADR-0031).
+- Priority: P3, accepted; revisit only if the retries become frequent.
+- ADR: [ADR-0031](adr/0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md)
