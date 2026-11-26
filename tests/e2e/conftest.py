@@ -55,3 +55,9 @@ def e2e_target() -> str:
         return e2eslot.held()[1]
     except e2eslot.NoSlot as e:
         pytest.fail(str(e), pytrace=False)
+
+
+@pytest.fixture
+def tag(testrun_uid: str) -> str:
+    """Short unique suffix for the items a test creates (the xdist test-run id)."""
+    return testrun_uid[:8]

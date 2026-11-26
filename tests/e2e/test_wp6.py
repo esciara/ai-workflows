@@ -67,11 +67,6 @@ SANDBOX_BUG = (
 
 
 @pytest.fixture
-def tag(testrun_uid: str) -> str:
-    return testrun_uid[:8]
-
-
-@pytest.fixture
 def opened() -> Iterator[list[int]]:
     """Issues this test opened; closed as not planned at teardown (never deleted)."""
     numbers: list[int] = []

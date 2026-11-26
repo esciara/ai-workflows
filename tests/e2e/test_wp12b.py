@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import base64
 import contextlib
-import json
 import os
 import re
 import uuid
@@ -29,6 +28,8 @@ from typing import Any, Iterator
 import pytest
 
 import playground as pg
+from triage_core import bot_comments
+from playground import labels
 
 E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 TRIAGE_MARKER = "<!-- ai-workflows:triage -->"
@@ -49,27 +50,12 @@ INJECTION_BUG = ("Steps:\n\n```python\nfrom zorblax.lattice import Quillframe\nf
 
 
 @pytest.fixture
-def tag(testrun_uid: str) -> str:
-    return testrun_uid[:8]
-
-
-@pytest.fixture
 def opened() -> Iterator[list[int]]:
     """Issues this test opened; closed as not planned at teardown (never deleted)."""
     numbers: list[int] = []
     yield numbers
     for n in numbers:
         pg.api(f"repos/{pg.REPO}/issues/{n}", "state=closed", "state_reason=not_planned", method="PATCH")
-
-
-def labels(number: int) -> set[str]:
-    return {lb["name"] for lb in pg.api(f"repos/{pg.REPO}/issues/{number}/labels?per_page=100")}
-
-
-def bot_comments(number: int, marker: str) -> list[dict]:
-    out = pg.gh(["api", "--paginate", f"repos/{pg.REPO}/issues/{number}/comments?per_page=100", "--jq", ".[]"])
-    comments = [json.loads(line) for line in out.splitlines() if line.strip()]
-    return [c for c in comments if c["user"]["login"] == pg.BOT and marker in (c["body"] or "")]
 
 
 def outside_injection_report(body: str) -> str:

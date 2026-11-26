@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from aiwf import config, labels
+from aiwf import config, labels, mdtext
 from aiwf.ghapi import GhRunner
 
 CI_BUDGET = 20 * 60  # seconds; then the verdict is human-review (ADR-0034); a config key comes with WP12 budgets
@@ -36,7 +36,7 @@ DEF_RE = re.compile(r"\b(?:def|function|func|fn|class)\s+([A-Za-z_][A-Za-z0-9_]{
 # one of them could end `<diff>` early and forge e.g. `<previous_findings>` (checkpoint item 6).
 CONTEXT_TAGS = ("pr_description", "linked_issues", "diff", "touched_files", "callers", "file", "candidates",
                 "previous_findings")
-TAG_RE = re.compile(r"<(\s*/?\s*(?:" + "|".join(CONTEXT_TAGS) + r")\b)", re.IGNORECASE)
+TAG_RE = mdtext.tag_re(CONTEXT_TAGS)
 # A check run is ours when GitHub Actions ran it in a workflow run that calls one of our reusable workflows (the run's
 # `referenced_workflows`): earlier runs of ours on the same head (an `ai: error` run, a `/review` re-run, this repo's
 # `verdict` job) are not the repo's CI, so they never make it red (checkpoint item 2). Known by the run, never by the
@@ -226,7 +226,7 @@ def fence(text: str) -> str:
     """Untrusted text with every opening or closing context tag defused (`<diff>` -> `&lt;diff>`), so it cannot close
     or fake the tags that frame it. Same escape as triage.neutral (ADR-0039), but only before our tag names: the
     agents quote code from the context in suggested fixes, so the rest of it must stay as written."""
-    return TAG_RE.sub(r"&lt;\1", text)
+    return mdtext.defuse_tags(text, TAG_RE)
 
 
 def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, bool]:

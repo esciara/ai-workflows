@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 from jsonschema import Draft202012Validator
 
-from aiwf import labels
+from aiwf import labels, mdtext
 from aiwf.ghapi import GhRunner
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schema"
@@ -67,8 +67,7 @@ def clean(text: str, limit: int = 600) -> str:
     text = " ".join(str(text).split())[:limit]
     text = text.replace("\\", "\\\\").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("@", "@&#8203;").replace("|", "\\|")\
         .replace("[", "\\[").replace("]", "\\]").replace("!", "\\!")
-    text = re.sub(r"(?i)\b([a-z][a-z0-9+.-]*)://", r"\1:&#8203;//", text)  # bare URLs stop autolinking
-    text = re.sub(r"(?i)\bwww\.", "www&#8203;.", text)
+    text = mdtext.defuse_links(text, "&#8203;")  # bare URLs stop autolinking
     return re.sub(r"(?<!&)#(?=\d)", "#&#8203;", text)  # #123 stops cross-referencing (no GitHub ping or timeline event)
 
 

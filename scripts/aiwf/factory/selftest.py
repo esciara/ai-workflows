@@ -17,8 +17,8 @@ from pathlib import Path
 
 PREFIX = "aiwf-"
 KILL_AFTER = 5.0
-M0_CMD = ["uv", "run", "python", "-m", "aiwf.factory.m0"]
-DOCTOR_CMD = ["uv", "run", "python", "-m", "aiwf.factory", "doctor"]
+M0_CMD = ["uv", "run", "--extra", "factory", "python", "-m", "aiwf.factory.m0"]
+DOCTOR_CMD = ["uv", "run", "--extra", "factory", "python", "-m", "aiwf.factory", "doctor"]
 TOKEN_PREFIX = "sk-ant-oat"
 HELLO_RE = re.compile(r"hello,?\s+world", re.IGNORECASE)  # the prompt is "say hello world": punctuation varies
 
@@ -162,8 +162,8 @@ class SelfTest:
 def report(name: str, check: Callable[[], Result]) -> bool:
     try:
         ok, msg = check()
-    except Exception as e:  # a crashing check is a FAIL, not a crash
-        ok, msg = False, f"{type(e).__name__}: {e}"
+    except Exception as e:  # a crashing check is a FAIL, not a crash; the type only, never the text (as doctor does)
+        ok, msg = False, type(e).__name__
     print(f"{'PASS' if ok else 'FAIL'} {name}: {msg}", flush=True)
     return ok
 

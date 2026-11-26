@@ -6,6 +6,7 @@ import json
 import re
 
 import playground as pg
+from playground import labels
 
 E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 MARKER = "<!-- ai-review:summary v1 -->"  # the spec's hidden marker (review comment template)
@@ -44,10 +45,6 @@ def review_run(sha: str, after: str) -> dict:
 def bot_comments(number: int) -> list[dict]:
     out = pg.gh(["api", "--paginate", f"repos/{pg.REPO}/issues/{number}/comments?per_page=100", "--jq", ".[]"])
     return [c for c in (json.loads(line) for line in out.splitlines() if line.strip()) if c["user"]["login"] == pg.BOT]
-
-
-def labels(number: int) -> set[str]:
-    return {lb["name"] for lb in pg.api(f"repos/{pg.REPO}/issues/{number}/labels?per_page=100")}
 
 
 def head_sha(number: int) -> str:

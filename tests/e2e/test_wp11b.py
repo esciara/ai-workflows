@@ -27,7 +27,7 @@ import playground as pg
 from triage_core import labels
 from triage_fix import (ESCALATE_JOB, FAIL_LABEL, NEEDS_MAINTAINER, TAX_BUG, TAX_FILES, fail_config, fix,
                         open_as_reporter, reproduce_and_analyse)
-from triage_fix import opened as fix_opened, tag  # noqa: F401 (fixtures)
+from triage_fix import opened as fix_opened  # noqa: F401 (fixtures)
 
 TITLE_PREFIX = "[e2e] WP11b"
 CHANNELS = {"slack", "telegram"}

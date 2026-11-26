@@ -24,6 +24,8 @@ from typing import Iterator
 import pytest
 
 import playground as pg
+from triage_core import bot_comments
+from playground import labels
 
 E2E_WORKFLOW = pg.E2E_WORKFLOW  # the held slot's playground caller, caller-e2e-<n>.yml (ADR-0056)
 OFF = "ai: off"
@@ -41,16 +43,6 @@ BUG = ("Steps:\n\n```python\nfrom minicart.cart import Cart\ncart = Cart()\ncart
 
 def now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 5))
-
-
-def labels(number: int) -> set[str]:
-    return {lb["name"] for lb in pg.api(f"repos/{pg.REPO}/issues/{number}/labels?per_page=100")}
-
-
-def bot_comments(number: int, marker: str) -> list[dict]:
-    out = pg.gh(["api", "--paginate", f"repos/{pg.REPO}/issues/{number}/comments?per_page=100", "--jq", ".[]"])
-    comments = [json.loads(line) for line in out.splitlines() if line.strip()]
-    return [c for c in comments if c["user"]["login"] == pg.BOT and marker in (c["body"] or "")]
 
 
 def runs(event: str, title: str, after: str) -> list[dict]:
@@ -88,11 +80,6 @@ def add_label(number: int, name: str) -> None:
 def put_file(branch: str, path: str) -> None:
     pg.api(f"repos/{pg.REPO}/contents/{path}", f"message=test: e2e WP12a {path}",
            f"content={base64.b64encode(path.encode()).decode()}", f"branch={branch}", method="PUT")
-
-
-@pytest.fixture
-def tag(testrun_uid: str) -> str:
-    return testrun_uid[:8]
 
 
 @pytest.fixture

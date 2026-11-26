@@ -20,12 +20,9 @@ from urllib.parse import quote
 
 from aiwf import config, guard, publish_triage
 from aiwf.ghapi import GhRunner, get_json
+from aiwf.mdtext import parse_time
 
 WINDOW = timedelta(hours=24)
-
-
-def parse_time(text: str) -> datetime:
-    return datetime.fromisoformat(text.replace("Z", "+00:00"))
 
 
 def is_maintainer(login: str, maintainers: list[str]) -> bool:

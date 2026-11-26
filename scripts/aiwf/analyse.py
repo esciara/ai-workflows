@@ -18,7 +18,7 @@ import stat
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from aiwf import publish
+from aiwf import mdtext, publish
 from aiwf.review import DEF_RE, capped
 
 MAX_TREE_FILES = 20_000
@@ -35,7 +35,7 @@ EXT_RE = re.compile(r"\.(?:" + "|".join(sorted(SOURCE_EXT)) + r")$")
 MAX_SCAN_TEXT = 100_000  # characters of each output searched for paths
 IMPORT_RE = re.compile(r"^\s*(?:from\s+([\w.]+)\s+import\s+\(?([\w ,]+)|import\s+([\w.]+))", re.MULTILINE)
 TAGS = ("reproduction", "source_files", "file", "callers")
-TAG_RE = re.compile(r"<(\s*/?\s*(?:" + "|".join(TAGS) + r")\b)", re.IGNORECASE)
+TAG_RE = mdtext.tag_re(TAGS)
 
 
 def safe_file(tree: Path, rel: Any) -> Path | None:
@@ -147,7 +147,7 @@ def callers(tree: Path, chosen: dict[str, str], files: list[str], hint: str) -> 
 
 def fence(text: str) -> str:
     """Untrusted text with our context tags defused, the rest kept as written (as review.fence does for A)."""
-    return TAG_RE.sub(r"&lt;\1", text)
+    return mdtext.defuse_tags(text, TAG_RE)
 
 
 def build(answer: dict[str, Any], tree: Path, sha: str) -> tuple[str, list[str]]:

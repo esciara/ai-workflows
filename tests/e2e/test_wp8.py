@@ -43,11 +43,6 @@ REASON = f"/no-fix {REASON_TEXT}"
 
 
 @pytest.fixture
-def tag(testrun_uid: str) -> str:
-    return testrun_uid[:8]
-
-
-@pytest.fixture
 def opened() -> Iterator[list[int]]:
     """Issues this test opened; closed as not planned at teardown (never deleted)."""
     numbers: list[int] = []

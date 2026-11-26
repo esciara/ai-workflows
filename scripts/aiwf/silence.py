@@ -23,6 +23,7 @@ from urllib.parse import quote
 
 from aiwf import config, guard, publish
 from aiwf.ghapi import BOT, GhRunner, remove_label
+from aiwf.mdtext import parse_time
 from aiwf.publish_reproduce import NEEDS_INFO, NEEDS_INFO_MARKER, all_comments
 
 PING_MARKER = "<!-- ai-workflows:no-response -->"
@@ -31,10 +32,6 @@ KEEP_OPEN = "keep-open"
 STALE = "stale"
 EXEMPT = frozenset({NO_RESPONSE, KEEP_OPEN, guard.OFF_LABEL, guard.ERROR_LABEL})
 DAY = 86400.0
-
-
-def parse_time(text: str) -> datetime:
-    return datetime.fromisoformat(text.replace("Z", "+00:00"))
 
 
 def fmt_days(days: float) -> str:

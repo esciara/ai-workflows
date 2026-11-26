@@ -443,3 +443,8 @@ def http_status(url: str) -> int:
             return resp.status
     except urllib.error.HTTPError as exc:
         return exc.code
+
+
+def labels(number: int) -> set[str]:
+    """The labels on an issue or PR."""
+    return {lb["name"] for lb in api(f"repos/{REPO}/issues/{number}/labels?per_page=100")}
