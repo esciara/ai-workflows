@@ -19,11 +19,11 @@ Decided for the second: the diff and findings review is the human gate, and the 
 
 ## Decision
 
-Once a slice's PRs have merged, `aiwf-orch` posts the release-candidate report at once: diff of the release-review paths, Workflow A findings, and the full e2e marked running. The maintainer may tag on that report. The full e2e on `main` HEAD runs in parallel and its results and run IDs are appended to the report as a comment. A red e2e is fixed forward on `main` and gets a new tag. The `templates/caller.yml` pin bump, the playground pin bump, and enabling a new workflow stage on a real repo (pyteleinfo) wait for a green e2e on the tagged SHA.
+Once a slice's PRs have merged, `aiwf-orch` posts the release-candidate report at once: diff of the release-review paths, Workflow A findings, and the full e2e marked running. The maintainer may tag on that report. The full e2e runs in parallel on the SHA named in the report, not on a later `main` HEAD, and its results and run IDs are appended to the report as a comment. A red e2e is fixed forward on `main`; the fix gets its own release-candidate report and a new tag (agents cannot move or delete the red tag; the maintainer may). The `templates/caller.yml` pin bump, the playground pin bump, and enabling a new workflow stage on a real repo (pyteleinfo) wait for a green e2e on the tagged SHA.
 
 Why: the maintainer's review no longer idles behind e2e, while nothing that spreads a tag (pins, real-repo rollout) happens before a green e2e on that SHA.
 
 ## Consequences
 
-- A tag can exist on a SHA whose e2e is red; the next tag replaces it, and nothing pinned it in the meantime.
+- A tag can exist on a SHA whose e2e is red. Our own pins (template, playground) and the pyteleinfo rollout wait, but target repos can already pin the tag or get a Dependabot or Renovate bump; the next tag replaces it. Accepted risk, recorded in `docs/known-issues.md`.
 - ADR-0060 point 4 and the rest are unchanged.
