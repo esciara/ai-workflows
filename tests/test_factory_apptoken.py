@@ -149,8 +149,16 @@ def test_other_repositories_refused(pem):
         apptoken.mint("o/r", apptoken.READ, app_id="1", pem=pem, http=FakeHttp(repos=[{"name": "r"}, {"name": "x"}]))
 
 
+def test_doctor_check_skips_without_app_id(monkeypatch):
+    from aiwf.factory import doctor
+    monkeypatch.delenv("AIWF_FACTORY_APP_ID", raising=False)
+    ok, msg = doctor.check_app_token()
+    assert ok and msg.startswith("skipped")
+
+
 def test_doctor_check_handles_bad_body(monkeypatch):
     from aiwf.factory import doctor
+    monkeypatch.setenv("AIWF_FACTORY_APP_ID", "1")
     monkeypatch.setattr(apptoken, "mint", lambda *a, **k: apptoken.Token("t"))
     monkeypatch.setattr(apptoken, "_urllib_http", lambda *a: (200, b"<html>"))
     ok, msg = doctor.check_app_token()

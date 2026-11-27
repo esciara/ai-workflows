@@ -71,7 +71,7 @@ def count_results(out: str) -> int:
 def doctor_verdict(rc: int, out: str) -> Result:
     """Decide from `doctor`'s exit code; show its FAIL lines (they never contain a secret)."""
     if rc == 0:
-        return True, "doctor ok (key file, decrypt, sbx)"
+        return True, "doctor ok (key file, decrypt, app token, sbx)"
     fails = [line for line in out.splitlines() if line.startswith("FAIL")]
     return False, "; ".join(fails) or f"doctor failed rc={rc}"
 
