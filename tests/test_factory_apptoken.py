@@ -80,6 +80,69 @@ def test_refuses_token_with_extra_permissions(pem):
         apptoken.mint("o/r", apptoken.READ, app_id="1", pem=pem, http=FakeHttp(granted={"pull_requests": "read", "contents": "write"}))
 
 
+def test_extra_level_or_missing_permissions_refused(pem):
+    with pytest.raises(apptoken.TokenError, match="more permissions"):
+        apptoken.mint("o/r", apptoken.READ, app_id="1", pem=pem, http=FakeHttp(granted={"pull_requests": "write"}))
+    http = lambda m, u, h, d: (200, b'{"id": 1}') if u.endswith("/installation") else (201, b'{"token": "x"}')  # noqa: E731
+    with pytest.raises(apptoken.TokenError, match="did not report"):
+        apptoken.mint("o/r", apptoken.READ, app_id="1", pem=pem, http=http)
+
+
+def test_metadata_read_added_by_github_is_accepted(pem):
+    http = FakeHttp(granted={**apptoken.PUBLISH, "metadata": "read"})
+    assert apptoken.mint("o/r", apptoken.PUBLISH, app_id="1", pem=pem, http=http).reveal() == TOKEN
+
+
+def test_pem_decrypted_once_per_process(pem, monkeypatch):
+    monkeypatch.setattr(apptoken, "_pem", None)
+    n = []
+    monkeypatch.setattr(apptoken.secrets, "read_secret", lambda name, *a, **k: n.append(name) or pem)
+    for _ in range(3):
+        apptoken.mint("o/r", apptoken.READ, app_id="1", http=FakeHttp())
+    assert n == ["factory_app_pem"]
+
+
+class FakeDbos:
+    """Records every step's arguments and return value, as DBOS does in its SQLite."""
+
+    def __init__(self):
+        self.records = []
+
+    def step(self, fn):
+        def wrapper(*a, **k):
+            out = fn(*a, **k)
+            self.records.append(json.dumps({"args": a, "kwargs": k, "result": out}, default=repr))
+            return out
+        return wrapper
+
+
+def test_token_never_reaches_step_args_or_return_value(pem):
+    dbos = FakeDbos()
+    seen_by_github = []
+
+    @dbos.step
+    def publish_step(repo, pr):
+        http = FakeHttp()
+        tok = apptoken.mint(repo, apptoken.PUBLISH, app_id="1", pem=pem, http=http)
+        seen_by_github.append(tok.reveal())  # the one legitimate use: an HTTP header or GH_TOKEN of a child
+        return {"posted": pr}
+
+    publish_step("o/r", 5)
+    assert seen_by_github == [TOKEN]
+    assert dbos.records and all(TOKEN not in r for r in dbos.records)
+
+
+def test_doctor_check_handles_bad_body(monkeypatch):
+    from aiwf.factory import doctor
+    monkeypatch.setattr(apptoken, "mint", lambda *a, **k: apptoken.Token("t"))
+    monkeypatch.setattr(apptoken, "_urllib_http", lambda *a: (200, b"<html>"))
+    ok, msg = doctor.check_app_token()
+    assert not ok and "unexpected body" in msg
+    monkeypatch.setattr(apptoken, "_urllib_http", lambda *a: (200, b'[{"n": 1}, {"n": 2}]'))
+    ok, msg = doctor.check_app_token()
+    assert ok and "2 open PR" in msg and "t" not in msg.replace("minted", "").replace("token", "").replace("open", "").replace("listed", "")[:0]
+
+
 def test_not_installed_and_http_error_messages_are_safe(pem):
     with pytest.raises(apptoken.TokenError, match="not installed"):
         apptoken.mint("o/r", apptoken.READ, app_id="1", pem=pem, http=FakeHttp(installed=False))

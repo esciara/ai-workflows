@@ -28,6 +28,20 @@ CONTEXT = {"contents": "read", "pull_requests": "read", "issues": "read", "check
 PUBLISH = {"pull_requests": "write", "issues": "write", "contents": "read"}
 READ = {"pull_requests": "read", "metadata": "read"}  # doctor
 
+_LEVEL = {"read": 1, "write": 2, "admin": 3}
+_pem: str | None = None  # decrypted once per process (ADR-0064 d5), memory only
+
+
+def _load_pem() -> str:
+    global _pem
+    if _pem is None:
+        try:
+            _pem = secrets.read_secret(secrets.FACTORY_APP_PEM)
+        except secrets.SecretsError as e:
+            raise TokenError(str(e)) from None
+    return _pem
+
+
 Http = Callable[[str, str, dict[str, str], bytes | None], tuple[int, bytes]]
 
 
@@ -103,10 +117,7 @@ def mint(repo: str, permissions: dict[str, str], *, app_id: str | None = None, p
         raise TokenError(f"{APP_ID_ENV} is not set (the maintainer creates the App, docs/factory-m1.md)")
     if "/" not in repo or not permissions:
         raise TokenError("need repo as owner/name and a non-empty permissions dict")
-    try:
-        pem = pem or secrets.read_secret(secrets.FACTORY_APP_PEM)
-    except secrets.SecretsError as e:
-        raise TokenError(str(e)) from None
+    pem = pem or _load_pem()
     jwt = make_jwt(app_id, pem, now)
     inst = _call(http, "GET", f"/repos/{repo}/installation", jwt)
     if not isinstance(inst.get("id"), int):
@@ -117,6 +128,11 @@ def mint(repo: str, permissions: dict[str, str], *, app_id: str | None = None, p
     if not isinstance(tok, str) or not tok:
         raise TokenError("GitHub returned no token")
     granted = resp.get("permissions")
-    if isinstance(granted, dict) and set(granted) - set(permissions):
-        raise TokenError("GitHub granted more permissions than requested: refusing the token")
+    if not isinstance(granted, dict):
+        raise TokenError("GitHub did not report the token's permissions: refusing the token")
+    for name, level in granted.items():  # metadata: read is always added by GitHub
+        if name == "metadata" and level == "read":
+            continue
+        if _LEVEL.get(level, 99) > _LEVEL.get(permissions.get(name), 0):
+            raise TokenError("GitHub granted more permissions than requested: refusing the token")
     return Token(tok)
