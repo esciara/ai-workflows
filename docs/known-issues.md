@@ -52,9 +52,9 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 ### Workflow A's review rules come from the PR's base branch, not the default branch
 
 - Date: 2026-11-27
-- What: A reads `REVIEW.md` and `CODEOWNERS` from the branch the PR targets (aiwf-t0z). A PR author, a fork's included, picks that branch, so targeting a stale branch with no or weaker `REVIEW.md` drops the repo's current rules for that review. Each of the three inputs is cut at 20,000 characters without setting `truncated`, and together they share the context cap with the diff.
-- Why it matters: only advisory guidance is lost, the author cannot inject text into the rules, and the verdict stays advisory (ADR-0060).
-- Current mitigation: none needed; moving to the default branch would be a one-line change.
+- What: A reads `REVIEW.md` and `CODEOWNERS` from the branch the PR targets (aiwf-t0z). A PR author picks that branch (a fork's PR can only pick an existing branch of the base repo): targeting a stale branch with no or weaker `REVIEW.md` drops the repo's current rules for that review, and a contributor with push access can create a branch holding their own `REVIEW.md` or `CODEOWNERS` and target it, steering the review of their own PR. Each of the three inputs is cut at 20,000 characters without setting `truncated`, and together they share the context cap with the diff.
+- Why it matters: a fork author cannot inject rules, a writer can only steer the advisory review of their own PR (the verdict is advisory, ADR-0060, and the ruleset and the maintainer's release tag still gate).
+- Current mitigation: none needed; none needed; reading the default branch instead (`ghapi.default_branch`) is a one-line change, which also needs a `REVIEW.md` on the playground's default branch for the e2e.
 - Priority: P3.
 - ADR: [ADR-0034](adr/0034-workflow-a-agent-inputs-and-ci-gate.md)
 

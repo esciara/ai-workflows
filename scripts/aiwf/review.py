@@ -246,6 +246,11 @@ def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, b
     return "\n\n".join(out), truncated
 
 
+def cut(text: str) -> str:
+    """`text` cut at RULES_CAP, with a marker saying so."""
+    return text[:RULES_CAP] + f"\n[... truncated: {RULES_CAP} characters]" if len(text) > RULES_CAP else text
+
+
 def base_file(gh: GhRunner, repo: str, path: str, ref: str) -> str | None:
     """Text of `path` on the PR's base branch `ref` (never the PR's head: the PR's author controls its own copy), cut at
     RULES_CAP; None when the file is missing, not a plain file or unreadable (the review then goes on without it)."""
@@ -258,7 +263,7 @@ def base_file(gh: GhRunner, repo: str, path: str, ref: str) -> str | None:
     if not isinstance(got, dict) or got.get("type") != "file" or got.get("encoding") != "base64":
         return None
     text = base64.b64decode(got.get("content") or "").decode("utf-8", errors="replace")
-    return text[:RULES_CAP] + f"\n[... truncated: {RULES_CAP} characters]" if len(text) > RULES_CAP else text
+    return cut(text)
 
 
 def repro_test(gh: GhRunner, repo: str, pr: dict[str, Any]) -> str | None:
@@ -281,7 +286,7 @@ def repro_test(gh: GhRunner, repo: str, pr: dict[str, Any]) -> str | None:
     if not (path or command or code):
         return None
     text = f"Issue #{m.group(1)}\nTest path: {path or 'not given'}\nCommand: {command or 'not given'}\n\n{code}"
-    return text[:RULES_CAP] + f"\n[... truncated: {RULES_CAP} characters]" if len(text) > RULES_CAP else text
+    return cut(text)
 
 
 def readable(path: Path, workdir: Path) -> bool:
