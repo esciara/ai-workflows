@@ -41,7 +41,7 @@ permissions: {}
 jobs:
   # Also parses a comment's slash command once (ADR-0005); review and triage run only on the command they handle.
   config:
-    uses: esciara/ai-workflows/.github/workflows/config.yml@f7c7daa32e31de8fc79d9af5d11155a6adb04037 # v0.3.3
+    uses: esciara/ai-workflows/.github/workflows/config.yml@074fbbf7b86cc7a5a8551bd2fe17eb7e18fb6324 # v0.4.0
     permissions:
       contents: read
     with:
@@ -51,7 +51,7 @@ jobs:
   labels:
     needs: config
     if: needs.config.outputs.enabled == 'true' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')
-    uses: esciara/ai-workflows/.github/workflows/labels.yml@f7c7daa32e31de8fc79d9af5d11155a6adb04037 # v0.3.3
+    uses: esciara/ai-workflows/.github/workflows/labels.yml@074fbbf7b86cc7a5a8551bd2fe17eb7e18fb6324 # v0.4.0
     permissions:
       issues: write
 
@@ -59,7 +59,7 @@ jobs:
   review:
     needs: config
     if: needs.config.outputs.review == 'true' && (github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
-    uses: esciara/ai-workflows/.github/workflows/review.yml@f7c7daa32e31de8fc79d9af5d11155a6adb04037 # v0.3.3
+    uses: esciara/ai-workflows/.github/workflows/review.yml@074fbbf7b86cc7a5a8551bd2fe17eb7e18fb6324 # v0.4.0
     permissions:
       contents: write  # the resolve-threads job resolves A's fixed threads (ADR-0062); the agents get none of it (docs/install.md).
       pull-requests: write
@@ -75,7 +75,7 @@ jobs:
   review-fork-push:
     needs: config
     if: needs.config.outputs.review == 'true' && github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository
-    uses: esciara/ai-workflows/.github/workflows/review-fork-push.yml@f7c7daa32e31de8fc79d9af5d11155a6adb04037 # v0.3.3
+    uses: esciara/ai-workflows/.github/workflows/review-fork-push.yml@074fbbf7b86cc7a5a8551bd2fe17eb7e18fb6324 # v0.4.0
     permissions:
       pull-requests: write
 
@@ -83,7 +83,7 @@ jobs:
   triage:
     needs: config
     if: needs.config.outputs.triage == 'true' && (github.event_name == 'issues' || (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
-    uses: esciara/ai-workflows/.github/workflows/triage.yml@f7c7daa32e31de8fc79d9af5d11155a6adb04037 # v0.3.3
+    uses: esciara/ai-workflows/.github/workflows/triage.yml@074fbbf7b86cc7a5a8551bd2fe17eb7e18fb6324 # v0.4.0
     # Issue labels and comments; B5's push job writes `ai-fix/issue-<n>` (never `.github/`). Workflow B opens no PR
     # (ADR-0061): it reads PRs only (a fixing PR merged into the default branch).
     permissions:
@@ -104,7 +104,7 @@ jobs:
   silence:
     needs: config
     if: needs.config.outputs.triage == 'true' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    uses: esciara/ai-workflows/.github/workflows/silence.yml@f7c7daa32e31de8fc79d9af5d11155a6adb04037 # v0.3.3
+    uses: esciara/ai-workflows/.github/workflows/silence.yml@074fbbf7b86cc7a5a8551bd2fe17eb7e18fb6324 # v0.4.0
     permissions:
       issues: write
     with:
@@ -115,7 +115,7 @@ jobs:
   notify:
     needs: config
     if: needs.config.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && fromJSON(needs.config.outputs.config).notify != 'none'
-    uses: esciara/ai-workflows/.github/workflows/notify.yml@f7c7daa32e31de8fc79d9af5d11155a6adb04037 # v0.3.3
+    uses: esciara/ai-workflows/.github/workflows/notify.yml@074fbbf7b86cc7a5a8551bd2fe17eb7e18fb6324 # v0.4.0
     permissions: {}
     with:
       channels: ${{ fromJSON(needs.config.outputs.config).notify }}
