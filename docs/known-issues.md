@@ -107,3 +107,12 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Current mitigation: accepted risk (maintainer, 2026-11-26). The catch-all text pattern stays because it also covers shapes the argv parser can miss (unbalanced quotes fall back to a naive split) and the guard is a CODEOWNERS-protected security control; the ruleset on `main` is the real boundary (ADR-0031).
 - Priority: P3, accepted; revisit only if the retries become frequent.
 - ADR: [ADR-0031](adr/0031-agents-act-as-their-own-github-app-main-protected-by-a-ruleset.md)
+
+### A v* tag can exist on a SHA whose full e2e is red (ADR-0066)
+
+- Date: 2026-11-27
+- What: the release-candidate report is posted and tagged before the full e2e finishes, so a tag can land on a SHA whose e2e later turns red.
+- Why it matters: target repos can pin that tag, or receive a Dependabot or Renovate bump, before the fix tag exists.
+- Current mitigation: accepted risk (maintainer, 2026-11-27). The template pin, the playground pin and any new stage on pyteleinfo wait for a green e2e on the tagged SHA; a red e2e is fixed forward with a new tag.
+- Priority: P3, accepted.
+- ADR: [ADR-0066](adr/0066-release-candidate-report-does-not-wait-for-the-full-e2e.md)
