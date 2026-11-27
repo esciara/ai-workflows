@@ -41,6 +41,8 @@ PLAYGROUND = "esciara/ai-workflows-playground"
 def check_app_token() -> Result:
     """Mint a read-only token for the playground and list its PRs (the token goes to one request header, then is dropped)."""
     repo = os.environ.get("AIWF_FACTORY_REPO", PLAYGROUND)
+    if not os.environ.get(apptoken.APP_ID_ENV):  # M1.1 hosts have a placeholder PEM and no App yet
+        return True, f"skipped: {apptoken.APP_ID_ENV} is not set (the App is created in M1.2, docs/factory-m1.md)"
     try:
         tok = apptoken.mint(repo, apptoken.READ)
         status, raw = apptoken._urllib_http("GET", f"{apptoken.API}/repos/{repo}/pulls?state=open&per_page=100",
