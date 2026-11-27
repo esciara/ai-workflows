@@ -21,6 +21,11 @@ def sh(args: list[str], env: dict | None = None, stdin: str | None = None, timeo
 
 
 def main() -> int:
+    ok, msg = m0.unlock_keychain()
+    print(f"{'PASS' if ok else 'FAIL'} keychain: {msg}", flush=True)
+    if not ok:
+        print("SUMMARY: FAIL; M1 stops and comes back as an ask")
+        return 1
     try:
         token = secrets.read_secret(secrets.CLAUDE_OAUTH)
     except secrets.SecretsError as e:
