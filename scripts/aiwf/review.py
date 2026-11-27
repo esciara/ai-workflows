@@ -18,7 +18,7 @@ from urllib.parse import quote
 from typing import Any, Callable
 
 from aiwf import config, labels, mdtext
-from aiwf.ghapi import GhRunner, find_marker_comment, get_or_none
+from aiwf.ghapi import GhRunner, find_marker_comment
 
 CI_BUDGET = 20 * 60  # seconds; then the verdict is human-review (ADR-0034); a config key comes with WP12 budgets
 CI_POLL = 20
@@ -249,7 +249,12 @@ def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, b
 def base_file(gh: GhRunner, repo: str, path: str, ref: str) -> str | None:
     """Text of `path` on the PR's base branch `ref` (never the PR's head: the PR's author controls its own copy), cut at
     RULES_CAP; None when the file is missing, not a plain file or unreadable (the review then goes on without it)."""
-    got = get_or_none(gh, f"repos/{repo}/contents/{quote(path)}?ref={quote(ref, safe='')}", notice=f"{path} not read")
+    try:
+        got = json.loads(gh(["api", f"repos/{repo}/contents/{quote(path)}?ref={quote(ref, safe='')}"]) or "null")
+    except RuntimeError as exc:
+        if "404" not in str(exc):  # a missing file is the normal case; anything else is worth a log line
+            print(f"::notice title={path} not read::{str(exc)[:200]}")
+        return None
     if not isinstance(got, dict) or got.get("type") != "file" or got.get("encoding") != "base64":
         return None
     text = base64.b64decode(got.get("content") or "").decode("utf-8", errors="replace")
