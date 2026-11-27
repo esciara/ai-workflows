@@ -50,7 +50,13 @@ def check_app_token() -> Result:
         return False, str(e)
     if status != 200:
         return False, f"listing PRs of {repo} failed with HTTP {status}"
-    return True, f"minted a read token and listed {len(json.loads(raw))} open PR(s) of {repo}"
+    try:
+        prs = json.loads(raw)
+    except ValueError:
+        prs = None
+    if not isinstance(prs, list):
+        return False, f"listing PRs of {repo} returned an unexpected body"
+    return True, f"minted a read token and listed {len(prs)} open PR(s) of {repo}"
 
 
 def check_sbx() -> Result:
