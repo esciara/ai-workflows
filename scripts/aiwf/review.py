@@ -7,16 +7,18 @@ between tags, never onto a command line. Agents get the code inline and no file 
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import quote
 from typing import Any, Callable
 
 from aiwf import config, labels, mdtext
-from aiwf.ghapi import GhRunner
+from aiwf.ghapi import GhRunner, find_marker_comment, get_or_none
 
 CI_BUDGET = 20 * 60  # seconds; then the verdict is human-review (ADR-0034); a config key comes with WP12 budgets
 CI_POLL = 20
@@ -27,6 +29,10 @@ LOCKFILES = {"package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock
 GENERATED_RE = re.compile(r"(\.min\.(js|css)|\.map|_pb2(_grpc)?\.pyi?|\.pb\.go|\.generated\.\w+)$")
 MAX_GENERATED = 20  # names kept in the facts and shown in the summary
 CONTEXT_CAP = 120_000  # characters of diff + files + callers handed to an agent
+RULES_CAP = 20_000  # characters of REVIEW.md, and of CODEOWNERS or the stored repro test, each cut on its own (aiwf-t0z)
+REVIEW_RULES_PATH = "REVIEW.md"
+CODEOWNERS_PATHS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")  # GitHub's lookup order: the first one found counts
+FIX_BRANCH_RE = re.compile(r"ai-fix/issue-(\d+)")
 GREEN = {"success", "neutral", "skipped"}
 PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; review-context publishes it as the `passes` output, which review.yml's matrix and verifier loop read
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
@@ -34,8 +40,8 @@ MAX_COMMENTABLE = 300  # files whose diff lines are passed on for inline comment
 DEF_RE = re.compile(r"\b(?:def|function|func|fn|class)\s+([A-Za-z_][A-Za-z0-9_]{2,})")
 # Tags that frame the agents' context (here and in review.yml's verifier prompt). Untrusted text that opens or closes
 # one of them could end `<diff>` early and forge e.g. `<previous_findings>` (checkpoint item 6).
-CONTEXT_TAGS = ("pr_description", "linked_issues", "diff", "touched_files", "callers", "file", "candidates",
-                "previous_findings")
+CONTEXT_TAGS = ("pr_description", "linked_issues", "review_rules", "codeowners", "repro_test", "diff", "touched_files",
+                "callers", "file", "candidates", "previous_findings")
 TAG_RE = mdtext.tag_re(CONTEXT_TAGS)
 # A check run is ours when GitHub Actions ran it in a workflow run that calls one of our reusable workflows (the run's
 # `referenced_workflows`): earlier runs of ours on the same head (an `ai: error` run, a `/review` re-run, this repo's
@@ -240,6 +246,35 @@ def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, b
     return "\n\n".join(out), truncated
 
 
+def base_file(gh: GhRunner, repo: str, path: str, ref: str) -> str | None:
+    """Text of `path` on the PR's base branch `ref` (never the PR's head: the PR's author controls its own copy), cut at
+    RULES_CAP; None when the file is missing, not a plain file or unreadable (the review then goes on without it)."""
+    got = get_or_none(gh, f"repos/{repo}/contents/{quote(path)}?ref={quote(ref, safe='')}")
+    if not isinstance(got, dict) or got.get("type") != "file" or got.get("encoding") != "base64":
+        return None
+    text = base64.b64decode(got.get("content") or "").decode("utf-8", errors="replace")
+    return text[:RULES_CAP] + f"\n[... truncated: {RULES_CAP} characters]" if len(text) > RULES_CAP else text
+
+
+def repro_test(gh: GhRunner, repo: str, pr: dict[str, Any]) -> str | None:
+    """For a PR of Workflow B's own branch (`ai-fix/issue-<n>`, pushed by the App, so never from a fork), the reproduction
+    test B2 stored on issue <n>, as B5 reads it: path, command and test code. None for any other PR or when none is stored."""
+    from aiwf import fix, publish_reproduce  # lazy: keeps the read side's import list short
+
+    head = pr.get("head") or {}
+    m = FIX_BRANCH_RE.fullmatch(head.get("ref") or "")
+    if not m or (head.get("repo") or {}).get("full_name") != repo:
+        return None
+    comment = find_marker_comment(gh, repo, int(m.group(1)), publish_reproduce.MARKER)
+    body = (comment or {}).get("body") or ""
+    path, command = fix.repro_command(body)
+    code = fix.repro_code(body)
+    if not (path or command or code):
+        return None
+    text = f"Issue #{m.group(1)}\nTest path: {path or 'not given'}\nCommand: {command or 'not given'}\n\n{code}"
+    return text[:RULES_CAP] + f"\n[... truncated: {RULES_CAP} characters]" if len(text) > RULES_CAP else text
+
+
 def readable(path: Path, workdir: Path) -> bool:
     """False for a symlink or a path resolving outside `workdir` (a PR can commit a link to /proc/self/environ)."""
     return not path.is_symlink() and path.resolve().is_relative_to(workdir.resolve())
@@ -276,9 +311,14 @@ def gather(gh: GhRunner, repo: str, number: int, sha: str, workdir: Path, cfg: d
         elif f["status"] != "removed" and p.is_file():
             path = fence(f["filename"]).replace('"', "&quot;")
             touched.append(f'<file path="{path}">\n{fence(p.read_text(errors="replace"))}\n</file>')
+    base_ref = (pr.get("base") or {}).get("ref") or ""
+    rules = base_file(gh, repo, REVIEW_RULES_PATH, base_ref) if base_ref else None
+    owners = next((t for t in (base_file(gh, repo, p, base_ref) for p in CODEOWNERS_PATHS) if t is not None), None) if base_ref else None
+    repro = repro_test(gh, repo, pr)
+    extra = [(tag, fence(text)) for tag, text in (("review_rules", rules), ("codeowners", owners), ("repro_test", repro)) if text]
     pr_text = fence(f"Title: {pr['title']}\n\n{pr.get('body') or ''}")
     issue_text = fence("\n\n".join(f"Issue #{i['number']}: {i['title']}\n\n{i.get('body') or ''}" for i in issues)) or "(none)"
-    context, truncated = capped([("pr_description", pr_text), ("linked_issues", issue_text), ("diff", fence(diff)),
+    context, truncated = capped([("pr_description", pr_text), ("linked_issues", issue_text), *extra, ("diff", fence(diff)),
                                  ("touched_files", "\n".join(touched)),
                                  ("callers", fence(callers(changed_names(diff), workdir)))])
     plan_mode = cfg.get("linked_issue", "issue") == "issue-or-plan-ref"
