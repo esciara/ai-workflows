@@ -7,7 +7,7 @@ import os
 from typing import Any, Callable
 from urllib.parse import quote
 
-BOT = "github-actions[bot]"  # the workflow's GITHUB_TOKEN identity; only its marker comments are ours (ADR-0021)
+BOT = os.environ.get("AIWF_BOT_LOGIN") or "github-actions[bot]"  # the writer identity; only its marker comments are ours (ADR-0021). Default: the workflow's GITHUB_TOKEN; the factory sets its App's login (ADR-0064)
 
 GhRunner = Callable[[list[str]], str]
 
