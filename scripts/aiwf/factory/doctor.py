@@ -61,6 +61,23 @@ def check_app_token() -> Result:
     return True, f"minted a read token and listed {len(prs)} open PR(s) of {repo}"
 
 
+def check_keychain() -> Result:
+    """Unlock factory's login keychain (empty password, ADR-0067), then confirm it is unlocked."""
+    ok, msg = m0.unlock_keychain()
+    if not ok:
+        return False, msg
+    if msg.startswith("skipped"):
+        return True, msg
+    try:
+        r = subprocess.run(["security", "show-keychain-info", str(m0.keychain_path())], capture_output=True, text=True,
+                           timeout=30, check=False, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as e:
+        return False, f"security did not run ({type(e).__name__})"
+    if r.returncode != 0:
+        return False, f"keychain still locked or unreadable rc={r.returncode}: {r.stderr.strip()[:200]} (docs/factory-m1.md, step sbx keychain)"
+    return True, "login keychain unlocked"
+
+
 def check_sbx() -> Result:
     try:
         r = subprocess.run(["sbx", "ls", "--quiet"], capture_output=True, text=True, timeout=60, check=False,
@@ -90,6 +107,7 @@ CHECKS: list[tuple[str, Callable[[], Result]]] = [
     ("key-file", check_key_file),
     ("decrypt", check_decrypt),
     ("app-token", check_app_token),
+    ("keychain", check_keychain),
     ("sbx", check_sbx),
     ("stop-file", check_stop_file),
     ("failures", check_failures),

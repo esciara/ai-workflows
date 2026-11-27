@@ -25,6 +25,30 @@ DEFAULT_MAX_FAILURES = 3
 _token: str | None = None  # module-level on purpose: DBOS stores step args in SQLite, so steps read it from here
 
 
+def keychain_path() -> Path:
+    return Path.home() / "Library" / "Keychains" / "login.keychain-db"
+
+
+def unlock_keychain() -> tuple[bool, str]:
+    """Unlock factory's login keychain with an EMPTY password so sbx can read its Docker sign-in (ADR-0067). Never a real password.
+
+    Returns (ok, message); skips (ok) off macOS or when the keychain file is missing. The message never holds a secret.
+    """
+    if sys.platform != "darwin":
+        return True, "skipped: not macOS"
+    kc = keychain_path()
+    if not kc.exists():
+        return True, f"skipped: {kc} does not exist"
+    try:
+        r = subprocess.run(["security", "unlock-keychain", "-p", "", str(kc)], capture_output=True, text=True, timeout=30,
+                           check=False, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as e:
+        return False, f"security did not run ({type(e).__name__})"
+    if r.returncode != 0:
+        return False, f"unlock-keychain failed rc={r.returncode}: {r.stderr.strip()[:200]}"
+    return True, "unlocked"
+
+
 def load_token() -> None:
     """Read the token once at startup from the SOPS file (ADR-0064). The env override works only with AIWF_FACTORY_TEST=1.
 
@@ -226,6 +250,9 @@ def main() -> int:
     if read_failures() >= limit:
         print(f"{limit} consecutive failures: not starting; delete {failures_file()} to re-arm", file=sys.stderr)
         return 0
+    ok, msg = unlock_keychain()  # before any sbx call; a failure is reported, sbx then fails with its own error
+    if not ok:
+        print(f"keychain: {msg}", file=sys.stderr)
     try:
         rc = _run()
     except (Exception, SystemExit):

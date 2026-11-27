@@ -6,6 +6,7 @@
 - Alias: `D64`
 - Amends: [ADR-0037](0037-command-running-agents-sandbox-scrub-and-trusted-gate.md) (scope "not local use on the maintainer's Mac"), [ADR-0060](0060-release-tag-as-the-only-human-gate.md) (point 1: release-review paths)
 - Amended by: [ADR-0065](0065-agent-sessions-as-their-own-macos-user-with-a-token-broker.md) (factory runs only a `v*` tag, own model token, decision 3 enforced in code and `doctor`)
+- Amended by: [ADR-0067](0067-empty-password-login-keychain-for-factory-sbx.md) (sbx Docker sign-in in an empty-password login keychain, unlocked at start)
 - Relates to: [ADR-0063](0063-no-claude-code-cloud-sessions-for-agent-roles.md) (decides the isolation of the factory runner only, not of the dev agent roles)
 
 ## Context
