@@ -28,11 +28,11 @@ LOCKFILES = {"package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock
              "packages.lock.json", "gradle.lockfile", "mix.lock", "pubspec.lock", "flake.lock"}
 GENERATED_RE = re.compile(r"(\.min\.(js|css)|\.map|_pb2(_grpc)?\.pyi?|\.pb\.go|\.generated\.\w+)$")
 MAX_GENERATED = 20  # names kept in the facts and shown in the summary
-CONTEXT_CAP = 120_000  # characters of diff + files + callers handed to an agent
+CONTEXT_CAP = 120_000  # characters of rules, repro test, diff, files and callers handed to an agent
 RULES_CAP = 20_000  # characters of REVIEW.md, and of CODEOWNERS or the stored repro test, each cut on its own (aiwf-t0z)
 REVIEW_RULES_PATH = "REVIEW.md"
 CODEOWNERS_PATHS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")  # GitHub's lookup order: the first one found counts
-FIX_BRANCH_RE = re.compile(r"ai-fix/issue-(\d+)")
+FIX_BRANCH_RE = re.compile(r"ai-fix/issue-([0-9]+)")
 GREEN = {"success", "neutral", "skipped"}
 PASSES = ("correctness", "security", "maintainability", "tests")  # step 5; review-context publishes it as the `passes` output, which review.yml's matrix and verifier loop read
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
@@ -249,7 +249,7 @@ def capped(parts: list[tuple[str, str]], cap: int = CONTEXT_CAP) -> tuple[str, b
 def base_file(gh: GhRunner, repo: str, path: str, ref: str) -> str | None:
     """Text of `path` on the PR's base branch `ref` (never the PR's head: the PR's author controls its own copy), cut at
     RULES_CAP; None when the file is missing, not a plain file or unreadable (the review then goes on without it)."""
-    got = get_or_none(gh, f"repos/{repo}/contents/{quote(path)}?ref={quote(ref, safe='')}")
+    got = get_or_none(gh, f"repos/{repo}/contents/{quote(path)}?ref={quote(ref, safe='')}", notice=f"{path} not read")
     if not isinstance(got, dict) or got.get("type") != "file" or got.get("encoding") != "base64":
         return None
     text = base64.b64decode(got.get("content") or "").decode("utf-8", errors="replace")
@@ -257,7 +257,7 @@ def base_file(gh: GhRunner, repo: str, path: str, ref: str) -> str | None:
 
 
 def repro_test(gh: GhRunner, repo: str, pr: dict[str, Any]) -> str | None:
-    """For a PR of Workflow B's own branch (`ai-fix/issue-<n>`, pushed by the App, so never from a fork), the reproduction
+    """For a PR from a branch named `ai-fix/issue-<n>` in this repo (a fork's branch of that name is ignored), the reproduction
     test B2 stored on issue <n>, as B5 reads it: path, command and test code. None for any other PR or when none is stored."""
     from aiwf import fix, publish_reproduce  # lazy: keeps the read side's import list short
 
@@ -265,7 +265,11 @@ def repro_test(gh: GhRunner, repo: str, pr: dict[str, Any]) -> str | None:
     m = FIX_BRANCH_RE.fullmatch(head.get("ref") or "")
     if not m or (head.get("repo") or {}).get("full_name") != repo:
         return None
-    comment = find_marker_comment(gh, repo, int(m.group(1)), publish_reproduce.MARKER)
+    try:
+        comment = find_marker_comment(gh, repo, int(m.group(1)), publish_reproduce.MARKER)
+    except RuntimeError as exc:  # no such issue, or the API refused: the review goes on without the repro test
+        print(f"::notice title=repro test not read::issue #{m.group(1)}: {str(exc)[:200]}")
+        return None
     body = (comment or {}).get("body") or ""
     path, command = fix.repro_command(body)
     code = fix.repro_code(body)

@@ -49,6 +49,15 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Priority: P3.
 - ADR: [ADR-0064](adr/0064-mac-factory-runner-own-github-app-and-secrets-at-rest.md)
 
+### Workflow A's review rules come from the PR's base branch, not the default branch
+
+- Date: 2026-11-27
+- What: A reads `REVIEW.md` and `CODEOWNERS` from the branch the PR targets (aiwf-t0z). A PR author, a fork's included, picks that branch, so targeting a stale branch with no or weaker `REVIEW.md` drops the repo's current rules for that review. Each of the three inputs is cut at 20,000 characters without setting `truncated`, and together they share the context cap with the diff.
+- Why it matters: only advisory guidance is lost, the author cannot inject text into the rules, and the verdict stays advisory (ADR-0060).
+- Current mitigation: none needed; moving to the default branch would be a one-line change.
+- Priority: P3.
+- ADR: [ADR-0034](adr/0034-workflow-a-agent-inputs-and-ci-gate.md)
+
 ## Accepted risks
 
 ### Unreviewed code on `e2e-target-<n>` runs with playground secrets
