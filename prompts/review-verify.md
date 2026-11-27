@@ -6,7 +6,7 @@ Four review passes (correctness, security, maintainability, tests) looked at one
 
 Below this prompt, between tags:
 
-- `<pr_description>`, `<linked_issues>`, `<diff>`, `<touched_files>`, `<callers>`: the pull request, as the passes saw it.
+- `<pr_description>`, `<linked_issues>`, `<diff>`, `<touched_files>`, `<callers>`, and when present `<review_rules>`, `<codeowners>` and `<repro_test>`: the pull request, as the passes saw it.
 - `<candidates>`: a JSON list of candidate findings, each with an `id`, the `pass` that found it, `severity`, `path`, `line`, `title`, `detail` and maybe `suggested_fix` and `replacement` (code that replaces the lines `line` to `end_line`, published as a one-click suggestion).
 - `<previous_findings>`: a JSON list of the findings confirmed on the previous review of this PR (an earlier commit), each with an `id`; empty on a first review.
 
