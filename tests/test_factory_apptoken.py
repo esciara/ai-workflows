@@ -1,4 +1,5 @@
 import base64
+import pickle
 import json
 import logging
 import subprocess
@@ -20,9 +21,10 @@ def unb64(s):
 
 
 class FakeHttp:
-    def __init__(self, granted=None, installed=True):
+    def __init__(self, granted=None, installed=True, repos=None):
         self.calls = []
         self.granted = granted
+        self.repos = repos
         self.installed = installed
 
     def __call__(self, method, url, headers, data):
@@ -30,7 +32,8 @@ class FakeHttp:
         if url.endswith("/installation"):
             return (200, json.dumps({"id": 77} if self.installed else {}).encode())
         body = self.calls[-1][3]
-        return (201, json.dumps({"token": TOKEN, "permissions": self.granted or body["permissions"]}).encode())
+        return (201, json.dumps({"token": TOKEN, "permissions": self.granted or body["permissions"],
+                                            "repositories": self.repos or [{"name": n} for n in body["repositories"]]}).encode())
 
 
 def test_jwt_is_rs256_with_app_id_and_valid_signature(pem, tmp_path):
@@ -111,7 +114,7 @@ class FakeDbos:
     def step(self, fn):
         def wrapper(*a, **k):
             out = fn(*a, **k)
-            self.records.append(json.dumps({"args": a, "kwargs": k, "result": out}, default=repr))
+            self.records.append(pickle.dumps({"args": a, "kwargs": k, "result": out}))  # as DBOS stores them
             return out
         return wrapper
 
@@ -129,7 +132,21 @@ def test_token_never_reaches_step_args_or_return_value(pem):
 
     publish_step("o/r", 5)
     assert seen_by_github == [TOKEN]
-    assert dbos.records and all(TOKEN not in r for r in dbos.records)
+    assert dbos.records and all(TOKEN.encode() not in r for r in dbos.records)
+
+
+def test_token_cannot_be_pickled_as_step_arg_or_result(pem):
+    tok = apptoken.mint("o/r", apptoken.READ, app_id="1", pem=pem, http=FakeHttp())
+    dbos = FakeDbos()
+    with pytest.raises(TypeError, match="cannot be serialized"):
+        dbos.step(lambda t: "x")(tok)
+    with pytest.raises(TypeError, match="cannot be serialized"):
+        dbos.step(lambda: {"tok": tok})()
+
+
+def test_other_repositories_refused(pem):
+    with pytest.raises(apptoken.TokenError, match="other repositories"):
+        apptoken.mint("o/r", apptoken.READ, app_id="1", pem=pem, http=FakeHttp(repos=[{"name": "r"}, {"name": "x"}]))
 
 
 def test_doctor_check_handles_bad_body(monkeypatch):
@@ -140,7 +157,7 @@ def test_doctor_check_handles_bad_body(monkeypatch):
     assert not ok and "unexpected body" in msg
     monkeypatch.setattr(apptoken, "_urllib_http", lambda *a: (200, b'[{"n": 1}, {"n": 2}]'))
     ok, msg = doctor.check_app_token()
-    assert ok and "2 open PR" in msg and "t" not in msg.replace("minted", "").replace("token", "").replace("open", "").replace("listed", "")[:0]
+    assert ok and "2 open PR" in msg
 
 
 def test_not_installed_and_http_error_messages_are_safe(pem):
@@ -168,6 +185,7 @@ def test_bad_pem_gives_safe_error():
 
 
 def test_pem_comes_from_secrets_reader(pem, monkeypatch):
+    monkeypatch.setattr(apptoken, "_pem", None)
     asked = []
     monkeypatch.setattr(apptoken.secrets, "read_secret", lambda name, *a, **k: asked.append(name) or pem)
     apptoken.mint("o/r", apptoken.READ, app_id="1", http=FakeHttp())

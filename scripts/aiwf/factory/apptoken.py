@@ -61,6 +61,9 @@ class Token:
 
     __str__ = __repr__
 
+    def __reduce__(self):  # DBOS pickles step arguments and return values: refuse, so a token cannot be recorded
+        raise TypeError("a Token cannot be serialized or stored")
+
 
 def _b64(b: bytes) -> str:
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
@@ -127,6 +130,9 @@ def mint(repo: str, permissions: dict[str, str], *, app_id: str | None = None, p
     tok = resp.get("token")
     if not isinstance(tok, str) or not tok:
         raise TokenError("GitHub returned no token")
+    repos = resp.get("repositories")
+    if repos is not None and [r.get("name") for r in repos if isinstance(r, dict)] != [repo.split("/", 1)[1]]:
+        raise TokenError("GitHub returned a token for other repositories than requested: refusing the token")
     granted = resp.get("permissions")
     if not isinstance(granted, dict):
         raise TokenError("GitHub did not report the token's permissions: refusing the token")
