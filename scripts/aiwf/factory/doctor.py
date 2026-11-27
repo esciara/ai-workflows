@@ -1,14 +1,16 @@
 """`doctor`: check the factory host without starting a run. One `ok` or `FAIL` line per check, exit 1 on any FAIL.
 
-Never prints a secret: the decrypt check discards the value. M1.2 adds the App token mint, M1.4 the sbx egress policy.
+Never prints a secret: the decrypt check discards the value and the token check prints only a PR count. M1.4 the sbx egress policy.
 """
 
+import json
+import os
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable
 
-from aiwf.factory import m0, secrets
+from aiwf.factory import apptoken, m0, secrets
 
 TOOLS = ("sops", "sbx", "uv", "git")
 Result = tuple[bool, str]
@@ -31,6 +33,24 @@ def check_decrypt() -> Result:
         except secrets.SecretsError as e:
             return False, str(e)
     return True, "claude_oauth and factory_app_pem decrypt"
+
+
+PLAYGROUND = "esciara/ai-workflows-playground"
+
+
+def check_app_token() -> Result:
+    """Mint a read-only token for the playground and list its PRs (the token goes to one request header, then is dropped)."""
+    repo = os.environ.get("AIWF_FACTORY_REPO", PLAYGROUND)
+    try:
+        tok = apptoken.mint(repo, apptoken.READ)
+        status, raw = apptoken._urllib_http("GET", f"{apptoken.API}/repos/{repo}/pulls?state=open&per_page=100",
+                                            {"Authorization": f"Bearer {tok.reveal()}", "Accept": "application/vnd.github+json",
+                                             "User-Agent": "aiwf-factory"}, None)
+    except apptoken.TokenError as e:
+        return False, str(e)
+    if status != 200:
+        return False, f"listing PRs of {repo} failed with HTTP {status}"
+    return True, f"minted a read token and listed {len(json.loads(raw))} open PR(s) of {repo}"
 
 
 def check_sbx() -> Result:
@@ -61,6 +81,7 @@ CHECKS: list[tuple[str, Callable[[], Result]]] = [
     ("tools", check_tools),
     ("key-file", check_key_file),
     ("decrypt", check_decrypt),
+    ("app-token", check_app_token),
     ("sbx", check_sbx),
     ("stop-file", check_stop_file),
     ("failures", check_failures),
