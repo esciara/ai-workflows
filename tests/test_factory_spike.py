@@ -3,11 +3,6 @@ import pytest
 from aiwf.factory import m0, secrets, spike
 
 
-@pytest.fixture(autouse=True)
-def _no_real_keychain(monkeypatch):
-    monkeypatch.setattr(m0, "unlock_keychain", lambda: (True, "skipped: test"))
-
-
 def fake_sh(rc_by_prefix, out_by_prefix=None):
     """Replaces spike.sh: the first matching prefix of the args decides (rc, stdout); records every call."""
     calls = []

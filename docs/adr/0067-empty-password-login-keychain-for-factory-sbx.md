@@ -15,13 +15,14 @@ On the factory Mac, `sbx create` (Docker Sandboxes) fails when nobody is logged 
 - A, empty-password login keychain with no auto-lock, unlocked by the factory program at start with an empty password: no password stored anywhere, one small function; the keychain protects nothing by password, so it must hold nothing valuable.
 - Keychain password stored in the SOPS file: works, but the SOPS key file is the same trust root as an empty password (anyone who is `factory` gets it) and it adds a moving part.
 - A dedicated second keychain as the default: untested with sbx (it reads the default login keychain), no real gain over A.
+- ADR-0064's rejected option B (own keychain with an empty password: "adds nothing over file modes... sleep can lock it"): A differs because the login keychain is the one sbx reads, auto-lock and lock-on-sleep are switched off, and the goal is only the Docker sign-in, not the secrets (those stay in SOPS + age).
 - Lima VM with gVisor and Podman instead of sbx: avoids the keychain and Docker sign-in, but a new sandbox stack to build and secure. Kept as the fallback if the M1.1 spike fails.
 - Hosted sandboxes: the model token and the repo leave the Mac.
 - Apple `container`, Tart, or Anthropic's sandbox-runtime: weaker isolation or unclear fit with the ADR-0037 sandbox, scrub and gate.
 
 ## Decision
 
-Decision A. `factory`'s login keychain gets an empty password and never auto-locks. The factory program (`python -m aiwf.factory run`, the spike and `doctor`) runs `security unlock-keychain -p ""` on that keychain at start, before any sbx call; it is skipped off macOS or when the file is missing. The keychain holds only a read-only Docker access token for sbx. Secrets stay in SOPS + age; the old `aiwf-claude-oauth` keychain item is deleted after M1. `doctor` has a `keychain` check. Setup and revert are in `docs/factory-m1.md` (step 6b).
+Decision A. `factory`'s login keychain gets an empty password and never auto-locks. The factory program (`python -m aiwf.factory run`, the spike and `doctor`) runs `security unlock-keychain -p ""` on that keychain at start, before any sbx call; it is skipped off macOS or when the file is missing. The keychain holds only a read-only Docker access token for sbx. Secrets stay in SOPS + age; the old `aiwf-claude-oauth` keychain item is deleted after M1. `doctor` has a `keychain` check. Setup and revert are in `docs/factory-m1.md` (step 7).
 
 Why: the keychain only has to hand sbx a Docker sign-in; making that need no password removes the unattended-start blocker with no stored password and the least new code.
 

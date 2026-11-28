@@ -74,7 +74,7 @@ def check_keychain() -> Result:
     except (OSError, subprocess.SubprocessError) as e:
         return False, f"security did not run ({type(e).__name__})"
     if r.returncode != 0:
-        return False, f"keychain still locked or unreadable rc={r.returncode}: {r.stderr.strip()[:200]} (docs/factory-m1.md, step sbx keychain)"
+        return False, f"keychain still locked or unreadable rc={r.returncode}: {r.stderr.strip()[:200]} (docs/factory-m1.md, step 7)"
     return True, "login keychain unlocked"
 
 
