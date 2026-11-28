@@ -3,6 +3,14 @@ import subprocess
 from aiwf.factory import doctor, m0, spike
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_real_keychain():
+    """Override the conftest stub: these tests exercise the real unlock_keychain with subprocess mocked."""
+
+
 class Run:
     """Fake subprocess.run: records argv, returns the given returncode/stderr."""
 

@@ -99,6 +99,15 @@ Hand-maintained. Every entry links an ADR; remove an entry only when the fix mer
 - Priority: P2, before the factory leaves the playground.
 - ADR: [ADR-0064](adr/0064-mac-factory-runner-own-github-app-and-secrets-at-rest.md)
 
+### Factory login keychain has an empty password and never locks
+
+- Date: 2026-11-27
+- What: `factory`'s login keychain has an empty password and never auto-locks, so sbx can read its Docker sign-in with nobody logged in. Any process running as `factory` can read the Docker access token.
+- Why it matters: the token is read-only, but it could still pull private images the Docker account can see.
+- Current mitigation: accepted risk. The token is read-only and nothing else is stored in that keychain (secrets stay in SOPS + age).
+- Priority: P3.
+- ADR: [ADR-0067](adr/0067-empty-password-login-keychain-for-factory-sbx.md)
+
 ### guard-bash blocks any command whose text merely mentions a push to the main branch (aiwf-2gp)
 
 - Date: 2026-11-26
